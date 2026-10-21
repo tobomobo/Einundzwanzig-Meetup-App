@@ -73,7 +73,7 @@ final class ClientTests: XCTestCase, @unchecked Sendable {
         XCTAssertEqual(events[0].url?.absoluteString, "https://example.org/meetup")
         XCTAssertEqual(events[0].nostrAddress, "31923:key:event")
         XCTAssertEqual(events[1].meetupName, "Nested meetup")
-        XCTAssertEqual(events[1].latitude, 49)
+        XCTAssertNil(events[1].latitude, "Group coordinates are not an event venue")
         XCTAssertEqual(events[1].title, "Custom title")
         XCTAssertEqual(events[2].meetupID, "10")
         XCTAssertNil(events[2].end)

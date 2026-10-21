@@ -1,6 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 import MapKit
+import PhotosUI
 
 struct BadgeWalletView: View {
     @Environment(AppStore.self) private var store
@@ -116,25 +117,31 @@ struct BadgeImportView: View {
     @State private var showFileImporter = false
     @State private var error: String?
     @State private var imported = false
+    @State private var photo: PhotosPickerItem?
+    @State private var decodingPhoto = false
+    @State private var imageDecoder = QRImageDecoder()
 
     var body: some View {
         Form {
             Section {
                 Text("scan.boundary").font(.subheadline).foregroundStyle(.secondary)
                 if store.preferences.demo { Label("scan.demoDisabled", systemImage: "testtube.2") }
-                Button { showCamera = true } label: { Label("scan.camera", systemImage: "camera.viewfinder") }
-                Button { showFileImporter = true } label: { Label("scan.file", systemImage: "doc") }
+                Button { photo = nil; decodingPhoto = false; showCamera = true } label: { Label("scan.camera", systemImage: "camera.viewfinder") }
+                PhotosPicker(selection: $photo, matching: .images) { Label("scan.photo", systemImage: "photo") }
+                if decodingPhoto { ProgressView("action.loading") }
+                Button { photo = nil; decodingPhoto = false; showFileImporter = true } label: { Label("scan.file", systemImage: "doc") }
             }
             Section("scan.input") {
                 TextEditor(text: $input).frame(minHeight: 150).font(.system(.body, design: .monospaced))
                     .autocorrectionDisabled().accessibilityLabel("scan.input")
+                    .disabled(decodingPhoto)
                     .onChange(of: input) { imported = false; error = nil }
                 Text("scan.example").font(.caption).foregroundStyle(.secondary)
                 Button("scan.inspect") {
                     imported = false
                     do { _ = try store.importPreview(input); error = nil; imported = true }
                     catch { self.error = store.errorMessage(error) }
-                }.disabled(input.isEmpty || store.preferences.demo)
+                }.disabled(input.isEmpty || store.preferences.demo || decodingPhoto)
                 if let error { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red) }
                 if imported { Label("scan.savedPreview", systemImage: "doc.badge.plus").foregroundStyle(.secondary) }
             }
@@ -144,6 +151,7 @@ struct BadgeImportView: View {
             }
         }
         .formStyle(.grouped)
+        .onChange(of: photo) { _, selection in Task { await inspectPhoto(selection) } }
         .navigationTitle("scan.title")
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("action.done") { dismiss() } } }
         .sheet(isPresented: $showCamera) {
@@ -165,6 +173,30 @@ struct BadgeImportView: View {
                 guard data.count <= 65_536, let text = String(data: data, encoding: .utf8) else { throw LocalDataError.invalidImport }
                 input = text
             } catch { self.error = store.errorMessage(error) }
+        }
+    }
+
+    private func inspectPhoto(_ selection: PhotosPickerItem?) async {
+        guard let selection else { return }
+        decodingPhoto = true
+        imported = false
+        error = nil
+        defer { if photo == selection { decodingPhoto = false } }
+        do {
+            guard let data = try await selection.loadTransferable(type: Data.self) else { throw QRImageError.invalidImage }
+            let payload = try await imageDecoder.decode(data)
+            guard photo == selection, !Task.isCancelled else { return }
+            input = payload
+        } catch {
+            guard photo == selection, !Task.isCancelled else { return }
+            let key: String
+            switch error as? QRImageError {
+            case .tooLarge, .payloadTooLarge: key = "scan.photoTooLarge"
+            case .noCode: key = "scan.photoNoQR"
+            case .multipleCodes: key = "scan.photoMultiple"
+            default: key = "scan.photoFailed"
+            }
+            self.error = store.text(key)
         }
     }
 }

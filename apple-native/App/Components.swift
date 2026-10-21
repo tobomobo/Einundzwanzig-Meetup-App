@@ -3,7 +3,7 @@ import MeetupCore
 
 struct SourceNotice: View {
     @Environment(AppStore.self) private var store
-    private var feedIssues: [String] { store.networkIssues.filter { $0 != "source.bitcoin.failed" } }
+    private var feedIssues: [String] { store.networkIssues.filter { $0 == "source.meetups.failed" || $0 == "source.news.failed" } }
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label(store.preferences.demo ? "source.demo" : "source.portal", systemImage: store.preferences.demo ? "testtube.2" : "network")

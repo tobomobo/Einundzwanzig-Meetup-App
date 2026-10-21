@@ -11,6 +11,10 @@ final class AppStore {
     private(set) var bitcoin: BitcoinSnapshot?
     private(set) var loading = false
     private(set) var bitcoinLoading = false
+    private(set) var associatedEvents: [MeetupEvent] = []
+    private(set) var calendarRefreshedThisSession = false
+    private(set) var calendarLastAttempt: Date?
+    let learning = LearningStore()
     private(set) var networkIssues: [String] = []
     private(set) var diagnostics: [String] = []
     var persistenceIssue: String?
@@ -24,6 +28,7 @@ final class AppStore {
     private let portal = PortalClient()
     private let newsClient = NewsClient()
     private let mempool = MempoolClient()
+    private let calendarClient = CalendarClient()
     private let directory: URL
 
     init() {
@@ -59,10 +64,11 @@ final class AppStore {
            let cached = try? JSONDecoder().decode(DataCache.self, from: data) {
             cache = cached
         }
+        associatedEvents = MeetupEventMatcher.associated(cache.events, with: cache.meetups)
     }
 
     var meetups: [Meetup] { preferences.demo ? PreviewFixtures.meetups : cache.meetups }
-    var events: [MeetupEvent] { preferences.demo ? PreviewFixtures.events : cache.events }
+    var events: [MeetupEvent] { preferences.demo ? PreviewFixtures.events : associatedEvents }
     var articles: [NewsArticle] { preferences.demo ? PreviewFixtures.articles : cache.articles }
     var badges: [BadgePreview] { preferences.demo ? PreviewFixtures.badges : preferences.badgePreviews }
     var favorites: [Meetup] {
@@ -86,7 +92,7 @@ final class AppStore {
     }
 
     func nextEvent(for meetupID: String) -> MeetupEvent? {
-        events.filter { $0.meetupID == meetupID && $0.start >= Date().addingTimeInterval(-21_600) }
+        events.filter { $0.meetupID == meetupID && CalendarDisplayWindow.includes($0) }
             .min { $0.start < $1.start }
     }
     func plan(for id: String) -> LocalPlan? { preferences.demo ? preferences.demoPlans[id] : preferences.plans[id] }
@@ -105,12 +111,12 @@ final class AppStore {
     func saveProfile(nickname: String, npub: String) -> Bool {
         guard profileReadable else { persistenceIssue = text("error.profileRead"); return false }
         let name = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
-        let key = npub.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let alphabet = Set("023456789acdefghjklmnpqrstuvwxyz")
+        let input = npub.trimmingCharacters(in: .whitespacesAndNewlines)
+        let identity = input.isEmpty ? nil : try? PublicIdentity(input)
         guard !name.isEmpty, name.count <= 40,
-              key.isEmpty || (key.hasPrefix("npub1") && key.count == 63 && key.dropFirst(5).allSatisfy { alphabet.contains($0) })
+              input.isEmpty || identity != nil
         else { persistenceIssue = text("error.profile"); return false }
-        let next = LocalProfile(nickname: name, npub: key, onboarded: true)
+        let next = LocalProfile(nickname: name, npub: identity?.npub ?? "", onboarded: true)
         do {
             #if os(macOS)
             try persist(next, name: "public-profile.json")
@@ -152,6 +158,7 @@ final class AppStore {
         if updatePreferences({ $0.demo = enabled }) {
             // An in-flight live refresh cannot replace the demo badge/source label.
             refreshGeneration = UUID()
+            learning.invalidateRequests()
             loading = false
             networkIssues.removeAll { $0 != "source.bitcoin.failed" }
             if !enabled { Task { await refresh() } }
@@ -190,8 +197,10 @@ final class AppStore {
         networkIssues.removeAll { $0 != "source.bitcoin.failed" }
         let portal = self.portal
         let newsClient = self.newsClient
+        let calendarClient = self.calendarClient
+        calendarLastAttempt = Date()
         async let directoryResult = capture { try await portal.meetups() }
-        async let eventsResult = capture { try await portal.events() }
+        async let eventsResult = capture { try await calendarClient.snapshot() }
         async let newsResult = capture { try await newsClient.articles() }
         let (directoryResponse, eventResponse, newsResponse) = await (directoryResult, eventsResult, newsResult)
         guard generation == refreshGeneration else { return }
@@ -201,7 +210,10 @@ final class AppStore {
         case .failure: networkIssues.append("source.meetups.failed")
         }
         switch eventResponse {
-        case .success(let values): updated.events = values
+        case .success(let snapshot):
+            updated.events = snapshot.events
+            updated.calendarSnapshot = snapshot
+            calendarRefreshedThisSession = true
         case .failure: networkIssues.append("source.events.failed")
         }
         switch newsResponse {
@@ -209,9 +221,10 @@ final class AppStore {
         case .failure: networkIssues.append("source.news.failed")
         }
         // A timestamp is only fresh for a complete refresh; partial refreshes are labelled.
-        let portalSucceeded = !networkIssues.contains { $0 != "source.bitcoin.failed" }
+        let portalSucceeded = !networkIssues.contains { $0 == "source.meetups.failed" || $0 == "source.news.failed" }
         if portalSucceeded { updated.fetchedAt = Date() }
         cache = updated
+        associatedEvents = MeetupEventMatcher.associated(updated.events, with: updated.meetups)
         do { try persist(updated, name: "public-cache.json") }
         catch { persistenceIssue = text("error.cacheSave") }
         diagnostics.insert("\(Date().formatted()) · portal/rss · \(portalSucceeded ? "OK" : "partial/offline")", at: 0)
@@ -256,6 +269,7 @@ final class AppStore {
     /// Clear Apple prototype data only; never reads or migrates the Flutter containers.
     func resetLocalData() {
         do {
+            try learning.reset()
             #if os(iOS)
             try KeychainStore.delete(account: "local-public-profile-v1")
             #endif
@@ -267,6 +281,9 @@ final class AppStore {
             profile = LocalProfile()
             preferences = LocalPreferences()
             cache = DataCache()
+            associatedEvents = []
+            calendarRefreshedThisSession = false
+            calendarLastAttempt = nil
             bitcoin = nil
             bitcoinLoading = false
             stateReadable = true

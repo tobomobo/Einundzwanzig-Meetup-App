@@ -174,6 +174,9 @@ struct RouteDestination: View {
         case .converter: ConverterView()
         case .resources: ResourcesView()
         case .glossary: GlossaryView()
+        case .courses: CoursesView()
+        case .course(let id): CourseDetailView(id: id)
+        case .lecturer(let id): LecturerDetailView(id: id)
         case .unavailable(let integration): IntegrationView(integration: integration)
         }
     }

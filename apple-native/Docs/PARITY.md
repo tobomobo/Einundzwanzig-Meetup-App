@@ -8,12 +8,12 @@ Audit basis: current local commit `0d00c83`, Flutter `lib/`, `android-native/spe
 | --- | --- | --- |
 | `Splash` | Partial | Synchronous local state/profile loading and native system launch screen; no Flutter migration or artificial timed splash. |
 | `Intro` | Partial | Native welcome, language choice and explicit preview mode; encrypted backup restore missing. |
-| `IdentitySetup` | Partial | Local nickname and optional user-entered public npub reference. No key creation, ownership proof, Bech32 checksum verification, external signer, passkey or encrypted key export. |
+| `IdentitySetup` | Partial | Local nickname plus checksum-validated NIP-19 npub, nostr: URI or 64-hex public reference, saved as canonical npub. No curve membership/ownership claim, keys, external signer or passkey. |
 | `HomeTab` | Partial | Native dashboard, chronological favorite cards, edit favorites, configurable tile order/visibility and navigation. No widgets, tours, chat unread counts, Nostr sessions, live duel status or audio mini-player. |
 | `WalletTab` | Partial | Searchable unverified preview collection, grouping, metadata details and deletion. No trusted credentials or production wallet import. |
 | `EventsTab` | Partial | Portal meetup dates, text/day/favorite filters and local plans. No NIP-52 event or course aggregation. |
 | `BadgeScanner` | Partial | Manual/file/camera input extracts bounded allowlisted display metadata only. No acceptance, freshness check, Schnorr verification, registry lookup or collector claim. |
-| `BadgeQrCamera` | Partial | Native VisionKit QR scanning on supported iOS devices with availability checks and manual fallback. Simulator/Mac camera unavailable; gallery-image QR decoding missing. |
+| `BadgeQrCamera` | Partial | VisionKit camera on supported iOS devices plus selected-photo QR decoding via Vision on iOS/Mac. Camera unavailable on Mac/simulator; native SDK/device behavior remains untested. |
 | `RollingQr` | Missing | No organizer sessions, session seed, rotating signed payload or QR issuance. |
 | `NfcTagWriter` | Missing | Not implemented; NFC is also disabled in current Flutter source. |
 | `MeetupSessionWizard` | Missing | No NFC/session wizard. |
@@ -33,9 +33,9 @@ Audit basis: current local commit `0d00c83`, Flutter `lib/`, `android-native/spe
 | `AdminPanel` | Missing | Organizer explanation and official portal link only; no authority asserted. |
 | `PlatformProofs` | Missing | No NIP-05, platform proof creation or verification. |
 | `HumanityProof` | Missing | No Lightning challenge, payments, zap receipt verification or humanity proof. |
-| `ProfileEdit` | Partial | Saves nickname/public reference; iOS Keychain and public-only Mac file. No avatars, key management or signer switching. |
+| `ProfileEdit` | Partial | Persisted public nickname/reference with NIP-19 checksum/hex validation on save. No ownership proof, avatars, key management or signer switching. |
 | `RelaySettings` | Partial | Persist/add/remove/reset validated WSS relay URLs. Saved configuration only; no relay connection, ping, NIP-65 discovery or subscription. |
-| `NearbyMeetups` | Partial | Real portal directory, city/group search, favorite filter, MapKit markers and selection. GPS/radius/geocoding/date-radius search missing. |
+| `NearbyMeetups` | Partial | Native foreground one-shot location with denial/no-fix states; MapKit planned-place search; radius/day/range/favorite filters, straight-line group distances and map selection. No background tracking or presence verification. Native runtime acceptance outstanding. |
 | `MeetupDetails` | Partial | Native detail, favorite toggle, matching portal dates, MapKit location, Apple Maps, safe portal/Telegram links and share. Public slim endpoint may omit description/social fields. No chat/leader management. |
 | `MeetupSelection` | Implemented | Search and toggle multiple favorites by exact portal ID; persists across launches and retains distinct groups in the same city. |
 | `LocationPicker` | Missing | No editor or location selection result flow. |
@@ -43,19 +43,19 @@ Audit basis: current local commit `0d00c83`, Flutter `lib/`, `android-native/spe
 | `PortalMeetupEvents` | Missing | No organizer event management. Public event browsing does not imply portal login. |
 | `PortalEventEditor` | Missing | No portal create/edit requests. |
 | `CommunityPortal` | Partial | Curated verified source URLs open in the default browser; not the full in-app portal catalog. |
-| `MeetupCalendar` | Partial | Public API today + first of next two months, UTC timestamp parsing, chronological list, search, exact meetup/favorite/day filters, detail, sharing and calendar export. No iCal/RRULE fallback, portal RSVP or widget integration. |
-| `EventCalendar` | Partial | Native date selection filters public portal meetup dates only. No relay NIP-52 events, event badges or courses. |
+| `MeetupCalendar` | Partial | Complete portal aggregate first, ICS fallback with bounded WEEKLY/MONTHLY recurrence, time zones/DST/EXDATE and explicit source/fetch/error/limitation provenance. Conservative directory ownership associates fallback dates; all-day dates preserved. No portal RSVP/widget. |
+| `EventCalendar` | Partial | Native day filters public portal/ICS meetup dates. Courses are available through their own native course screens; NIP-52 discovery/event badges still absent. |
 | `EventEditor` | Missing | No signed NIP-52 event publishing or organizer helpers. |
-| `MyEvents` | Partial | Persisted private local Going/Maybe plans, notes, detail and removal. Demo plans are separate. Does not publish portal or Nostr RSVP; no event chats. |
+| `MyEvents` | Partial | Persisted private Going/Maybe plans and notes; demo isolated. Exact canonical nonrecurring portal ICS UIDs retain portal event IDs; other occurrences use deterministic source IDs. No portal/Nostr RSVP or chats. |
 | `MeetupChat` | Missing | Clear unavailable state. NIP-29 relay authentication/membership and messaging absent. |
 | `EventChat` | Missing | Clear unavailable state. NIP-22 comments absent. |
 | `News` | Partial | Real RSS, dates/images/sanitized summary, search, local read marks, refresh and cached content. No Nostr article fetch, reactions, zaps or push. |
 | `NewsArticleDetails` | Partial | Native RSS excerpt reader, original article link and native share. Full article content remains on the publisher website. |
 | `CommunityHub` | Partial | Native hub to news, directory, calendar, resources, reputation explanation and source community websites. No live duel status, authenticated auto-login or audio player. |
-| `PortalArea` | Partial | Portal/community navigation and external official website links. Courses and organizer data unavailable. |
-| `Courses` | Missing | Official portal link only, no native course/lecturer API adapter. |
-| `CourseDetails` | Missing | No native course details or course dates. |
-| `LecturerDetails` | Missing | No native lecturer details. |
+| `PortalArea` | Partial | Portal/community navigation, public native course/lecturer screens and external official website links. Authenticated organizer data unavailable. |
+| `Courses` | Implemented | Public course/lecturer tabs, search, refresh, persisted summaries and ID navigation. Exact withDetails list contracts; failed requests never appear as fresh success. |
+| `CourseDetails` | Implemented | Public detail fetch, immediate cached summary/full-detail fallback by ID, failure/source/fetch labels, course dates, native calendar review/export, join/portal links and related lecturer navigation. |
+| `LecturerDetails` | Implemented | Public biography, source/cache/failure labels, related course navigation, safe website/social links and validated public Nostr reference links. Persisted list relationships also resolve offline. |
 | `ValueForValue` | Missing | External V4V information link only. No LNURL-pay invoice, amount picker, wallet payment or zap verification. |
 | `PlebrapLibrary` | Missing | External PlebRap link only. No native playlist, audio cache, playback or mini-player. |
 | `Glossary` | Partial | Searchable native disclosures use selected source DE/EN/ES glossary entries, with prototype limitation notice. Not the entire source glossary or guided tour. |
@@ -69,13 +69,13 @@ Audit basis: current local commit `0d00c83`, Flutter `lib/`, `android-native/spe
 | Workflow | Status | Boundary / next implementation |
 | --- | --- | --- |
 | Local profile and preferences | Implemented | Public-only nickname/npub reference; iOS device-only Keychain for profile, Mac public file with mode 0600, atomic nonsecret files. Errors are surfaced, corrupt storage is not silently overwritten. |
-| Public Nostr identity | Partial | Input format/length check only; no Bech32 checksum, relay profile or key ownership proof. No generated npub or fictitious keypair. |
-| Private keys and local signing | Missing | App never accepts, generates, imports, exports or stores nsec/private keys. Needs audited secp256k1/BIP-340 implementation and official vectors. Apple's CryptoKit signing curves do not substitute for secp256k1. |
+| Public Nostr identity | Partial | Classic Bech32 checksum, HRP, mixed case, exact 32-byte length/padding and 64-hex normalization are implemented and tested. This does not establish curve membership, ownership or a relay profile. Legacy saved references are not automatically rewritten. |
+| Private keys and local signing | Missing | App UI still never accepts/generates/imports/exports/stores private keys. Separate MeetupNostr actor now implements length-checked secp256k1/BIP-340 primitives and canonical NIP-01 IDs/signatures with official vectors. Product signing remains disabled until key lifecycle and authorization/claim binding exist; no wrapper audit is claimed. |
 | NIP-07 / NIP-55 / NIP-46 | Missing | Browser/Android signer paths are not emulated. A reviewed Apple-compatible remote signer requires encryption, pairing, request authentication, cancellation and response verification. |
 | NIP-44 / NIP-49 / encrypted backups | Missing | No replacement encryption or made-up backup format. No Flutter credential migration, restoration or secret export. |
 | Passkey PRF / local authentication | Missing | No credential wrapping, private-key reveal or associated-domain entitlement. |
 | Rolling QR issue / scan | Partial | Camera obtains raw text; metadata preview is not a protocol validation. No session/freshness/signature/expiry/authority/presence acceptance. |
-| Organizer signature / collector claim | Missing | No kind-21000 verification or kind-21002 signing. Boolean fields and signature-shaped text never confer trust. |
+| Organizer signature / collector claim | Missing | General NIP-01/BIP-340 verification exists in the isolated foundation module, but no badge kind-21000 validation or kind-21002 claim workflow is enabled. Boolean fields/signature-shaped text never confer trust. |
 | Organizer registry / vouch / distrust | Missing | No seed admin, bootstrap promotion, authority lookup or Nostr publish. |
 | Trust score / proofs / signed reputation | Missing | Unverified and demo previews contribute zero trusted badges. Score is unavailable, not a fabricated zero or production trust calculation. No signed QR, kind-30078 publish or proof-hash verification. |
 | Portal authentication / RSVP | Missing | No challenge signing/token or mutations. |
@@ -84,10 +84,12 @@ Audit basis: current local commit `0d00c83`, Flutter `lib/`, `android-native/spe
 | Transport and remote URLs | Implemented | Read-only ephemeral URLSession, 15-second resource/request deadlines, bounded bodies, cancellation, HTTP failures, safe web URL scheme+host checks and no HTTPS→HTTP redirects. ATS remains enabled. |
 | Accessibility | Partial | System text styles, VoiceOver labels, semantic native controls, adaptable control rows, glass transparency fallback, no custom motion. Device Dynamic Type/VoiceOver/Reduce Transparency testing outstanding. |
 
-## Next parity milestones
+## Milestone two: foundations and remaining work
 
-1. Run the checked-in three Apple SDK builds and the manual acceptance checklist on actual iPhone/Mac; fix platform/compiler issues before any release claim.
-2. Add iCal recurrence fallback and course adapters, then NIP-52 read-only event discovery with verified event parsing.
-3. Select and audit a secp256k1/BIP-340 provider; port the source protocol/security vectors and defensive invariants before exposing signer setup or trusted badge import.
-4. Implement Apple remote signer integration and portal authentication; only then enable claims, real RSVP, organizer tools, chat, encrypted backup and proof flows.
-5. Recreate trust algorithms, registry, QR and proof-chain verification with the source golden fixtures. Expand native media, community, widgets and remaining resource screens afterward.
+The app links the pinned **MeetupNostr** package product so all Apple app builds also compile the provider path. The module provides actual canonical NIP-01 hashing, Schnorr sign/verify primitives and byte-exact local read policies. It does not provide a relay subscription, app key lifecycle, trusted badge verification or organization authority. `SecurityCapabilities` intentionally remains false. [Provider/plugin review](../Packages/MeetupCore/Docs/CRYPTO_PROVIDER.md) records the exact release/commit and limits; it is not an audit assurance.
+
+Recurrence deliberately corrects the source's fixed-duration DST drift, COUNT=1, truncated UNTIL and invalid DATE handling. DATE uses each civil day's actual start (including Santiago's 01:00 start), rejects entirely skipped civil dates (Apia 2011-12-30), retains source time zone and exports VALUE=DATE. Timed events use a six-hour lookback; all-day dates remain visible through their exclusive civil end and date filters compare their source civil date. Unknown/malformed recurrence keeps only the base plus an explicit limitation; unsupported RDATE/EXRULE/RECURRENCE-ID/custom zones and expansion caps never imply a complete calendar. Expansion retains the source's oldest-first 200-occurrence cap and 4,096-period budget, so very old series can have no future results with a limitation warning. The live feed currently contains no RRULEs; synthetic fixtures test recurrence.
+
+Course floating dates retain Flutter's local-date policy, distinct from naive UTC meetup API timestamps. Calendar/learning caches retain original source timestamps and failed refresh states. Reset replaces the course client actor so old in-flight requests cannot hydrate the new cache. Coordinates for nearby search describe groups; only actual event/venue GEO fields appear on event maps.
+
+Next: run Apple builds and device acceptance; then wire verified NIP-52 relay discovery with exact filter/time/signature checks. App signing needs reviewed key lifecycle, remote signer integration, portal auth and claim/registry binding before real RSVP, badges or organizer tools. Full trust algorithms, chats, encrypted backup, platform/payment proofs, playback and widgets remain ahead.

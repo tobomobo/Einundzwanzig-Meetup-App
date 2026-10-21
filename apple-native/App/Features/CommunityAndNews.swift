@@ -13,7 +13,7 @@ struct CommunityView: View {
             }
             Section("community.portal") {
                 Link("resource.portal", destination: URL(string: "https://portal.einundzwanzig.space")!)
-                NavigationLink("integration.courses", value: AppRoute.unavailable(.courses))
+                NavigationLink("learning.title", value: AppRoute.courses)
                 NavigationLink("home.organizer", value: AppRoute.unavailable(.organizer))
             }
             Section("community.network") {
@@ -107,12 +107,13 @@ struct ResourcesView: View {
                 Link("resource.satoshiduell", destination: URL(string: "https://satoshiduell.de/")!)
             }
             Section("resource.tools") {
+                NavigationLink("learning.title", value: AppRoute.courses)
                 NavigationLink("nav.glossary", value: AppRoute.glossary)
                 NavigationLink("nav.bitcoin", value: AppRoute.bitcoin)
                 NavigationLink("nav.converter", value: AppRoute.converter)
             }
             Section("integration.remaining") {
-                ForEach([Integration.courses, .plebrap, .donations, .proofs, .humanity, .socialGraph, .organizer, .eventPublishing]) { item in
+                ForEach([Integration.plebrap, .donations, .proofs, .humanity, .socialGraph, .organizer, .eventPublishing]) { item in
                     NavigationLink(LocalizedStringKey(item.title), value: AppRoute.unavailable(item))
                 }
             }

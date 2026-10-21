@@ -7,14 +7,15 @@ struct EventRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
             VStack(spacing: 1) {
-                Text(event.start, format: .dateTime.day()).font(.title2.bold().monospacedDigit())
-                Text(event.start, format: .dateTime.month(.abbreviated)).font(.caption.weight(.semibold))
+                Text(event.start, format: event.displayFormat(.dateTime.day())).font(.title2.bold().monospacedDigit())
+                Text(event.start, format: event.displayFormat(.dateTime.month(.abbreviated))).font(.caption.weight(.semibold))
             }
             .frame(width: 52).padding(.vertical, 10)
             .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
             VStack(alignment: .leading, spacing: 5) {
                 Text(event.title).font(.headline).foregroundStyle(.primary)
-                Text(event.start, format: .dateTime.weekday().hour().minute()).font(.subheadline).foregroundStyle(.secondary)
+                if event.isAllDay { Text("event.allDay").font(.subheadline).foregroundStyle(.secondary) }
+                else { Text(event.start, format: .dateTime.weekday().hour().minute()).font(.subheadline).foregroundStyle(.secondary) }
                 if !event.location.isEmpty {
                     Label(event.location, systemImage: "mappin.and.ellipse").font(.caption).foregroundStyle(.secondary)
                 }
@@ -38,16 +39,16 @@ struct EventsView: View {
         store.events.filter { event in
             (meetupID == nil || event.meetupID == meetupID) &&
             (!favoritesOnly || event.meetupID.map { store.isFavorite($0) } == true) &&
-            (!showDayPicker || Calendar.current.isDate(event.start, inSameDayAs: selectedDay)) &&
+            (!showDayPicker || Calendar.current.isDate(CalendarDisplayWindow.filterDate(for: event), inSameDayAs: selectedDay)) &&
             (query.isEmpty || "\(event.title) \(event.location) \(event.meetupName ?? "")".localizedStandardContains(query)) &&
-            event.start > Date().addingTimeInterval(-21_600)
+            CalendarDisplayWindow.includes(event)
         }.sorted { $0.start < $1.start }
     }
 
     var body: some View {
         List {
             Section {
-                SourceNotice()
+                CalendarSourceNotice()
                 NavigationLink(value: AppRoute.plans) {
                     Label("nav.plans", systemImage: "calendar.badge.clock")
                         .badge(store.plans.count)
@@ -89,8 +90,11 @@ struct EventDetailView: View {
         List {
             Section {
                 Text(event.title).font(.largeTitle.bold())
-                Label { Text(event.start, format: .dateTime.weekday(.wide).day().month(.wide).year().hour().minute()) } icon: { Image(systemName: "calendar") }
-                if let end = event.end {
+                Label {
+                    if event.isAllDay { Text(event.start, format: event.displayFormat(.dateTime.weekday(.wide).day().month(.wide).year())); Text("event.allDay") }
+                    else { Text(event.start, format: .dateTime.weekday(.wide).day().month(.wide).year().hour().minute()) }
+                } icon: { Image(systemName: "calendar") }
+                if let end = event.end, !event.isAllDay {
                     LabeledContent("event.ends") { Text(end, format: .dateTime.day().month().hour().minute()) }
                 }
                 if !event.location.isEmpty { Label(event.location, systemImage: "mappin.and.ellipse") }
@@ -144,7 +148,7 @@ struct PlansView: View {
     @Environment(AppStore.self) private var store
     var body: some View {
         List {
-            Section { Text("plan.localOnly").font(.subheadline).foregroundStyle(.secondary); SourceNotice() }
+            Section { Text("plan.localOnly").font(.subheadline).foregroundStyle(.secondary); CalendarSourceNotice() }
             if store.plans.isEmpty { EmptyState(title: "plan.empty", symbol: "calendar.badge.plus", message: "plan.empty.body") }
             ForEach(store.plans) { plan in
                 NavigationLink(value: AppRoute.event(plan.event.id)) {

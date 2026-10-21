@@ -125,7 +125,7 @@
 "error.duplicate" = "Ya hay una vista previa con el mismo nombre y altura de bloque.";
 "error.import" = "No se pueden importar estos metadatos. Usa un objeto JSON compatible con un nombre de meetup no vacío de hasta 200 caracteres y, si incluyes una altura de bloque, un entero entre 0 y 100.000.000. No se admiten campos desconocidos.";
 "error.persistence" = "No se pudieron actualizar los datos locales. La operación no se completó. Comprueba que el almacenamiento esté disponible.";
-"error.profile" = "Introduce un apodo de entre 1 y 40 caracteres. La npub es opcional: debe empezar por npub1, tener 63 caracteres y usar el alfabeto permitido. No se comprueban su suma de verificación ni la titularidad.";
+"error.profile" = "Introduce un apodo de entre 1 y 40 caracteres. La referencia pública es opcional: usa exactamente 64 caracteres hexadecimales o una npub NIP-19 con suma de verificación válida. La npub también puede llevar el prefijo nostr:.";
 "error.profileRead" = "No se pudo leer el perfil local y no se sobrescribirá. En macOS se guarda en un archivo de perfil público; en iOS, en el llavero del dispositivo.";
 "error.profileSave" = "No se pudo guardar el perfil local. En macOS se utiliza un archivo de perfil público; en iOS, el llavero del dispositivo.";
 "error.stateRead" = "No se pudieron leer los ajustes locales y no se sobrescribirán. Puedes volver a abrir la app o restablecer sus datos locales desde los ajustes.";
@@ -146,7 +146,7 @@
 "event.openPortal" = "Abrir en el portal";
 "event.rsvpUnavailable" = "Confirmación pública de asistencia no disponible";
 "event.search" = "Buscar eventos";
-"event.sources.body" = "Se muestran los eventos del portal de Einundzwanzig o ejemplos ficticios en el modo de vista previa. La publicación y consulta de eventos Nostr no están disponibles en este prototipo.";
+"event.sources.body" = "Primero se carga el calendario público del portal, combinando este mes y los dos siguientes. Si falla alguna parte o no hay eventos recientes o futuros válidos, se carga la fuente alternativa de iCalendar. La fuente, la última carga correcta y los avisos se muestran por separado. Los calendarios Nostr NIP-52, la publicación de eventos y las confirmaciones de asistencia firmadas siguen sin estar disponibles.";
 "event.upcoming" = "Próximos eventos";
 
 /* favorite */
@@ -267,7 +267,7 @@
 "glZapTitle" = "Zaps";
 
 /* glossary */
-"glossary.prototype" = "Este glosario describe las funciones de la app de referencia. En este prototipo Apple no están disponibles las firmas, la verificación de insignias ni la reputación. Importar metadatos solo crea vistas previas no verificadas; las funciones descritas aquí no implican que estén disponibles en este prototipo.";
+"glossary.prototype" = "Este glosario describe la app completa de Flutter. El prototipo Apple ya incluye cursos públicos, filtros de ubicación y fecha, y calendarios del portal con una fuente alternativa de iCalendar. Las firmas, los calendarios Nostr NIP-52, las confirmaciones de asistencia firmadas, la verificación de insignias, la reputación y otras integraciones siguen sin estar disponibles. Los metadatos importados siguen sin ser fiables; las entradas del glosario no garantizan que una función esté disponible aquí.";
 "glossary.search" = "Buscar en el glosario";
 
 /* home */
@@ -285,7 +285,7 @@
 "integration.chat" = "Chat Nostr";
 "integration.chat.body" = "El chat Nostr no está disponible. Este prototipo no conecta con relés para enviar o recibir mensajes. Puedes usar los enlaces públicos del meetup cuando estén disponibles.";
 "integration.courses" = "Cursos";
-"integration.courses.body" = "La integración de cursos no está disponible en este prototipo. Abre el portal de Einundzwanzig para consultar su oferta y las opciones disponibles allí.";
+"integration.courses.body" = "La app permite consultar cursos públicos, docentes y las fechas disponibles. La inscripción a cursos y el acceso a cuentas del portal siguen sin estar disponibles. Abre el portal para usar los servicios que ofrece.";
 "integration.donations" = "Donaciones";
 "integration.donations.body" = "Los pagos, zaps y donaciones dentro de la app no están disponibles. Puedes abrir la página externa de V4V para consultar sus opciones.";
 "integration.eventPublishing" = "Publicar eventos";
@@ -300,7 +300,7 @@
 "integration.proofs.body" = "La vinculación y verificación de identidades o cuentas de otras plataformas no están disponibles. Introducir una npub pública no demuestra que la clave te pertenezca.";
 "integration.remaining" = "Integraciones aún no disponibles";
 "integration.signing" = "Claves y firma Nostr";
-"integration.signing.body" = "Este prototipo no dispone de un proveedor de criptografía Schnorr/Nostr auditado. No genera ni importa claves privadas, no conecta con aplicaciones de firma y no firma ni publica eventos. La npub del perfil es solo una referencia pública sin validación de suma de verificación ni de titularidad.";
+"integration.signing.body" = "La firma Nostr sigue sin estar disponible en este prototipo Apple. No genera, importa ni guarda claves privadas, no conecta con aplicaciones de firma y no firma ni publica eventos. Si introduces una npub, se comprueba su suma de verificación al guardar el perfil, pero la referencia pública no demuestra la titularidad.";
 "integration.socialGraph" = "Red de confianza";
 "integration.socialGraph.body" = "La red de confianza, los encuentros, los avales y las rutas de confianza no están disponibles. No se deducen relaciones verificadas a partir de metadatos importados ni de una npub introducida manualmente.";
 "integration.unavailable" = "Función no disponible en este prototipo";
@@ -391,8 +391,8 @@
 /* profile */
 "profile.local" = "Perfil local";
 "profile.nickname" = "Apodo";
-"profile.npub.optional" = "Referencia pública npub (opcional)";
-"profile.public.body" = "El apodo y la npub se guardan localmente. La npub es una referencia pública indicada por ti: no se comprueban su suma de verificación ni la titularidad y no inicia sesión en Nostr. No introduzcas un nsec ni otra clave privada.";
+"profile.npub.optional" = "Referencia pública: npub o hexadecimal (opcional)";
+"profile.public.body" = "El apodo y la referencia pública se guardan localmente: en el Llavero de iOS y en un archivo local en Mac. Al guardar, la app acepta 64 caracteres hexadecimales o una npub NIP-19 con suma de verificación válida, también con el prefijo nostr:. La referencia se guarda entonces como npub canónica en minúsculas. La suma de verificación no demuestra la titularidad ni que el valor sea un punto válido de la curva criptográfica. No se inicia sesión. La app no gestiona claves privadas ni firma datos. No introduzcas una clave privada.";
 "profile.title" = "Perfil";
 
 /* relay */
@@ -513,3 +513,85 @@
 "tile.plans.body" = "Guarda tus planes y notas en este dispositivo, sin confirmar asistencia.";
 "tile.reputation.body" = "Consulta los límites del prototipo: la reputación aún no se puede verificar.";
 "tile.resources.body" = "Glosario, herramientas y enlaces de la comunidad.";
+
+/* Milestone 2: public learning, nearby search and calendar source notices. */
+"calendar.source.awaiting" = "Aún no se ha cargado ningún calendario correctamente.";
+"calendar.source.cached" = "Datos guardados del calendario. La fuente y la hora de carga corresponden a la última consulta correcta.";
+"calendar.source.failed" = "La última actualización ha fallado. Los eventos guardados que se muestren proceden de una consulta anterior correcta. Último intento:";
+"calendar.source.fetched" = "Última carga correcta";
+"calendar.source.ical" = "Última fuente cargada correctamente: alternativa de iCalendar";
+"calendar.source.legacyCache" = "Eventos guardados anteriormente. Se desconocen su fuente y la hora de la última carga correcta.";
+"calendar.source.notes" = "Notas sobre la fuente del calendario";
+"calendar.source.portal" = "Última fuente cargada correctamente: portal";
+"calendar.warning.duplicateOccurrence" = "Se han combinado las repeticiones de iCalendar con el mismo identificador.";
+"calendar.warning.invalidCoordinates" = "Se han omitido unas coordenadas no válidas del lugar del evento.";
+"calendar.warning.invalidDate" = "Una fecha no era válida o no existía en su zona horaria. Se han omitido los eventos afectados; el calendario puede estar incompleto.";
+"calendar.warning.invalidEnd" = "Se ha omitido una fecha de fin no válida. Revisa el fin antes de guardar el evento en tu calendario.";
+"calendar.warning.invalidEvent" = "Se ha omitido un evento de iCalendar no válido. El calendario puede estar incompleto.";
+"calendar.warning.invalidURL" = "Se ha omitido un enlace de evento no válido.";
+"calendar.warning.malformedRecurrence" = "Una regla de repetición de iCalendar no es válida. Solo se ha podido leer el evento inicial; no se han podido determinar las demás repeticiones. El calendario puede estar incompleto.";
+"calendar.warning.missingUID" = "Un evento de iCalendar no tenía identificador (UID). Se ha generado uno a partir de su contenido.";
+"calendar.warning.noUpcomingPortalEvents" = "El calendario del portal no incluía eventos válidos con inicio desde las seis horas anteriores a la consulta. Se muestra la fuente alternativa de iCalendar.";
+"calendar.warning.portalFailed" = "No se ha podido cargar todo el calendario del portal para este mes y los dos siguientes. Se muestra la fuente alternativa de iCalendar.";
+"calendar.warning.recurrenceLimit" = "El cálculo de repeticiones de iCalendar ha alcanzado el límite de 366 días o 200 repeticiones. Pueden faltar otras repeticiones.";
+"calendar.warning.unknownTimeZone" = "No se ha reconocido una zona horaria de iCalendar. Se han omitido los eventos afectados; el calendario puede estar incompleto.";
+"calendar.warning.unsupportedException" = "Algunas excepciones de repetición de iCalendar no son compatibles. El calendario puede estar incompleto.";
+"calendar.warning.unsupportedRecurrence" = "Una regla de repetición de iCalendar no es compatible. Solo se ha podido leer el evento inicial; no se han podido determinar las demás repeticiones. El calendario puede estar incompleto.";
+"calendar.warning.unsupportedTimeZoneDefinition" = "Una zona horaria personalizada de iCalendar no es compatible. Los eventos afectados pueden estar incompletos.";
+"event.allDay" = "Todo el día";
+"learning.about" = "Descripción";
+"learning.browse" = "Ver cursos o docentes";
+"learning.cacheFailed" = "No se han podido guardar los últimos datos de cursos o docentes en este dispositivo. Puede que no estén disponibles al reiniciar la app.";
+"learning.cached" = "Datos públicos guardados, si los hay";
+"learning.courses" = "Cursos";
+"learning.coursesFailed" = "No se ha podido cargar la lista de cursos en el último intento. La información guardada que se muestre puede estar desactualizada.";
+"learning.dates" = "Fechas del curso";
+"learning.detailFailed" = "No se han podido cargar los detalles en el último intento. El resumen o los detalles guardados que se muestren pueden omitir información y fechas o estar desactualizados.";
+"learning.empty" = "No hay resultados";
+"learning.empty.body" = "Cambia la búsqueda o actualiza el resumen.";
+"learning.fresh" = "Recién cargado del portal";
+"learning.join" = "Abrir enlace para participar";
+"learning.lecturers" = "Docentes";
+"learning.lecturersFailed" = "No se ha podido cargar la lista de docentes en el último intento. La información guardada que se muestre puede estar desactualizada.";
+"learning.noDatesIncluded" = "Los datos mostrados no incluyen fechas. Un resumen guardado puede omitirlas. Vuelve a cargar los detalles o consulta el portal.";
+"learning.nostr" = "Abrir perfil público de Nostr";
+"learning.notFound" = "El portal no ha encontrado esta entrada. La información guardada puede estar desactualizada.";
+"learning.openPortal" = "Abrir en el portal";
+"learning.publicSource" = "Datos públicos del portal de Einundzwanzig";
+"learning.search" = "Buscar cursos o docentes";
+"learning.summaryNotice" = "El resumen puede omitir fechas y enlaces. Abre un curso para cargar sus detalles.";
+"learning.title" = "Cursos y docentes";
+"learning.twitter" = "X / Twitter";
+"learning.website" = "Sitio web";
+"nearby.accuracy %lld" = "Precisión de la ubicación: unos %lld m";
+"nearby.anyDate" = "Cualquier fecha";
+"nearby.clearOrigin" = "Quitar filtro de ubicación";
+"nearby.current" = "Usar mi ubicación actual";
+"nearby.date" = "Fecha";
+"nearby.dateRange" = "Intervalo de fechas";
+"nearby.distance %@" = "A %@ km";
+"nearby.empty" = "Cambia la búsqueda, el radio o las fechas. La búsqueda por radio solo incluye grupos con coordenadas válidas. Los filtros de fecha usan los eventos disponibles en el calendario.";
+"nearby.filters" = "Lugar, radio y fecha";
+"nearby.findPlace" = "Buscar lugar";
+"nearby.from" = "Desde";
+"nearby.here" = "Mi ubicación";
+"nearby.kilometers %lld" = "Radio: %lld km";
+"nearby.limitRadius" = "Limitar por radio";
+"nearby.locating" = "Buscando tu ubicación…";
+"nearby.location.denied" = "No se permite el acceso a tu ubicación. Puedes activarlo en los ajustes del sistema o buscar un lugar.";
+"nearby.location.disabled" = "Los servicios de ubicación están desactivados. Actívalos en los ajustes del sistema o busca un lugar.";
+"nearby.location.failed" = "No se ha podido obtener la ubicación. Inténtalo de nuevo o busca un lugar.";
+"nearby.location.noFix" = "No se ha podido obtener tu ubicación actual. Inténtalo de nuevo o busca un lugar.";
+"nearby.location.restricted" = "El acceso a la ubicación está restringido en este dispositivo. Busca un lugar.";
+"nearby.oneDay" = "Un día";
+"nearby.place" = "Lugar o dirección";
+"nearby.placeEmpty" = "No se han encontrado lugares. Prueba con otro nombre o una dirección.";
+"nearby.placeFailed" = "La búsqueda de lugares ha fallado. Comprueba la conexión e inténtalo de nuevo.";
+"nearby.privacy" = "Tu ubicación solo se solicita cuando lo eliges. Las distancias se calculan en este dispositivo; la búsqueda de lugares usa Mapas de Apple. Las coordenadas del directorio pueden ser aproximadas. Las distancias se miden en línea recta, no por rutas.";
+"nearby.radius" = "Radio";
+"nearby.to" = "Hasta";
+"scan.photo" = "Leer código QR de una foto";
+"scan.photoFailed" = "No se ha podido leer la foto. Prueba con otra imagen o importa un archivo.";
+"scan.photoMultiple" = "La foto contiene varios códigos QR. Elige una imagen con un solo código QR.";
+"scan.photoNoQR" = "No se ha encontrado ningún código QR legible en esta foto. Prueba con una imagen más nítida.";
+"scan.photoTooLarge" = "La foto o el texto del código QR supera el tamaño permitido. Elige una imagen más pequeña o un código QR con menos texto.";

@@ -380,10 +380,14 @@ class Project:
         package_id, package = self.only("XCLocalSwiftPackageReference")
         require(self.root.get("packageReferences") == [package_id] and package.get("relativePath") == "Packages/MeetupCore", "project must reference only the local Packages/MeetupCore package")
         require((self.apple / "Packages/MeetupCore/Package.swift").is_file(), "local MeetupCore Package.swift does not exist")
-        dependency_id, dependency = self.only("XCSwiftPackageProductDependency")
-        require(dependency.get("productName") == "MeetupCore" and dependency.get("package") == package_id, "MeetupCore product must reference the local package")
-        require(self.target.get("packageProductDependencies") == [dependency_id], "target must depend on MeetupCore")
-        require(members["PBXFrameworksBuildPhase"] == [dependency_id], "Frameworks phase must link the MeetupCore product")
+        dependencies = dict(self.of_type("XCSwiftPackageProductDependency"))
+        require({item.get("productName") for item in dependencies.values()} == {"MeetupCore", "MeetupNostr"} and len(dependencies) == 2, "expected only MeetupCore and MeetupNostr products")
+        require(all(item.get("package") == package_id for item in dependencies.values()), "both products must reference the local package")
+        require(set(self.target.get("packageProductDependencies", [])) == set(dependencies), "target must depend on both local products")
+        require(set(members["PBXFrameworksBuildPhase"]) == set(dependencies), "Frameworks phase must link both local products")
+        expected = {"identity": "swift-secp256k1", "kind": "remoteSourceControl", "location": "https://github.com/21-DOT-DEV/swift-secp256k1", "state": {"revision": "e70a10e036a55fffea31568f0af92d69b6d449cd", "version": "0.23.2"}}
+        for path in (self.apple / "Packages/MeetupCore/Package.resolved", self.apple / "Einundzwanzig.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"):
+            require(load_json(path).get("pins") == [expected], f"{path}: expected exact reviewed source-provider pin only")
 
 
 def strip_config_comments(text):
@@ -567,9 +571,10 @@ def validate_plists(project):
     launch_setting = all(project.effective[name, sdk].get("INFOPLIST_KEY_UILaunchScreen_Generation") == "YES" for name in ("Debug", "Release") for sdk in ("iphoneos", "iphonesimulator"))
     require(isinstance(info.get("UILaunchScreen"), dict) or launch_setting, "manual Info.plist must define UILaunchScreen, or enable iPhone launch-screen generation")
     entitlements = load_plist(project.apple / "Configuration/Einundzwanzig-macOS.entitlements")
-    for key in ("com.apple.security.app-sandbox", "com.apple.security.network.client", "com.apple.security.personal-information.calendars", "com.apple.security.files.user-selected.read-write"):
+    for key in ("com.apple.security.app-sandbox", "com.apple.security.network.client", "com.apple.security.personal-information.calendars", "com.apple.security.files.user-selected.read-write", "com.apple.security.personal-information.location"):
         require(entitlements.get(key) is True, f"macOS entitlements must enable {key}")
     require(not any("icloud" in key.lower() or "ubiquity" in key.lower() for key in entitlements), "iCloud/ubiquity entitlements are outside the local-only scaffold")
+    require(bool(info.get("NSLocationWhenInUseUsageDescription")) and bool(info.get("NSLocationUsageDescription")), "iOS/macOS foreground location descriptions required")
 
 
 def validate_scheme(project):

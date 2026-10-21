@@ -9,6 +9,7 @@
 		A10000000000000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* Assets.xcassets */; };
 		A10000000000000000000002 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000001 /* Localizable.strings */; };
 		A10000000000000000000003 /* MeetupCore in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000001 /* MeetupCore */; };
+		A10000000000000000000004 /* MeetupNostr in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000003 /* MeetupNostr */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -45,7 +46,7 @@
 		A50000000000000000000001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
-			files = (A10000000000000000000003 /* MeetupCore in Frameworks */,);
+			files = (A10000000000000000000003 /* MeetupCore in Frameworks */, A10000000000000000000004 /* MeetupNostr in Frameworks */,);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -103,7 +104,7 @@
 			dependencies = ();
 			fileSystemSynchronizedGroups = (A40000000000000000000001 /* App */,);
 			name = Einundzwanzig;
-			packageProductDependencies = (A90000000000000000000001 /* MeetupCore */,);
+			packageProductDependencies = (A90000000000000000000001 /* MeetupCore */, A90000000000000000000003 /* MeetupNostr */,);
 			productName = Einundzwanzig;
 			productReference = A2000000000000000000000A /* Einundzwanzig.app */;
 			productType = "com.apple.product-type.application";
@@ -244,6 +245,11 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		A90000000000000000000003 /* MeetupNostr */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A90000000000000000000002 /* XCLocalSwiftPackageReference "Packages/MeetupCore" */;
+			productName = MeetupNostr;
+		};
 		A90000000000000000000001 /* MeetupCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = A90000000000000000000002 /* XCLocalSwiftPackageReference "Packages/MeetupCore" */;

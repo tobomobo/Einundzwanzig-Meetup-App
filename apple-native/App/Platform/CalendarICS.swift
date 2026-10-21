@@ -13,6 +13,8 @@ struct CalendarICS: Sendable {
     private let end: Date?
     private let location: String
     private let url: URL?
+    private let allDay: Bool
+    private let timeZone: TimeZone
 
     init(
         uid: String,
@@ -21,7 +23,9 @@ struct CalendarICS: Sendable {
         start: Date,
         end: Date?,
         location: String,
-        url: URL?
+        url: URL?,
+        allDay: Bool = false,
+        timeZone: TimeZone = .current
     ) {
         self.uid = uid
         self.title = title
@@ -30,6 +34,8 @@ struct CalendarICS: Sendable {
         self.end = end
         self.location = location
         self.url = url
+        self.allDay = allDay
+        self.timeZone = timeZone
     }
 
     /// Throws for required dates outside finite Gregorian years 1...9999 CE.
@@ -40,10 +46,15 @@ struct CalendarICS: Sendable {
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         formatter.dateFormat = "yyyyMMdd'T'HHmmss'Z'"
 
-        guard let startValue = Self.utcDate(start, using: formatter),
-              let stampValue = Self.utcDate(timestamp, using: formatter) else {
+        guard let stampValue = Self.utcDate(timestamp, using: formatter) else {
             throw EncodingError.invalidDate
         }
+        let eventFormatter = DateFormatter()
+        eventFormatter.locale = formatter.locale
+        eventFormatter.calendar = formatter.calendar
+        eventFormatter.timeZone = allDay ? timeZone : TimeZone(secondsFromGMT: 0)
+        eventFormatter.dateFormat = allDay ? "yyyyMMdd" : "yyyyMMdd'T'HHmmss'Z'"
+        guard let startValue = Self.utcDate(start, using: eventFormatter) else { throw EncodingError.invalidDate }
 
         // Base64URL is deterministic and lossless, even for empty or hostile IDs.
         // The caller's event identity, rather than its export time, determines UID.
@@ -58,13 +69,13 @@ struct CalendarICS: Sendable {
             "BEGIN:VEVENT",
             "UID:meetup-\(safeID)@einundzwanzig.space",
             "DTSTAMP:\(stampValue)",
-            "DTSTART:\(startValue)",
+            "DTSTART\(allDay ? ";VALUE=DATE" : ""):\(startValue)",
         ]
 
         // RFC 5545 has second precision: do not emit an equal end after truncation.
         if let end, end > start,
-           let endValue = Self.utcDate(end, using: formatter), endValue > startValue {
-            lines.append("DTEND:\(endValue)")
+           let endValue = Self.utcDate(end, using: eventFormatter), endValue > startValue {
+            lines.append("DTEND\(allDay ? ";VALUE=DATE" : ""):\(endValue)")
         }
         lines.append("SUMMARY:\(Self.escapeText(title))")
         lines.append("DESCRIPTION:\(Self.escapeText(description))")

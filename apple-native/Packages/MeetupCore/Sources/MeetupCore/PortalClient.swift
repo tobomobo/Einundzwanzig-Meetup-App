@@ -120,10 +120,11 @@ enum PortalParsing {
                 end: DateParsing.portal(JSONFields.string(row["end_iso"])) ?? DateParsing.portal(JSONFields.string(row["end"])),
                 location: JSONFields.string(row["location"]) ?? "",
                 meetupID: JSONFields.firstString(meetup("id"), row["meetup_id"]), meetupName: name,
-                latitude: JSONFields.firstNumber(row["latitude"], row["lat"], row["osm_lat"], meetup("latitude"), meetup("lat")),
-                longitude: JSONFields.firstNumber(row["longitude"], row["lon"], row["lng"], row["osm_lon"], meetup("longitude"), meetup("lon"), meetup("lng")),
+                latitude: JSONFields.firstNumber(row["latitude"], row["lat"], row["osm_lat"]),
+                longitude: JSONFields.firstNumber(row["longitude"], row["lon"], row["lng"], row["osm_lon"]),
                 url: web(JSONFields.firstString(row["link"], row["url"], meetup("portalLink"))),
-                nostrAddress: JSONFields.string(row["nostr_address"])
+                nostrAddress: JSONFields.string(row["nostr_address"]),
+                meetupPortalURL: web(JSONFields.string(meetup("portalLink")))
             )
         }
     }

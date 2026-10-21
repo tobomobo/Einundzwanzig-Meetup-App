@@ -65,6 +65,7 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 26) {
                 hero
                 SourceNotice()
+                CalendarSourceNotice()
                 GlassEffectContainer(spacing: 16) {
                     ViewThatFits(in: .horizontal) {
                         HStack(spacing: 16) { discoverControl; scanControl }

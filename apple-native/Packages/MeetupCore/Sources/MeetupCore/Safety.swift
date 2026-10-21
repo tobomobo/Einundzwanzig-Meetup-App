@@ -84,7 +84,7 @@ public enum SafeURL {
 public enum SecurityCapabilities {
     public static let signingAvailable = false
     public static let verificationAvailable = false
-    public static let reason = "This prototype has no audited Schnorr/Nostr cryptography provider. Signing, signature verification, badge claims and trusted reputation are unavailable. Imported data is unverified."
+    public static let reason = "App signing, badge verification, claims and trusted reputation remain unavailable. The separate MeetupNostr foundation has tested Schnorr/NIP-01 primitives, but no app key lifecycle, organizer registry or collector binding is connected. Imported data is unverified."
 }
 
 public enum BitcoinConversionError: Error, Equatable, Sendable {

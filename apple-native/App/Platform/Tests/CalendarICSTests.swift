@@ -20,6 +20,8 @@ private enum CalendarICSTests {
             ("invalid required dates throw", invalidRequiredDates),
             ("optional and invalid end dates", endDates),
             ("URL encoding and injection", urls),
+            ("all-day export keeps civil dates across DST", allDayDates),
+            ("all-day export accepts a civil day without midnight", midnightSkipDate),
         ]
         for (name, test) in tests {
             try test()
@@ -261,6 +263,29 @@ private enum CalendarICSTests {
         let based = URL(string: "relative", relativeTo: URL(string: "https://example.com/base/")!)!
         let absolute = try value("URL", in: document(url: based))
         try require(absolute == "https://example.com/base/relative", "Base URL was not resolved")
+    }
+    private static func allDayDates() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/Vienna")!
+        let start = calendar.date(from: DateComponents(year: 2026, month: 10, day: 25))!
+        let end = calendar.date(byAdding: .day, value: 1, to: start)!
+        try require(end.timeIntervalSince(start) == 25 * 3600, "DST fixture must cover 25 hours")
+        let data = try CalendarICS(uid: "date", title: "Date", description: "", start: start, end: end,
+                                   location: "", url: nil, allDay: true, timeZone: calendar.timeZone).data()
+        let actualStart = try value("DTSTART;VALUE=DATE", in: data)
+        let actualEnd = try value("DTEND;VALUE=DATE", in: data)
+        try require(actualStart == "20261025", "All-day start became a timed UTC instant")
+        try require(actualEnd == "20261026", "Exclusive all-day end changed date")
+    }
+    private static func midnightSkipDate() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Santiago")!
+        let start = calendar.date(from: DateComponents(year: 2026, month: 9, day: 6))!
+        let end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: start))!
+        let data = try CalendarICS(uid: "date", title: "Date", description: "", start: start, end: end,
+                                   location: "", url: nil, allDay: true, timeZone: calendar.timeZone).data()
+        let actualStart = try value("DTSTART;VALUE=DATE", in: data)
+        try require(actualStart == "20260906", "Midnight skip changed civil date")
     }
 }
 #endif

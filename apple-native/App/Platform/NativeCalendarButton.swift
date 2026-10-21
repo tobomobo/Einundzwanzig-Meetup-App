@@ -19,7 +19,7 @@ struct NativeCalendarButton: View {
     @State private var errorMessage: String?
 
     init(event: MeetupEvent) {
-        self.event = event
+        self.event = event.forNativeCalendar
     }
 
     var body: some View {
@@ -123,12 +123,14 @@ private func makeCalendarEvent(_ source: MeetupEvent, store: EKEventStore, end: 
     event.location = source.location
     event.startDate = source.start
     event.endDate = end
+    event.isAllDay = source.isAllDay
     event.url = source.url
     return event
 }
 
 private func proposedEnd(for event: MeetupEvent) -> Date {
     if let end = event.end, end > event.start { return end }
+    if event.isAllDay { return Calendar.current.date(byAdding: .day, value: 1, to: event.start) ?? event.start.addingTimeInterval(86_400) }
     // A proposal for review in native UI, not an asserted event duration.
     return event.start.addingTimeInterval(3_600)
 }
@@ -205,10 +207,10 @@ private struct MacCalendarConfirmation: View {
             Text("calendar.review.title").font(.headline)
             Form {
                 LabeledContent("calendar.event.title") { Text(verbatim: event.title) }
-                LabeledContent("calendar.event.start") { Text(event.start, format: .dateTime) }
-                DatePicker("calendar.event.end", selection: $end, in: event.start...)
+                LabeledContent("calendar.event.start") { Text(event.start, format: event.isAllDay ? .dateTime.day().month().year() : .dateTime) }
+                DatePicker("calendar.event.end", selection: $end, in: event.start..., displayedComponents: event.isAllDay ? .date : [.date, .hourAndMinute])
                     .accessibilityLabel("calendar.event.end.accessibility")
-                if event.end.map({ $0 <= event.start }) ?? true {
+                if !event.isAllDay && (event.end.map({ $0 <= event.start }) ?? true) {
                     Text("calendar.end.proposed.explanation").font(.caption)
                 }
                 LabeledContent("calendar.event.location") { Text(verbatim: event.location) }

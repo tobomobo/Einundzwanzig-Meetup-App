@@ -32,8 +32,8 @@ jobs:
       - name: Validate checked-in project and resources
         run: python3 apple-native/Scripts/validate_project.py --require-route-matrix
 
-      - name: Test MeetupCore
-        run: swift test --package-path apple-native/Packages/MeetupCore
+      - name: Test MeetupCore and MeetupNostr with the checked-in dependency pin
+        run: swift test --package-path apple-native/Packages/MeetupCore --force-resolved-versions -Xswiftc -warnings-as-errors
 
       - name: Parse all Apple platform branches
         run: python3 apple-native/Scripts/parse_swift.py
@@ -52,6 +52,8 @@ jobs:
           -project apple-native/Einundzwanzig.xcodeproj
           -scheme Einundzwanzig
           -configuration Debug
+          -onlyUsePackageVersionsFromResolvedFile
+          -skipPackagePluginValidation
           -sdk iphonesimulator
           -destination 'generic/platform=iOS Simulator'
           -derivedDataPath /tmp/einundzwanzig-ios-derived-data
@@ -64,6 +66,8 @@ jobs:
           -project apple-native/Einundzwanzig.xcodeproj
           -scheme Einundzwanzig
           -configuration Debug
+          -onlyUsePackageVersionsFromResolvedFile
+          -skipPackagePluginValidation
           -sdk iphoneos
           -destination 'generic/platform=iOS'
           -derivedDataPath /tmp/einundzwanzig-iphoneos-derived-data
@@ -76,6 +80,8 @@ jobs:
           -project apple-native/Einundzwanzig.xcodeproj
           -scheme Einundzwanzig
           -configuration Debug
+          -onlyUsePackageVersionsFromResolvedFile
+          -skipPackagePluginValidation
           -sdk macosx
           -destination 'platform=macOS'
           -derivedDataPath /tmp/einundzwanzig-macos-derived-data

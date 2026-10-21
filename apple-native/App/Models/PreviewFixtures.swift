@@ -3,6 +3,8 @@ import MeetupCore
 
 /// Fictional sample sessions and metadata. Never credentials, attendance or network data.
 enum PreviewFixtures {
+    static let course = Course(id: 9_000_001, name: "Preview · Bitcoin basics", description: "Fictional offline preview course. No registration or real appointment.", lecturers: [LecturerSummary(id: 9_000_002, name: "Preview · Community educator")], events: [CourseDate(id: "demo-course-date", title: "Preview · Bitcoin basics", start: events[0].start, end: events[0].end, location: "Preview · Wien")])
+    static let lecturer = Lecturer(id: 9_000_002, name: "Preview · Community educator", description: "Fictional offline preview profile.", courses: [course.summary])
     static let meetups: [Meetup] = [
         Meetup(id: "demo-vienna", name: "Preview · Bitcoin Wien", city: "Wien", country: "AT", latitude: 48.2082, longitude: 16.3738, description: "Fictional preview group. Not a portal listing."),
         Meetup(id: "demo-berlin", name: "Preview · Berlin Mitte", city: "Berlin", country: "DE", latitude: 52.5200, longitude: 13.4050, description: "Fictional preview group. Not a portal listing."),

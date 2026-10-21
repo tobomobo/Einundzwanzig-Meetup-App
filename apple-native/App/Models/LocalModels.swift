@@ -87,6 +87,7 @@ enum AppRoute: Hashable {
     case meetups, meetup(String), events(String?), event(String), plans
     case badges, collection(String), badge(UUID), badgeMap, reputation
     case community, news, article(String), bitcoin, converter, resources, glossary
+    case courses, course(Int), lecturer(Int)
     case unavailable(Integration)
 }
 
@@ -103,6 +104,7 @@ struct DataCache: Codable {
     var events: [MeetupEvent] = []
     var articles: [NewsArticle] = []
     var fetchedAt: Date?
+    var calendarSnapshot: CalendarFeedSnapshot?
 }
 
 enum LocalDataError: LocalizedError {

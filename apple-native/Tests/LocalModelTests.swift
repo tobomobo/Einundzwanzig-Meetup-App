@@ -13,8 +13,22 @@ enum LocalModelTests {
         catch is LocalDataError { return }
         throw Failure(description: "Unsafe/invalid import accepted")
     }
-    static func main() throws {
+    @MainActor static func main() async throws {
         let tests: [(String, () throws -> Void)] = [
+            ("legacy caches and local plan events decode without all-day metadata", {
+                let old = Data(#"{"meetups":[],"events":[{"id":"old-event","title":"Legacy","description":"","start":0,"location":""}],"articles":[]}"#.utf8)
+                let cache = try JSONDecoder().decode(DataCache.self, from: old)
+                try require(cache.calendarSnapshot == nil && cache.events.count == 1 && !cache.events[0].isAllDay, "Lost existing calendar/plan compatibility")
+            }),
+            ("all-day native calendar conversion preserves source civil day", {
+                var source = Calendar(identifier: .gregorian)
+                source.timeZone = TimeZone(identifier: "America/Santiago")!
+                let start = source.date(from: DateComponents(year: 2026, month: 9, day: 6))!
+                let event = MeetupEvent(id: "date", start: start, isAllDay: true, calendarTimeZoneID: source.timeZone.identifier)
+                let converted = event.forNativeCalendar
+                let parts = Calendar.current.dateComponents([.year, .month, .day], from: converted.start)
+                try require(parts.year == 2026 && parts.month == 9 && parts.day == 6 && converted.isAllDay, "All-day date shifted into another day")
+            }),
             ("selected language resolves search text from actual translated resources", {
                 guard CommandLine.arguments.count > 1, let bundle = Bundle(path: CommandLine.arguments[1]) else {
                     throw Failure(description: "Missing real app resource bundle")
@@ -75,7 +89,85 @@ enum LocalModelTests {
             })
         ]
         for (name, test) in tests { try test(); print("PASS \(name)") }
-        print("LocalModels: \(tests.count) tests passed")
+        let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("learning-tests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: temporary) }
+        let client = ControlledLearningClient()
+        let learning = LearningStore(clientFactory: { client }, cacheFile: temporary.appendingPathComponent("cache.json"))
+        let first = Task { await learning.refresh() }
+        await client.waitForCourses(1)
+        first.cancel()
+        await first.value
+        try require(!learning.loading, "Cancelled refresh permanently held loading")
+        await learning.refresh()
+        try require(!learning.loading && learning.cache.courses.first?.id == 7, "Refresh did not recover after cancellation")
+        print("PASS learning refresh cancellation releases loading and permits retry")
+        let old = Task { await learning.refresh() }
+        await client.waitForCourses(3)
+        learning.invalidateRequests()
+        let fresh = Task { await learning.refresh() }
+        await client.waitForCourses(4)
+        old.cancel()
+        await old.value
+        try require(learning.loading, "Old cancelled request cleared newer generation loading")
+        await fresh.value
+        try require(!learning.loading && learning.cache.courses.count == 1, "Newer generation did not complete")
+        print("PASS obsolete learning generation cannot clear a newer refresh")
+        var nested = LearningCache()
+        nested.courses = [Course(id: 7, name: "List course", lecturers: [LecturerSummary(id: 144, name: "Nested educator")])]
+        nested.lecturers = [Lecturer(id: 8, name: "List educator", courses: [CourseSummary(id: 44, name: "Nested course")])]
+        let nestedFile = temporary.appendingPathComponent("nested.json")
+        try JSONEncoder().encode(nested).write(to: nestedFile)
+        let restored = LearningStore(cacheFile: nestedFile)
+        try require(restored.cachedLecturer(144)?.name == "Nested educator" && restored.cachedCourse(44)?.name == "Nested course", "Persisted list relationships lost their fallback")
+        print("PASS offline related IDs resolve from persisted lists")
+        let server = LearningFixtureServer()
+        let resettable = LearningStore(clientFactory: { ResetCachingClient(server: server) }, cacheFile: temporary.appendingPathComponent("reset.json"))
+        let beforeReset = try await resettable.course(44)
+        try require(beforeReset.value?.name == "Before reset", "Expected initial public detail")
+        try resettable.reset()
+        await server.goOffline()
+        let afterReset = try await resettable.course(44)
+        try require(afterReset.value == nil && afterReset.source == .unavailable, "Reset resurrected a pre-reset client detail")
+        print("PASS reset replaces client cache and cannot resurrect old details")
+        print("LocalModels: \(tests.count + 4) tests passed")
     }
+}
+
+actor ControlledLearningClient: LearningDataSource {
+    private var calls = 0
+    private var waiters: [(Int, CheckedContinuation<Void, Never>)] = []
+    func waitForCourses(_ count: Int) async {
+        if calls >= count { return }
+        await withCheckedContinuation { waiters.append((count, $0)) }
+    }
+    func courses() async throws -> [Course] {
+        calls += 1
+        let ready = waiters.filter { $0.0 <= calls }
+        waiters.removeAll { $0.0 <= calls }
+        ready.forEach { $0.1.resume() }
+        try await Task.sleep(for: .milliseconds(80))
+        return [Course(id: 7, name: "Fixture course")]
+    }
+    func lecturers() async throws -> [Lecturer] { [] }
+    func courseDetail(id: Int) async throws -> PublicDetailResult<Course> { PublicDetailResult(value: nil, source: .unavailable, failure: .notFound) }
+    func lecturerDetail(id: Int) async throws -> PublicDetailResult<Lecturer> { PublicDetailResult(value: nil, source: .unavailable, failure: .notFound) }
+}
+
+actor LearningFixtureServer {
+    private var online = true
+    func goOffline() { online = false }
+    func detail() -> Course? { online ? Course(id: 44, name: "Before reset") : nil }
+}
+actor ResetCachingClient: LearningDataSource {
+    let server: LearningFixtureServer
+    private var cached: Course?
+    init(server: LearningFixtureServer) { self.server = server }
+    func courses() async throws -> [Course] { [] }
+    func lecturers() async throws -> [Lecturer] { [] }
+    func courseDetail(id: Int) async throws -> PublicDetailResult<Course> {
+        if let value = await server.detail() { cached = value; return PublicDetailResult(value: value, source: .fresh) }
+        return PublicDetailResult(value: cached, source: cached == nil ? .unavailable : .cache, failure: .notFound)
+    }
+    func lecturerDetail(id: Int) async throws -> PublicDetailResult<Lecturer> { PublicDetailResult(value: nil, source: .unavailable, failure: .notFound) }
 }
 #endif

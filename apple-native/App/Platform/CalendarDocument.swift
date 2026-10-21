@@ -21,7 +21,9 @@ struct CalendarDocument: FileDocument {
             start: event.start,
             end: event.end,
             location: event.location,
-            url: event.url
+            url: event.url,
+            allDay: event.isAllDay,
+            timeZone: event.civilTimeZone
         ).data()
     }
 
