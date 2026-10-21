@@ -87,4 +87,12 @@ class AmberAndPasskeyJsonTest {
         assertNull(PasskeyJson.prfSecretHex("""{"id":"x","clientExtensionResults":{}}"""))
         assertNull(PasskeyJson.prfSecretHex("""{"clientExtensionResults":{"prf":{"results":{"first":""}}}}"""))
     }
+
+    @Test
+    fun malformedResponseHasNoCredentialId() {
+        assertNull(PasskeyJson.credentialId("not json"))
+        assertNull(PasskeyJson.credentialId("""{"id":42}"""))
+        assertNull(PasskeyJson.credentialId("[]"))
+        assertNull(PasskeyJson.credentialId(""))
+    }
 }

@@ -1,5 +1,7 @@
 package space.einundzwanzig.meetup.data.badges
 
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -21,7 +23,9 @@ import space.einundzwanzig.meetup.core.crypto.Sha256
 import space.einundzwanzig.meetup.data.badges.claim.BadgeClaims
 import space.einundzwanzig.meetup.data.badges.internal.DefaultBadgeClaimService
 import space.einundzwanzig.meetup.data.badges.model.MeetupBadge
+import space.einundzwanzig.meetup.core.nostr.NostrEvent
 import space.einundzwanzig.meetup.data.badges.security.BadgeSecurity
+import space.einundzwanzig.meetup.data.badges.security.BadgeSigner
 
 /**
  * Claim format (spec 02 §7.4, `fixtures.claim`), the claim service, retroactive claiming, and
@@ -84,6 +88,29 @@ class BadgeClaimTest {
     }
 
     @Test
+    fun `claim signed with explicit created_at verifies across a second boundary`() = runTest {
+        val time = FakeTime(1_760_000_123_900)
+        // The clock ticks over while the user approves (Amber/bunker): the signer still uses the
+        // requested created_at, so one request suffices.
+        val signer = object : BadgeSigner {
+            var calls = 0
+            override suspend fun canSign() = true
+            override suspend fun signEvent(kind: Int, tags: List<List<String>>, content: String, createdAt: Long?): NostrEvent {
+                calls++
+                time.millis += 1_500
+                return EventIds.sign(attendee, createdAt ?: time.nowSeconds(), kind, tags, content)
+            }
+        }
+        val service = DefaultBadgeClaimService(signer, StoreHarness(time = time).repo, time)
+        val r = service.createClaim(compactSig, "", organizerPub, 917001)
+        assertTrue(r.success)
+        assertEquals(1, signer.calls)
+        assertEquals(1760000123L, r.claimTimestamp)
+        assertEquals(Fixtures["claim"].jsonObject["id"]!!.jsonPrimitive.content, r.claimEventId)
+        assertTrue(BadgeClaims.verifyClaim(r.claimSig, r.claimEventId, r.claimPubkey, r.claimTimestamp, compactSig, "", organizerPub, 917001).isValid)
+    }
+
+    @Test
     fun `createClaim re-requests when the signer picks another created_at`() = runTest {
         val time = FakeTime(1_760_000_123_000)
         val signer = TestSigner(attendee, time, createdAtOverride = { call -> if (call == 0) 1_760_000_124 else null })
@@ -118,7 +145,8 @@ class BadgeClaimTest {
         val h = StoreHarness()
         val service = DefaultBadgeClaimService(TestSigner(attendee, h.time), h.repo, h.time)
         val plain = MeetupBadge(id = "plain", meetupName = "X", date = DartDateTime.utc(2025, 1, 1), iconPath = "")
-        val input = listOf(unclaimed("a", presenceVerified = false), plain)
+        assertTrue(h.repo.saveBadges(listOf(unclaimed("a", presenceVerified = false), plain)))
+        val input = h.repo.badges.value
         val result = service.ensureBadgesClaimed(input)
         assertEquals(1, result.claimedCount)
         val claimed = result.badges[0]
@@ -138,12 +166,84 @@ class BadgeClaimTest {
     @Test
     fun `failed save reports zero claims`() = runTest {
         val h = StoreHarness()
+        assertTrue(h.repo.saveBadges(listOf(unclaimed("a"))))
         h.prefs.failAllWrites = true
         val service = DefaultBadgeClaimService(TestSigner(attendee, h.time), h.repo, h.time)
-        val input = listOf(unclaimed("a"))
+        val input = h.repo.badges.value
         val result = service.claimUnboundBadges(input)
         assertEquals(0, result.claimedCount)
         assertSame(input, result.badges)
+        assertFalse(h.repo.loadBadges().single().isClaimed)
+    }
+
+    @Test
+    fun `a badge scanned during the claim batch survives`() = runTest {
+        val h = StoreHarness()
+        assertTrue(h.repo.saveBadges(listOf(unclaimed("a"))))
+        val scanned = MeetupBadge(id = "scan", meetupName = "Wien", meetupEventId = "scan", date = DartDateTime.utc(2025, 11, 1), iconPath = "")
+        // The scanner saves while the user approves the claim in the signer.
+        val signer = object : BadgeSigner {
+            val inner = TestSigner(attendee, h.time)
+            override suspend fun canSign() = true
+            override suspend fun signEvent(kind: Int, tags: List<List<String>>, content: String, createdAt: Long?): NostrEvent {
+                assertTrue(h.repo.update { it + scanned })
+                return inner.signEvent(kind, tags, content, createdAt)
+            }
+        }
+        val service = DefaultBadgeClaimService(signer, h.repo, h.time)
+        val result = service.claimUnboundBadges(h.repo.badges.value)
+        assertEquals(1, result.claimedCount)
+        val stored = h.repo.loadBadges()
+        assertEquals(listOf("a", "scan"), stored.map { it.id })
+        assertTrue(stored[0].isClaimed)
+        assertEquals(listOf("a", "scan"), result.badges.map { it.id })
+    }
+
+    @Test
+    fun `a badge removed during the claim batch is not brought back`() = runTest {
+        val h = StoreHarness()
+        val keep = MeetupBadge(id = "keep", meetupName = "Wien", meetupEventId = "keep", date = DartDateTime.utc(2025, 11, 1), iconPath = "")
+        assertTrue(h.repo.saveBadges(listOf(unclaimed("a"), keep)))
+        val signer = object : BadgeSigner {
+            val inner = TestSigner(attendee, h.time)
+            override suspend fun canSign() = true
+            override suspend fun signEvent(kind: Int, tags: List<List<String>>, content: String, createdAt: Long?): NostrEvent {
+                assertTrue(h.repo.update { current -> current.filter { it.id != "a" } })
+                return inner.signEvent(kind, tags, content, createdAt)
+            }
+        }
+        val result = DefaultBadgeClaimService(signer, h.repo, h.time).claimUnboundBadges(h.repo.badges.value)
+        assertEquals(0, result.claimedCount)
+        assertEquals(listOf("keep"), h.repo.loadBadges().map { it.id })
+    }
+
+    @Test
+    fun `concurrent ensureBadgesClaimed prompts once per badge`() = runTest {
+        val h = StoreHarness()
+        // Different block heights: same proof and second would give identical claim events.
+        assertTrue(h.repo.saveBadges(listOf(unclaimed("a"), unclaimed("b").copyWith(blockHeight = 917001))))
+        val gate = CompletableDeferred<Unit>()
+        val signer = object : BadgeSigner {
+            val inner = TestSigner(attendee, h.time)
+            override suspend fun canSign() = true
+            override suspend fun signEvent(kind: Int, tags: List<List<String>>, content: String, createdAt: Long?): NostrEvent {
+                gate.await()
+                return inner.signEvent(kind, tags, content, createdAt)
+            }
+        }
+        val service = DefaultBadgeClaimService(signer, h.repo, h.time)
+        val snapshot = h.repo.badges.value
+        val first = async { service.ensureBadgesClaimed(snapshot) }
+        val second = async { service.ensureBadgesClaimed(snapshot) }
+        testScheduler.runCurrent()
+        gate.complete(Unit)
+        val results = listOf(first.await(), second.await())
+
+        assertEquals(2, signer.inner.calls)
+        assertEquals(2, results.sumOf { it.claimedCount })
+        val stored = h.repo.loadBadges()
+        assertTrue(stored.all { it.isClaimed })
+        assertEquals(2, stored.map { it.claimEventId }.toSet().size)
     }
 
     @Test
@@ -215,6 +315,7 @@ class BadgeClaimTest {
         val binding = bind(claimer, badge, sigId, day + 60)
         val b = MeetupBadge(
             id = "x", meetupName = "A", date = DartDateTime.utc(2025, 1, 1), iconPath = "",
+            blockHeight = 875000,
             sig = badge["s"]!!.jsonPrimitive.content, sigId = sigId, adminPubkey = admin.publicKeyHex, sigVersion = 2,
             claimSig = binding.sig, claimEventId = binding.id, claimPubkey = claimer.publicKeyHex, claimTimestamp = binding.ts,
         )

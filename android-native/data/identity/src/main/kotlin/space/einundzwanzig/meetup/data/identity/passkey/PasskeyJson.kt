@@ -72,11 +72,14 @@ object PasskeyJson {
     /** A fresh 32-byte challenge, base64url without padding (no server verifies it). */
     fun randomChallenge(): String = DartBase64.encodeUrlNoPadding(space.einundzwanzig.meetup.core.crypto.CryptoRandom.bytes(32))
 
-    /** The credential `id` of a WebAuthn response JSON. */
-    fun credentialId(responseJson: String): String? =
+    /** The credential `id` of a WebAuthn response JSON, or `null` if absent or the JSON is malformed. */
+    fun credentialId(responseJson: String): String? = try {
         (DartJson.decode(responseJson) as? JsonObject)?.get("id")?.let {
             (it as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { p -> p.isString }?.content
         }
+    } catch (e: Exception) {
+        null
+    }
 
     /**
      * `clientExtensionResults.prf.results.first` (base64url, padding optional) as lowercase hex,

@@ -44,7 +44,9 @@ Never run `./gradlew clean` or delete another module's build dir.
 
 ```
 app/                 MainActivity, Application, NavDisplay wiring, app shell, deep links, manifest
-core/common          dispatchers, ApplicationScope, TimeSource, AppLogger, Result helpers
+core/common          dispatchers, ApplicationScope, TimeSource, AppLogger, AppStartupTask, DartJson
+                     (the ONLY Dart-compatible JSON codec), Dart compat (toDartString/toStringAsFixed,
+                     DartDateTime, DartUri)
 core/l10n            ALL strings generated from ../lib/l10n/*.arb (tools/arb2xml.py). Do not edit by hand.
 core/ui              theme (EinundzwanzigTheme), design-system components, shared composables
 core/navigation      Navigator + every NavKey (Destinations.kt)

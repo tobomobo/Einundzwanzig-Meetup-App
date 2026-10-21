@@ -67,11 +67,13 @@ internal class ExoPlaybackBackend @Inject constructor(
         }
 
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-            listener?.onPlayWhenReadyChanged(playWhenReady)
+            listener?.onPlayWhenReadyChanged(this@ExoPlaybackBackend.playWhenReady)
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             if (playbackState == Player.STATE_READY) listener?.onReady()
+            // Entering/leaving ENDED changes the effective play intent without a playWhenReady change.
+            listener?.onPlayWhenReadyChanged(this@ExoPlaybackBackend.playWhenReady)
             reportDuration()
         }
 
@@ -95,7 +97,12 @@ internal class ExoPlaybackBackend @Inject constructor(
 
     override val currentIndex: Int? get() = if (player.mediaItemCount > 0) player.currentMediaItemIndex else null
 
-    override val playWhenReady: Boolean get() = player.playWhenReady
+    /**
+     * Effective play intent: `playWhenReady`, but `false` once the playlist has ENDED (ExoPlayer
+     * keeps `playWhenReady = true` there), so the UI shows "play" and the next toggle restarts.
+     */
+    override val playWhenReady: Boolean
+        get() = player.playWhenReady && player.playbackState != Player.STATE_ENDED
 
     override val durationMs: Long? get() = player.duration.takeIf { it != C.TIME_UNSET && it >= 0 }
 
@@ -131,7 +138,13 @@ internal class ExoPlaybackBackend @Inject constructor(
         prepareIfIdle()
     }
 
+    /**
+     * Same semantics as the notification's play button (`Util.handlePlayButtonAction`): prepares an
+     * IDLE player and, in ENDED, seeks to the start of the current item first — a bare
+     * `player.play()` is a no-op there.
+     */
     override fun play() {
+        if (player.playbackState == Player.STATE_ENDED) player.seekToDefaultPosition(player.currentMediaItemIndex)
         prepareIfIdle()
         player.play()
     }

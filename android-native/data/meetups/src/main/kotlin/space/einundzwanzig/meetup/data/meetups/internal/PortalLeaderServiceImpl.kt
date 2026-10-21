@@ -1,18 +1,20 @@
 package space.einundzwanzig.meetup.data.meetups.internal
 
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.OkHttpClient
+import space.einundzwanzig.meetup.core.common.IoDispatcher
 import space.einundzwanzig.meetup.core.common.TimeSource
 import space.einundzwanzig.meetup.core.common.dart.dartTrim
 import space.einundzwanzig.meetup.core.common.json.DartJson
 import space.einundzwanzig.meetup.core.common.log.DiagnosticLog
 import space.einundzwanzig.meetup.core.data.prefs.KeyValueStore
 import space.einundzwanzig.meetup.core.network.HttpResult
-import space.einundzwanzig.meetup.core.network.getCapped
 import space.einundzwanzig.meetup.data.meetups.portal.PortalLeaderService
 import space.einundzwanzig.meetup.data.meetups.portal.PortalLeaderService.Companion.CACHE_KEY
 import space.einundzwanzig.meetup.data.meetups.portal.PortalLeaderService.Companion.CACHE_TS_KEY
@@ -28,6 +30,7 @@ internal class PortalLeaderServiceImpl @Inject constructor(
     private val prefs: KeyValueStore,
     private val time: TimeSource,
     private val log: DiagnosticLog,
+    @IoDispatcher private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : PortalLeaderService {
 
     private val mutex = Mutex()
@@ -38,29 +41,49 @@ internal class PortalLeaderServiceImpl @Inject constructor(
     @Volatile
     private var loadedAt: Long? = null
 
-    override suspend fun ensureLoaded(force: Boolean) = mutex.withLock {
+    /**
+     * Number of finished network attempts. A caller that queued on [mutex] while another caller
+     * fetched skips its own fetch (Dart ran concurrent calls in parallel, so the worst case was one
+     * timeout, not one per queued caller).
+     */
+    @Volatile
+    private var attempts: Long = 0
+
+    override suspend fun ensureLoaded(force: Boolean) {
+        val seen = attempts
+        mutex.withLock {
+            if (!force && attempts != seen) return
+            try {
+                load(force)
+            } finally {
+                attempts++
+            }
+        }
+    }
+
+    private suspend fun load(force: Boolean) {
         val at = loadedAt
-        if (!force && leaders.isNotEmpty() && at != null && time.nowMillis() - at < TTL_MS) return@withLock
+        if (!force && leaders.isNotEmpty() && at != null && time.nowMillis() - at < TTL_MS) return
         if (leaders.isEmpty()) loadFromCache()
 
-        val r = client.getCapped(PortalUrls.LEADERS_URL, maxBytes = MAX_BYTES, timeout = PortalUrls.LEADERS_TIMEOUT)
+        val r = client.getCappedOn(io, PortalUrls.LEADERS_URL, maxBytes = MAX_BYTES, timeout = PortalUrls.LEADERS_TIMEOUT)
         if (r !is HttpResult.Response) {
             log.warn(TAG, "Leader-Liste nicht abrufbar: ${(r as? HttpResult.Failure)?.cause ?: r}")
-            return@withLock
+            return
         }
         if (r.status != 200) {
             log.warn(TAG, "Portal antwortete mit HTTP ${r.status}.")
-            return@withLock
+            return
         }
         val body = r.text()
         val parsed = runCatching { parse(body, normalize = true) }.getOrElse {
             log.warn(TAG, "Leader-Liste nicht abrufbar: $it")
-            return@withLock
+            return
         }
         // Never adopt an empty answer: it can be an outage, and then every organizer would be unknown.
         if (parsed.isEmpty()) {
             log.warn(TAG, "Leere Leader-Liste — alter Stand bleibt.")
-            return@withLock
+            return
         }
         val now = time.nowMillis()
         leaders = parsed

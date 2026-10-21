@@ -25,7 +25,10 @@ interface PortalApiService {
     /** `getToken() != null`. */
     suspend fun hasToken(): Boolean
 
-    /** Stores [token] and binds it to the mode-aware `SigningService.npub()` (if non-empty). */
+    /**
+     * Stores [token] and binds it to the mode-aware `SigningService.npub()` (if non-empty), both in
+     * one secure-store transaction. A failed write is logged; [loginWithNostr] then fails.
+     */
     suspend fun storeToken(token: String)
 
     /** `storeToken(token.trim())` — personal token created on the portal website. */
@@ -122,7 +125,13 @@ interface PortalApiService {
      * month and the 1st of the month after (sequential), merged by `id` (a later date overwrites
      * the value but keeps the first position). Raw maps; times are UTC without zone.
      */
-    suspend fun getAllMeetupEvents(today: LocalDate = LocalDate.now()): List<JsonObject>
+    suspend fun getAllMeetupEvents(today: LocalDate): List<JsonObject>
+
+    /**
+     * [getAllMeetupEvents] for today's local date (device zone) taken from the injected
+     * `TimeSource` (Dart `DateTime.now()`), never the system clock directly.
+     */
+    suspend fun getAllMeetupEvents(): List<JsonObject>
 
     /** `GET /api/meetup-events/{id}/rsvp` → `body.data` if it is an object, else the body. */
     suspend fun getRsvp(eventId: Int): JsonObject?

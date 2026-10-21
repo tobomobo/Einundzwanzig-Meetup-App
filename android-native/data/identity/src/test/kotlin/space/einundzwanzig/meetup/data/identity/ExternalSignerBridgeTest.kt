@@ -8,6 +8,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -24,7 +25,7 @@ class ExternalSignerBridgeTest {
 
     @Test
     fun publishesLaunchesAndDeliversTheResult() = runBlocking {
-        val bridge = DefaultExternalSignerBridge()
+        val bridge = DefaultExternalSignerBridge().also { it.attachHost() }
         val request = async(Dispatchers.Unconfined, start = CoroutineStart.UNDISPATCHED) { bridge.launch(intent) }
         val pending = bridge.pendingLaunch.value!!
         assertEquals(false, pending.launched)
@@ -54,7 +55,7 @@ class ExternalSignerBridgeTest {
 
     @Test
     fun launchFailureFailsTheRequest() = runBlocking {
-        val bridge = DefaultExternalSignerBridge()
+        val bridge = DefaultExternalSignerBridge().also { it.attachHost() }
         val request = async(Dispatchers.Unconfined, start = CoroutineStart.UNDISPATCHED) { runCatching { bridge.launch(intent) } }
         bridge.onLaunchFailed(bridge.pendingLaunch.value!!.id, android.content.ActivityNotFoundException("kein Amber"))
         val error = request.await().exceptionOrNull() as Nip55Exception
@@ -65,8 +66,63 @@ class ExternalSignerBridgeTest {
     }
 
     @Test
-    fun abandonedLaunchedRequestStaysReservedUntilItsResult() = runBlocking {
+    fun resultForANeverLaunchedRequestIsDropped() = runBlocking {
+        // Process death while Amber was in front: the recreated Activity restores the old id and
+        // a new request with that id is published before the stale result arrives.
+        val bridge = DefaultExternalSignerBridge().also { it.attachHost() }
+        val request = async(Dispatchers.Unconfined, start = CoroutineStart.UNDISPATCHED) { bridge.launch(intent) }
+        val pending = bridge.pendingLaunch.value!!
+        bridge.onResult(pending.id, Activity.RESULT_OK, Intent().putExtra("result", "stale"))
+        assertTrue(request.isActive)
+        assertEquals(pending, bridge.pendingLaunch.value)
+        assertTrue(bridge.onLaunched(pending.id))
+        bridge.onResult(pending.id, Activity.RESULT_OK, Intent().putExtra("result", "fresh"))
+        assertEquals("fresh", request.await().data!!.getStringExtra("result"))
+    }
+
+    @Test
+    fun idsDoNotRepeatAcrossInstances() {
+        val ids = (1..8).map {
+            val bridge = DefaultExternalSignerBridge().also { b -> b.attachHost() }
+            runBlocking {
+                val r = async(Dispatchers.Unconfined, start = CoroutineStart.UNDISPATCHED) { runCatching { bridge.launch(intent) } }
+                val id = bridge.pendingLaunch.value!!.id
+                r.cancel()
+                id
+            }
+        }
+        assertTrue(ids.all { it > 0 })
+        assertEquals(ids.size, ids.toSet().size)
+    }
+
+    @Test
+    fun withoutHostTheRequestFailsInsteadOfBlockingTheSlot() = runTest {
         val bridge = DefaultExternalSignerBridge()
+        val error = runCatching { bridge.launch(intent) }.exceptionOrNull() as Nip55Exception
+        assertEquals("cancelled", error.code)
+        assertNull(bridge.pendingLaunch.value)
+
+        // A host that attaches within the grace period (configuration change) still gets it.
+        val waiting = async { bridge.launch(intent) }
+        testScheduler.runCurrent()
+        assertNull(bridge.pendingLaunch.value)
+        val host = bridge.attachHost()
+        testScheduler.runCurrent()
+        val pending = bridge.pendingLaunch.value!!
+        assertTrue(bridge.onLaunched(pending.id))
+        bridge.onResult(pending.id, Activity.RESULT_OK, Intent().putExtra("result", "ok"))
+        assertEquals("ok", waiting.await().data!!.getStringExtra("result"))
+
+        // Detached again: back to failing fast; double close is harmless.
+        host.close()
+        host.close()
+        val again = runCatching { bridge.launch(intent) }.exceptionOrNull() as Nip55Exception
+        assertEquals("cancelled", again.code)
+    }
+
+    @Test
+    fun abandonedLaunchedRequestStaysReservedUntilItsResult() = runBlocking {
+        val bridge = DefaultExternalSignerBridge().also { it.attachHost() }
         val first = async(Dispatchers.Unconfined, start = CoroutineStart.UNDISPATCHED) { bridge.launch(intent) }
         val a = bridge.pendingLaunch.value!!
         assertTrue(bridge.onLaunched(a.id))
@@ -99,7 +155,7 @@ class ExternalSignerBridgeTest {
 
     @Test
     fun requestCancelledBeforeLaunchIsReleasedAndNeverLaunched() = runBlocking {
-        val bridge = DefaultExternalSignerBridge()
+        val bridge = DefaultExternalSignerBridge().also { it.attachHost() }
         val first = async(Dispatchers.Unconfined, start = CoroutineStart.UNDISPATCHED) { bridge.launch(intent) }
         val a = bridge.pendingLaunch.value!!
         first.cancel()

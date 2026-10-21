@@ -13,7 +13,10 @@ import space.einundzwanzig.meetup.data.meetups.model.Meetup
  */
 interface PortalLogoRegistry {
 
-    /** Name → raw logo URL, in insertion order (Dart `LinkedHashMap`). */
+    /**
+     * Name → raw logo URL: the calendar entries ([put]) in insertion order (Dart `LinkedHashMap`),
+     * followed by seeded entries ([seedFrom]) whose name the calendar does not have.
+     */
     val logos: StateFlow<Map<String, String>>
 
     /** Records [logo] for [name] (non-empty logos only; an existing key keeps its position). */
@@ -22,13 +25,15 @@ interface PortalLogoRegistry {
     /**
      * Seeds the registry from the directory's `Meetup.logoUrl` (group name and city as keys,
      * existing entries win). Display only; fills crests for meetups without upcoming dates
-     * (allowed by spec 03 §5 "Native may additionally seed the registry from it").
+     * (allowed by spec 03 §5 "Native may additionally seed the registry from it"). Seeded entries
+     * are kept apart: [logoFor] consults them only when no calendar entry matches, and they do
+     * not count as "logos present" for [ensureLoaded].
      */
     fun seedFrom(meetups: List<Meetup>)
 
     /**
-     * Fills the registry once if it is empty: a single shared in-flight call of the bound
-     * [PortalLogoLoader] (no-op without a binding or when logos are present). Unlike Flutter, a
+     * Fills the registry once if it has no calendar entries: a single shared in-flight call of the
+     * bound [PortalLogoLoader] (no-op without a binding or when calendar logos are present). Unlike Flutter, a
      * load that produced nothing may be retried by a later call.
      */
     suspend fun ensureLoaded()
@@ -36,7 +41,8 @@ interface PortalLogoRegistry {
     /**
      * Dart `logoFor`: q = trimmed lowercase [titleOrCity]; empty → `""`. The first entry (insertion
      * order) whose lowercase name equals q, contains q or is contained in q →
-     * `absoluteImageUrl(logo)`; none → `""`.
+     * `absoluteImageUrl(logo)`; none → `""`. The rule runs over the calendar entries first and only
+     * then over the seeded ones, so results equal Flutter's whenever the calendar has a match.
      */
     fun logoFor(titleOrCity: String): String
 

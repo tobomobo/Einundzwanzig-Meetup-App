@@ -16,7 +16,7 @@ internal interface PlaybackBackend {
     /** Current item index, `null` without playlist. */
     val currentIndex: Int?
 
-    /** Play intent (`playWhenReady`). */
+    /** Play intent (`playWhenReady`; `false` once the playlist has ended). */
     val playWhenReady: Boolean
 
     /** Duration of the current item in ms, `null` if unknown. */
@@ -43,7 +43,7 @@ internal interface PlaybackBackend {
     fun seekToNext()
     fun seekToPrevious()
 
-    /** Starts/resumes playback (prepares again if idle). */
+    /** Starts/resumes playback (prepares again if idle; restarts the current item if ended). */
     fun play()
     fun pause()
 
@@ -52,7 +52,7 @@ internal interface PlaybackBackend {
         /** The current item changed (auto-advance, seek, new playlist). */
         fun onIndexChanged(index: Int)
 
-        /** Play intent changed (also from the notification / headset). */
+        /** Play intent changed (also from the notification / headset, or the playlist ending). */
         fun onPlayWhenReadyChanged(playWhenReady: Boolean)
 
         /** Duration of the current item became known/changed (`null` = unknown). */

@@ -23,9 +23,10 @@ internal class LocaleStartupTask @Inject constructor(
 
     override suspend fun run() {
         if (!controller.isManagedByPlatform) return
+        // syncWithSystem logs and swallows platform failures, so the collector always starts.
         controller.syncWithSystem()
         scope.launch {
-            controller.appLocale.collect { controller.applyToPlatform(it) }
+            controller.appLocale.collect { controller.applyToPlatform() }
         }
     }
 }

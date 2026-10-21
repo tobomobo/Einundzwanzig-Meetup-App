@@ -1,5 +1,6 @@
 package space.einundzwanzig.meetup.data.profile
 
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -52,6 +53,7 @@ class DisplayNamesTest {
             store = store,
             time = time,
             ioDispatcher = dispatcher,
+            scope = backgroundScope,
         )
     }
 
@@ -256,5 +258,18 @@ class DisplayNamesTest {
         service.setLocalPicture("/data/user/0/space.einundzwanzig.meetup/cache/gone.jpg")
         assertEquals("/data/user/0/space.einundzwanzig.meetup/cache/gone.jpg", service.getLocalPicture())
         assertNull(service.getExistingLocalPicture())
+    }
+
+    @Test
+    fun `concurrent lookups of the same npub share one query per relay`() = runTest {
+        val service = service()
+        relays.add(r1, profile(SECRET1, "{\"name\":\"alice\"}", age = 10))
+        relays.silent += r2 // keeps the first lookup in flight until the timeout
+        val first = async { service.fetchDisplayName(alice) }
+        val second = async { service.fetchDisplayName(alice) }
+        assertEquals("alice", first.await())
+        assertEquals("alice", second.await())
+        assertEquals(1, relays.reqs.count { it.first == r1 })
+        assertEquals(1, relays.reqs.count { it.first == r2 })
     }
 }

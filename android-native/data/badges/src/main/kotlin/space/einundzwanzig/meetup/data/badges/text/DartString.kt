@@ -21,6 +21,15 @@ object DartString {
     /** Resource name of the shipped Dart case table (next to this class). */
     const val CASE_TABLE_RESOURCE = "dart_case_table.txt"
 
+    /**
+     * Loads the case table (a Java resource read from the APK, tens of milliseconds the first
+     * time). Call it off the main thread before the first [lower]/[upper] on a UI path; the badge
+     * repository does so on its IO dispatcher with every load. Idempotent and cheap afterwards.
+     */
+    fun warmUp() {
+        Tables.lower
+    }
+
     /** Dart `s.trim()` (26 whitespace code units incl. U+0085 and U+FEFF; not U+001C–U+001F). */
     fun trim(s: String): String = s.dartTrim()
 

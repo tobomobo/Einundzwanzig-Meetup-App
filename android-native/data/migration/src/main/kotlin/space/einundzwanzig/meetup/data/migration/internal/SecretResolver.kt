@@ -2,6 +2,7 @@ package space.einundzwanzig.meetup.data.migration.internal
 
 import space.einundzwanzig.meetup.core.crypto.Keys
 import space.einundzwanzig.meetup.core.crypto.Nip19
+import space.einundzwanzig.meetup.data.identity.keys.IdentityKeys
 import space.einundzwanzig.meetup.data.identity.keys.RecoverySource
 import space.einundzwanzig.meetup.data.migration.legacy.LegacySecret
 import space.einundzwanzig.meetup.data.migration.legacy.SecureKeyInventory
@@ -84,7 +85,8 @@ internal object SecretResolver {
         return SecretPlan(primary, recovery, warnings)
     }
 
-    fun recoveryName(source: RecoverySource, key: String): String = "${source.prefix}/$key"
+    /** Secure-store recovery name, shared with `IdentityRecovery` (spec 14 §4.8). */
+    fun recoveryName(source: RecoverySource, key: String): String = IdentityKeys.recoveryName(source.prefix, key)
 
     /**
      * The npub the ESP identity group belongs to: ESP `nostr_npub_key`, else derived from ESP

@@ -16,25 +16,37 @@ import kotlinx.coroutines.flow.StateFlow
  * }
  * lifecycleScope.launch {
  *     repeatOnLifecycle(Lifecycle.State.STARTED) {
- *         externalSignerBridge.pendingLaunch.collect { launch ->
- *             if (launch != null && !launch.launched && externalSignerBridge.onLaunched(launch.id)) {
- *                 launchedSignerId = launch.id
- *                 try { signerLauncher.launch(launch.intent) }
- *                 catch (e: ActivityNotFoundException) { externalSignerBridge.onLaunchFailed(launch.id, e) }
+ *         val host = externalSignerBridge.attachHost()
+ *         try {
+ *             externalSignerBridge.pendingLaunch.collect { launch ->
+ *                 if (launch != null && !launch.launched && externalSignerBridge.onLaunched(launch.id)) {
+ *                     launchedSignerId = launch.id
+ *                     try { signerLauncher.launch(launch.intent) }
+ *                     catch (e: ActivityNotFoundException) { externalSignerBridge.onLaunchFailed(launch.id, e) }
+ *                 }
  *             }
+ *         } finally {
+ *             host.close()
  *         }
  *     }
  * }
  * ```
  * Only one foreground request runs at a time (others fail with `busy`, like the Flutter bridge).
  * A launched request stays reserved until its result arrives, even if the caller gave up; results
- * whose id is not the current request are dropped. A request published while no host is
- * `STARTED` waits until the app comes to the foreground (Flutter launched it from the Activity
- * as soon as it could). After process death the waiting coroutine is gone; a late result is ignored.
+ * whose id is not the current, launched request are dropped. Ids are random per process, so a
+ * result for a request of a dead process never matches. Without an attached host (no Activity
+ * `STARTED`) a request waits briefly (configuration change) and then fails with `cancelled`
+ * instead of blocking the single slot from the background.
  */
 interface ExternalSignerBridge {
     /** The request the host must launch, or `null`. Launch only while [ExternalSignerLaunch.launched] is `false`. */
     val pendingLaunch: StateFlow<ExternalSignerLaunch?>
+
+    /**
+     * Registers a host that can launch requests right now (the Activity is `STARTED`). Close the
+     * returned handle when it stops; closing twice is harmless.
+     */
+    fun attachHost(): AutoCloseable
 
     /**
      * The host is about to start the activity for request [id].
@@ -52,7 +64,7 @@ interface ExternalSignerBridge {
 
 /** One foreground signer request. */
 data class ExternalSignerLaunch(
-    /** Request id (monotonic). */
+    /** Request id (random start per process, then increasing; never 0). */
     val id: Long,
     /** The explicit `nostrsigner:` intent to start for result. */
     val intent: Intent,

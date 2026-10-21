@@ -26,9 +26,17 @@ interface BadgeRepository {
 
     /**
      * The in-memory collection (Dart global `myBadges`): set by [loadBadges] and every successful
-     * save/clear/promote/merge/reset. Empty until the first load.
+     * save/clear/promote/merge/reset. Empty until the first load: check [loaded] before treating
+     * an empty list as an empty wallet.
      */
     val badges: StateFlow<List<MeetupBadge>>
+
+    /**
+     * `false` until the store has been read once in this process (by [loadBadges] or by the first
+     * write, which always loads first). While `false`, [badges] and [badgesUnreadable] say nothing:
+     * show a loading state, never empty-state actions (spec 03 risk 13).
+     */
+    val loaded: StateFlow<Boolean>
 
     /**
      * Dart `MeetupBadge.badgesUnreadable`: a badge file exists but no key opens it. An empty
@@ -47,6 +55,8 @@ interface BadgeRepository {
 
     /**
      * Stores [badges] (united with any kept-aside badges). An empty list **clears by archiving**.
+     * Prefer [update] for read-modify-write; this replaces the collection with [badges] as given.
+     * Loads first if nothing was loaded in this process, so an unreadable file is never overwritten.
      *
      * @param replaceUnreadable a non-empty list may replace an unreadable file (the old file moves
      *   to the backup chain).
@@ -59,6 +69,20 @@ interface BadgeRepository {
         replaceUnreadable: Boolean = false,
         discardLocked: Boolean = false,
     ): Boolean
+
+    /**
+     * The preferred write path: an atomic read-modify-write under the repository lock, so no
+     * concurrent scan, sync merge or claim is lost between read and save.
+     *
+     * [transform] gets the current collection (loaded first if needed) and returns the new one,
+     * or `null` (or the same list instance) for "no change". It runs under the lock: keep it
+     * pure and fast, never suspend or call back into the repository. An empty result clears by
+     * archiving, like [saveBadges] with `[]`.
+     *
+     * @return `true` if the change was stored or nothing had to change; `false` if the wallet is
+     *   unreadable (nothing is written, [transform] is not called) or the save failed.
+     */
+    suspend fun update(transform: (current: List<MeetupBadge>) -> List<MeetupBadge>?): Boolean
 
     /**
      * Keeps a scanned badge aside (encrypted with its own key) while the wallet is unreadable;

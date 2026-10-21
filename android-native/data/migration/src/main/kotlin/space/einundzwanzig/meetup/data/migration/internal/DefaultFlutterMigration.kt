@@ -5,8 +5,9 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -76,8 +77,23 @@ internal class DefaultFlutterMigration @Inject constructor(
     private val mutex = Mutex()
     private val done = CompletableDeferred<Unit>()
 
+    /**
+     * Process-lifetime scope the import runs in. Callers only await the result, so a cancelled
+     * caller (Glance session, stopped Worker, ViewModel scope) can never abort an attempt halfway
+     * and leave later callers with a released gate over empty or partial stores.
+     */
+    private val scope = CoroutineScope(SupervisorJob() + io)
+
     @Volatile
     private var startCounted = false
+
+    /**
+     * An automatic attempt already ran in this process. Later [ensureMigrated]/[await] callers
+     * (widget, worker, a second launch path) get the persisted report instead of a second retry,
+     * so `IMPORTED_WITH_ERRORS` is retried once per app start (spec 14 §4.7).
+     */
+    @Volatile
+    private var automaticAttemptDone = false
 
     internal val files = LegacyFiles(context)
     internal val stateStore = MigrationStateStore(File(context.noBackupFilesDir, MigrationStateStore.DIR_NAME))
@@ -103,11 +119,22 @@ internal class DefaultFlutterMigration @Inject constructor(
 
     override suspend fun pendingLegacySecrets(): Set<String> = withContext(io) {
         val st = stateStore.read()
-        if (st.state != MigrationState.IMPORTED_WITH_ERRORS) return@withContext emptySet()
-        val named = st.failedKeys.filterNot { it.startsWith("<") }.toMutableSet()
-        // The ESP/secure file could not be read at all: every known key that was not imported may exist there.
-        if (FAILED_ESP in st.failedKeys || FAILED_FSS in st.failedKeys) named += SecureKeyInventory.KEYS - st.importedSecrets.toSet()
-        named
+        when (st.state) {
+            // No attempt finished (aborted before the state was written, or a corrupt state file, which
+            // reads as NOT_STARTED): every secret the Flutter files may hold is still pending.
+            MigrationState.NOT_STARTED ->
+                if (files.anyFlutterDataPresent()) ALL_LEGACY_SECRETS else emptySet()
+            MigrationState.IMPORTED_WITH_ERRORS -> {
+                val imported = st.importedSecrets.toSet()
+                val named = st.failedKeys.filterNot { it.startsWith("<") }.toMutableSet()
+                // The ESP/secure file could not be read at all: every known key that was not imported may exist there.
+                if (FAILED_ESP in st.failedKeys || FAILED_FSS in st.failedKeys) named += SecureKeyInventory.KEYS - imported
+                // The Flutter prefs could not be read: the E0 plaintext and rolling-QR secrets may exist there.
+                if (FAILED_PREFS in st.failedKeys) named += PREFS_ROUTED_SECRETS - imported
+                named
+            }
+            MigrationState.NOT_NEEDED, MigrationState.IMPORTED, MigrationState.CLEANED -> emptySet()
+        }
     }
 
     override suspend fun cleanupIfEligible(): CleanupOutcome = mutex.withLock {
@@ -132,51 +159,91 @@ internal class DefaultFlutterMigration @Inject constructor(
 
     // ---------------------------------------------------------------- run
 
-    private suspend fun run(manual: Boolean): MigrationReport {
-        try {
-            return mutex.withLock { withContext(io) { runLocked(manual) } }
+    /** Result of one locked run: the report and whether an import attempt wrote data (→ hooks). */
+    private class Outcome(val report: MigrationReport, val attempted: Boolean)
+
+    /**
+     * Runs the migration detached from the caller in [scope]; the caller only awaits the result,
+     * so cancelling it never aborts an attempt (the gate is released only after a finished run).
+     */
+    private suspend fun run(manual: Boolean): MigrationReport = scope.async { runDetached(manual) }.await()
+
+    private suspend fun runDetached(manual: Boolean): MigrationReport {
+        val outcome = try {
+            mutex.withLock { runLocked(manual) }
         } catch (e: CancellationException) {
-            throw e // gate stays open; the next await() runs the migration again
+            throw e // only if the process-wide scope itself is cancelled; the gate stays open
         } catch (e: Throwable) {
             log.warn(TAG, "Migration abgebrochen: ${e.javaClass.simpleName}")
-            return runCatching { stateStore.read().toReport() }.getOrElse { PersistedState().toReport() }
-        } finally {
-            // Release the gate also on failure (the app must start), but not on cancellation.
-            if (currentCoroutineContext().isActive) done.complete(Unit)
+            Outcome(runCatching { stateStore.read().toReport() }.getOrElse { PersistedState().toReport() }, attempted = false)
         }
+        // Release the gate also on failure (the app must start). Outside the mutex, before the hooks:
+        // a hook may await the gate, call ensureMigrated() or read the (gated) stores.
+        done.complete(Unit)
+        if (outcome.attempted) {
+            for (hook in hooks) {
+                try {
+                    hook.onMigrationImported(outcome.report)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    log.warn(TAG, "Hook fehlgeschlagen: ${e.javaClass.simpleName}")
+                }
+            }
+        }
+        return outcome.report
     }
 
-    private suspend fun runLocked(manual: Boolean): MigrationReport {
+    private suspend fun runLocked(manual: Boolean): Outcome {
         var st = stateStore.read()
         if (!startCounted) {
             startCounted = true
             st = st.copy(nativeStarts = st.nativeStarts + 1)
             runCatching { stateStore.write(st) }
         }
-        return when (st.state) {
-            MigrationState.NOT_NEEDED, MigrationState.IMPORTED, MigrationState.CLEANED -> st.toReport()
-            MigrationState.IMPORTED_WITH_ERRORS ->
-                if (!manual && st.attempts >= MAX_AUTOMATIC_ATTEMPTS) st.toReport() else attempt(st, retryOnly = st.failedKeys.toSet())
-            MigrationState.NOT_STARTED -> when {
-                !files.anyFlutterDataPresent() -> {
-                    val now = timeSource.nowMillis()
-                    st.copy(state = MigrationState.NOT_NEEDED, startedAt = now, finishedAt = now).also { stateStore.write(it) }.toReport()
+        if (!manual && automaticAttemptDone) return Outcome(st.toReport(), attempted = false)
+        if (!manual) automaticAttemptDone = true
+        try {
+            return when (st.state) {
+                MigrationState.NOT_NEEDED, MigrationState.IMPORTED, MigrationState.CLEANED -> Outcome(st.toReport(), attempted = false)
+                MigrationState.IMPORTED_WITH_ERRORS ->
+                    if (!manual && st.attempts >= MAX_AUTOMATIC_ATTEMPTS) {
+                        Outcome(st.toReport(), attempted = false)
+                    } else {
+                        Outcome(attempt(st, retry = true), attempted = true)
+                    }
+                MigrationState.NOT_STARTED -> when {
+                    !files.anyFlutterDataPresent() -> {
+                        val now = timeSource.nowMillis()
+                        val r = st.copy(state = MigrationState.NOT_NEEDED, startedAt = now, finishedAt = now).also { stateStore.write(it) }
+                        Outcome(r.toReport(), attempted = false)
+                    }
+                    !manual && st.attempts >= MAX_AUTOMATIC_ATTEMPTS -> {
+                        val r = st.copy(
+                            state = MigrationState.IMPORTED_WITH_ERRORS,
+                            warnings = (st.warnings + "TOO_MANY_ATTEMPTS").distinct(),
+                            failedKeys = (st.failedKeys + FAILED_FSS).distinct(),
+                        ).also { stateStore.write(it) }
+                        Outcome(r.toReport(), attempted = false)
+                    }
+                    else -> Outcome(attempt(st, retry = false), attempted = true)
                 }
-                !manual && st.attempts >= MAX_AUTOMATIC_ATTEMPTS -> st.copy(
-                    state = MigrationState.IMPORTED_WITH_ERRORS,
-                    warnings = (st.warnings + "TOO_MANY_ATTEMPTS").distinct(),
-                    failedKeys = (st.failedKeys + FAILED_FSS).distinct(),
-                ).also { stateStore.write(it) }.toReport()
-                else -> attempt(st, retryOnly = null)
             }
+        } catch (e: CancellationException) {
+            // Defensive (the run is detached): an aborted attempt must not count as this start's attempt.
+            if (!manual) automaticAttemptDone = false
+            throw e
         }
     }
 
     /**
-     * Steps 3–9. [retryOnly] = `null` for the first import; otherwise only these failed names
-     * (`<prefs>`, `<esp>`, `<fss>` markers or secure key names) are retried.
+     * Steps 3–9. On a [retry] every secret that is not yet settled is (re)written: primary keys
+     * not in `importedSecrets`, recovery names not in `recovered`. Scoping by what is settled (not
+     * by the failed names) matters when a source became readable only now, e.g. the Flutter prefs
+     * (E0 plaintext keys, rqr routes, the npubs that make ESP identity keys primary). Already
+     * imported keys are skipped so a native change after the import (logout) is never undone.
      */
-    private suspend fun attempt(previous: PersistedState, retryOnly: Set<String>?): MigrationReport {
+    private suspend fun attempt(previous: PersistedState, retry: Boolean): MigrationReport {
         val startedAt = timeSource.nowMillis()
         var st = previous.copy(attempts = previous.attempts + 1, startedAt = startedAt, finishedAt = null)
         stateStore.write(st) // an attempt that dies (process kill) is counted
@@ -250,18 +317,16 @@ internal class DefaultFlutterMigration @Inject constructor(
             counts[COUNT_BADGE_BLOBS_OPENED] = probe.opened
             probe.unopened.forEach { warnings += "BADGE_BLOB_UNOPENED:$it" }
 
-            // Restrict a retry to the names that failed before.
-            val inScope: (String) -> Boolean = { key ->
-                retryOnly == null || key in retryOnly ||
-                    ((FAILED_ESP in retryOnly || FAILED_FSS in retryOnly) && key !in previous.importedSecrets)
-            }
+            // A retry skips only what is already settled (writeSecret never overwrites a differing native value).
+            val settledPrimary = if (retry) previous.importedSecrets.toSet() else emptySet()
+            val settledRecovery = if (retry) previous.recovered.toSet() else emptySet()
 
             // 8. Write: secrets first.
             val imported = LinkedHashSet(previous.importedSecrets)
             val recovered = LinkedHashSet(previous.recovered)
             var secretsImported = 0
             for ((key, secret) in resolved.primary) {
-                if (!inScope(key)) continue
+                if (key in settledPrimary) continue
                 when (val r = writeSecret(key, secret.value)) {
                     WriteResult.Imported -> { imported += key; secretsImported++ }
                     is WriteResult.Recovered -> { recovered += r.name; failed -= key }
@@ -270,7 +335,7 @@ internal class DefaultFlutterMigration @Inject constructor(
             }
             for ((name, value) in resolved.recovery) {
                 val key = name.substringAfter('/')
-                if (!inScope(key)) continue
+                if (name in settledRecovery) continue
                 when (writeRecovery(name, value)) {
                     true -> recovered += name
                     false -> { failed += key; warnings += "RECOVERY_WRITE_FAILED:$name" }
@@ -359,11 +424,8 @@ internal class DefaultFlutterMigration @Inject constructor(
         }
         stateStore.write(st)
         val report = st.toReport()
-        logSummary(report, retryOnly != null)
-        for (hook in hooks) {
-            runCatching { hook.onMigrationImported(report) }.onFailure { log.warn(TAG, "Hook fehlgeschlagen: ${it.javaClass.simpleName}") }
-        }
-        return report
+        logSummary(report, retry)
+        return report // hooks run in runDetached, after the mutex and the gate are released
     }
 
     private sealed interface WriteResult {
@@ -476,5 +538,11 @@ internal class DefaultFlutterMigration @Inject constructor(
         const val FAILED_PREFS = "<prefs>"
         const val FAILED_ESP = "<esp>"
         const val FAILED_FSS = "<fss>"
+
+        /** Secure names the Flutter prefs file can feed (E0 plaintext identity, rolling-QR routes). */
+        val PREFS_ROUTED_SECRETS: Set<String> = (PrefsRouting.E0_IDENTITY_KEYS + PrefsRouting.RQR_ROUTES.values).toSet()
+
+        /** Every secure name a not-yet-imported Flutter install may hold. */
+        val ALL_LEGACY_SECRETS: Set<String> = SecureKeyInventory.KEYS.toSet() + PREFS_ROUTED_SECRETS
     }
 }

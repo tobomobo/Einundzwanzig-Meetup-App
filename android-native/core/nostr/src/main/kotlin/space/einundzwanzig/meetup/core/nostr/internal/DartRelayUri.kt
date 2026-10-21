@@ -14,11 +14,33 @@ import java.math.BigInteger
  * (zone ids normalised to `%25<zone>`), IPvFuture literals (`[v1.x]`) with brackets, as Dart's
  * `uri.host` does.
  *
- * Inputs without an absolute `scheme://` prefix, with an invalid scheme, a non-numeric port or
- * a malformed IP literal yield `null` (callers only accept `wss://` URIs with a host). Where
+ * Inputs without an absolute `scheme://` prefix, with an invalid scheme, a non-numeric port,
+ * a malformed IP literal, more than one `@` in the authority, or `[`/`]` outside an IP literal
+ * yield `null` (callers only accept `wss://` URIs with a host). Where
  * Dart *throws* from `Uri.tryParse` (a port beyond 64 bit, non-ASCII in an IPvFuture literal),
  * this parser returns `null`.
  */
+/**
+ * Dart (VM) `int.tryParse(s)`: optional surrounding whitespace, optional sign, decimal or `0x`
+ * hex digits. Decimal values outside the signed 64-bit range give `null`. Hex magnitudes below
+ * 2^64 are taken as two's complement (`0xffffffffffffffff` → -1, `0x8000000000000000` →
+ * `Long.MIN_VALUE`); with a `-` sign the magnitude may be at most 2^63. Larger values give `null`.
+ */
+internal fun dartIntTryParse(s: String): Long? {
+    val m = DART_INT.matchEntire(s.dartTrim()) ?: return null
+    val negative = m.groupValues[1] == "-"
+    val hex = m.groupValues[2]
+    val magnitude = if (hex.isNotEmpty()) BigInteger(hex, 16) else BigInteger(m.groupValues[3])
+    val value = if (negative) magnitude.negate() else magnitude
+    return when {
+        value.bitLength() < 64 -> value.toLong() // fits a signed Long (including -2^63)
+        hex.isNotEmpty() && !negative && magnitude.bitLength() <= 64 -> magnitude.toLong() // two's complement
+        else -> null
+    }
+}
+
+private val DART_INT = Regex("""([+-]?)(?:0[xX]([0-9a-fA-F]+)|([0-9]+))""")
+
 internal data class DartRelayUri(
     val scheme: String,
     val userInfo: String,
@@ -78,6 +100,9 @@ internal data class DartRelayUri(
             val path = removeDotSegments(normalize(remainder.replace('\\', '/'), PATH_EXTRA))
 
             val at = authority.lastIndexOf('@')
+            // Dart rejects a second '@' and '[' / ']' anywhere outside an IP literal.
+            if (at >= 0 && authority.indexOf('@') != at) return null
+            if (at >= 0 && authority.substring(0, at).any { it == '[' || it == ']' }) return null
             val userInfo = if (at >= 0) normalize(authority.substring(0, at), USERINFO_EXTRA) else ""
             val hostPort = if (at >= 0) authority.substring(at + 1) else authority
 
@@ -95,7 +120,9 @@ internal data class DartRelayUri(
                 }
             } else {
                 val portColon = hostPort.indexOf(':')
-                host = normalizeRegName(if (portColon >= 0) hostPort.substring(0, portColon) else hostPort)
+                val regName = if (portColon >= 0) hostPort.substring(0, portColon) else hostPort
+                if (regName.any { it == '[' || it == ']' }) return null
+                host = normalizeRegName(regName)
                 portText = if (portColon >= 0) hostPort.substring(portColon + 1) else null
             }
             val port = when {
@@ -162,15 +189,10 @@ internal data class DartRelayUri(
         }
 
         /**
-         * Dart `int.tryParse` on the port text: surrounding whitespace, optional sign, decimal or
-         * `0x` hex. `null` if not numeric or outside 64 bit (Dart throws there).
+         * Dart's port parsing ([dartIntTryParse]); `null` where Dart returns `null` or throws
+         * (decimal beyond 64 bit). `0xffffffffffffffff` → port -1, as in Dart.
          */
-        private fun parsePort(text: String): Long? {
-            val m = PORT.matchEntire(text.dartTrim()) ?: return null
-            val magnitude = if (m.groupValues[2].isNotEmpty()) BigInteger(m.groupValues[2], 16) else BigInteger(m.groupValues[3])
-            val value = if (m.groupValues[1] == "-") magnitude.negate() else magnitude
-            return if (value.bitLength() < 64) value.toLong() else null
-        }
+        private fun parsePort(text: String): Long? = dartIntTryParse(text)
 
         /** Dart `Uri._defaultPort`. */
         private fun defaultPort(scheme: String): Long = when (scheme) {
@@ -178,8 +200,6 @@ internal data class DartRelayUri(
             "https" -> 443L
             else -> 0L
         }
-
-        private val PORT = Regex("""([+-]?)(?:0[xX]([0-9a-fA-F]+)|([0-9]+))""")
 
         private const val SUB_DELIMS = "!$&'()*+,;="
         private const val USERINFO_EXTRA = "$SUB_DELIMS:"

@@ -58,7 +58,11 @@ interface MempoolService {
     /** Drops pooled keep-alive connections (host change, total failure, Orbot toggled). */
     fun resetClient()
 
-    /** App reset: forgets [lastDashboard], the in-memory height, error state and connections. */
+    /**
+     * App reset: forgets [lastDashboard], the in-memory height, error state and connections.
+     * Call it **after** `KeyValueStore.clear()`: a dashboard run between this call and the
+     * store wipe would read the old `mempool_last_height` back into memory.
+     */
     fun clearState()
 
     /** Constants of the domain. */

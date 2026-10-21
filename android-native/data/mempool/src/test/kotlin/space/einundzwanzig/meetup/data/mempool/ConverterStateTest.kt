@@ -99,6 +99,16 @@ class ConverterStateTest {
     }
 
     @Test
+    fun nanPremiumKeepsTheSliderUsable() {
+        val base = loaded.onFiatChanged("100")
+        val nan = base.onPremiumText("NaN")
+        assertEquals(0.0, nan.sliderValue, 0.0)
+        assertEquals(0L, nan.satsWithPremium)
+        assertEquals(20.0, base.onPremiumText("Infinity").sliderValue, 0.0)
+        assertEquals(-20.0, base.onPremiumText("-Infinity").sliderValue, 0.0)
+    }
+
+    @Test
     fun sliderRounding() {
         data class Case(val v: Float, val p: Double, val text: String, val label: String)
         val cases = listOf(

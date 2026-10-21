@@ -31,7 +31,8 @@ internal class DefaultDeviceIntegrityService(
 
     @Inject
     constructor(timeSource: TimeSource, @IoDispatcher io: CoroutineDispatcher) : this(
-        probe = { File(it).exists() },
+        // Per path like Dart `_pathExists`: one SecurityException must not void the whole report.
+        probe = { path -> runCatching { File(path).exists() }.getOrDefault(false) },
         buildTags = ::readBuildTags,
         timeSource = timeSource,
         io = io,

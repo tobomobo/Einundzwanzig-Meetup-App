@@ -41,7 +41,7 @@ class BadgeModelTest {
     private fun fullBadge(
         id: String = "badge-001",
         meetupName: String = "Aschaffenburg",
-        sigVersion: Int = 2,
+        sigVersion: Long = 2,
         sig: String = sig128,
         adminPubkey: String = pub64,
         claimSig: String = "",
@@ -97,7 +97,7 @@ class BadgeModelTest {
         val badge = MeetupBadge.fromJsonString("""{"id":"old-badge","meetupName":"Test","date":"2025-01-01T00:00:00.000Z","iconPath":""}""")
         assertEquals("old-badge", badge.id)
         assertEquals("", badge.sig)
-        assertEquals(0, badge.sigVersion)
+        assertEquals(0L, badge.sigVersion)
         assertEquals("", badge.claimSig)
         assertEquals("nfc", badge.delivery)
         assertTrue("presenceVerified defaults to true", badge.presenceVerified)

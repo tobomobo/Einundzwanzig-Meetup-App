@@ -6,7 +6,12 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.withTimeoutOrNull
 import space.einundzwanzig.meetup.core.common.log.AppLogger
+import java.security.SecureRandom
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -19,6 +24,14 @@ internal data class ExternalSignerResult(val resultCode: Int, val data: Intent?)
  * cancelled meanwhile: Amber is still in front and will answer **that** request. Only then can
  * the next request be published, so a late answer can never complete a newer request (Flutter
  * kept `pendingResult` until `onActivityResult` for the same reason).
+ *
+ * Request ids start at a random value per process, so an activity result that a recreated
+ * Activity delivers for a request of a dead process never matches a new request; results are
+ * also only accepted for a request the host actually launched.
+ *
+ * A request is only published while a host is attached ([attachHost]); without one, [launch]
+ * waits at most [HOST_WAIT_MS] (configuration change) and then fails with `cancelled`, so a
+ * background caller never holds the single slot indefinitely.
  */
 @Singleton
 internal class DefaultExternalSignerBridge @Inject constructor() : ExternalSignerBridge {
@@ -31,17 +44,31 @@ internal class DefaultExternalSignerBridge @Inject constructor() : ExternalSigne
     private val lock = Any()
     private val pending = MutableStateFlow<ExternalSignerLaunch?>(null)
     private var current: Request? = null
-    private var nextId = 1L
+    private val hosts = MutableStateFlow(0)
+
+    // Random 62-bit start: never 0 (the host's "nothing launched" value), never repeats across processes.
+    private var nextId = (SecureRandom().nextLong() ushr 2) + 1
 
     override val pendingLaunch: StateFlow<ExternalSignerLaunch?> = pending.asStateFlow()
+
+    override fun attachHost(): AutoCloseable {
+        hosts.update { it + 1 }
+        val closed = AtomicBoolean(false)
+        return AutoCloseable { if (closed.compareAndSet(false, true)) hosts.update { it - 1 } }
+    }
 
     /**
      * Publishes [intent] for the host and suspends until its result.
      *
      * @throws Nip55Exception `busy` if another request is running (including an abandoned one
-     *   whose signer activity has not returned yet), `launch_failed` if the host could not start it.
+     *   whose signer activity has not returned yet), `launch_failed` if the host could not start it,
+     *   `cancelled` if no host attached within [HOST_WAIT_MS].
      */
     suspend fun launch(intent: Intent): ExternalSignerResult {
+        if (hosts.value <= 0) {
+            withTimeoutOrNull(HOST_WAIT_MS) { hosts.first { it > 0 } }
+                ?: throw Nip55Exception("cancelled", "Keine Oberfläche für die Signer-Anfrage")
+        }
         val request = synchronized(lock) {
             if (current != null) throw Nip55Exception("busy", "Eine Signer-Anfrage läuft bereits")
             Request(nextId++, CompletableDeferred()).also {
@@ -89,7 +116,7 @@ internal class DefaultExternalSignerBridge @Inject constructor() : ExternalSigne
     override fun onResult(id: Long, resultCode: Int, data: Intent?) {
         val request = synchronized(lock) {
             val request = current
-            if (request == null || request.id != id) {
+            if (request == null || request.id != id || !request.launched) {
                 AppLogger.debug("AmberSigner", "Verspätete Signer-Antwort ohne passende Anfrage verworfen.")
                 return
             }
@@ -110,5 +137,10 @@ internal class DefaultExternalSignerBridge @Inject constructor() : ExternalSigne
             request
         }
         request.deferred.completeExceptionally(Nip55Exception("launch_failed", error.message))
+    }
+
+    internal companion object {
+        /** How long [launch] waits for a host (configuration change) before failing with `cancelled`. */
+        const val HOST_WAIT_MS = 5_000L
     }
 }

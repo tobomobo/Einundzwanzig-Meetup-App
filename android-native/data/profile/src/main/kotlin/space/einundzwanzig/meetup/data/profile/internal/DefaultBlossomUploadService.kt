@@ -10,6 +10,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import space.einundzwanzig.meetup.core.common.IoDispatcher
 import space.einundzwanzig.meetup.core.common.TimeSource
 import space.einundzwanzig.meetup.core.common.json.DartJson
 import space.einundzwanzig.meetup.core.common.log.AppLogger
@@ -27,7 +28,10 @@ import space.einundzwanzig.meetup.data.profile.blossom.BlossomUploadService.Comp
 import space.einundzwanzig.meetup.data.profile.blossom.BlossomUploadService.Companion.AUTH_KIND
 import space.einundzwanzig.meetup.data.profile.blossom.BlossomUploadService.Companion.TIMEOUT
 import space.einundzwanzig.meetup.data.profile.blossom.UploadResult
+import space.einundzwanzig.meetup.data.identity.SigningService
 import java.io.File
+import java.io.IOException
+import javax.inject.Inject
 
 /** Signs an event with the active signer (`SigningService.signEvent`). */
 internal fun interface EventSigner {
@@ -44,13 +48,33 @@ internal class DefaultBlossomUploadService(
     private val log: DiagnosticLog = AppLogger,
 ) : BlossomUploadService {
 
+    /** Hilt entry point: signs with the active signer of [SigningService]. */
+    @Inject
+    constructor(
+        client: OkHttpClient,
+        signing: SigningService,
+        time: TimeSource,
+        @IoDispatcher ioDispatcher: CoroutineDispatcher,
+        log: DiagnosticLog,
+    ) : this(client, EventSigner { k, t, c -> signing.signEvent(k, t, c) }, time, ioDispatcher, BlossomUploadService.SERVERS, log)
+
     override suspend fun uploadImage(file: File): UploadResult {
-        val bytes = withContext(ioDispatcher) {
-            if (!file.exists()) null else file.readBytes()
+        // Dart `File.exists()` is false for directories; an unreadable file is "not found" too
+        // instead of an exception escaping the UploadResult contract. Hashing stays off the caller.
+        val (bytes, digest) = withContext(ioDispatcher) {
+            val read = if (!file.isFile) {
+                null
+            } else {
+                try {
+                    file.readBytes()
+                } catch (_: IOException) {
+                    null
+                }
+            }
+            read?.let { it to Sha256.digest(it).toHex() }
         } ?: return UploadResult.failure("Datei nicht gefunden")
         if (bytes.isEmpty()) return UploadResult.failure("Datei ist leer")
 
-        val digest = Sha256.digest(bytes).toHex()
         val mime = BlossomUploadService.mimeFor(file.path)
         log.debug(TAG, "Upload vorbereitet: ${bytes.size} Bytes, $mime, sha256 ${digest.take(12)}…")
 

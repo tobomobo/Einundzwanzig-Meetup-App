@@ -61,7 +61,11 @@ object Nip42 {
  *    whole lifetime (later AUTH challenges are answered on the same socket),
  * 2. consume the frames that belong to the handshake (`AUTH`, the `OK` of its auth events),
  * 3. forward **every other decoded array** to [onMessage] (also after it returned),
- * 4. return the socket once the relay confirmed the AUTH, or close it and return `null`.
+ * 4. return the socket once the relay confirmed the AUTH, or close it and return `null`,
+ * 5. enforce its own deadline (no AUTH challenge, signer never answers, no `OK`): close the
+ *    socket and return `null` on expiry, like Dart `authenticateSocket(timeout:)`. [RelayClient]
+ *    bounds the call only when `authTimeout` is set in the options; `connectTimeout` does not
+ *    cover it. Cancellation must close the socket as well.
  *
  * [onMessage] is thread-safe and non-blocking.
  */

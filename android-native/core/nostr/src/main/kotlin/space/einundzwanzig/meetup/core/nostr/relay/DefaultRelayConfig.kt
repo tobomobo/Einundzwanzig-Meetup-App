@@ -6,6 +6,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withTimeout
 import space.einundzwanzig.meetup.core.common.dart.dartTrim
 import space.einundzwanzig.meetup.core.data.prefs.KeyValueStore
@@ -48,12 +50,15 @@ internal class DefaultRelayConfig @Inject constructor(
         val current = getCustomRelays()
         if (trimmed in current || trimmed in RelayConfig.DEFAULT_RELAYS) return RelayAddResult.ALREADY_PRESENT
         if (!probeRelay(trimmed)) return RelayAddResult.UNREACHABLE
-        // Re-read inside the transaction so a concurrent change is not lost.
+        // Re-read inside the transaction so a concurrent change is not lost, and check again:
+        // a concurrent add of the same URL (double tap) may have finished during the probe.
+        var alreadyPresent = false
         store.edit {
             val latest = getStringList(KEY_CUSTOM_RELAYS) ?: emptyList()
-            setStringList(KEY_CUSTOM_RELAYS, latest + trimmed)
+            alreadyPresent = trimmed in latest
+            if (!alreadyPresent) setStringList(KEY_CUSTOM_RELAYS, latest + trimmed)
         }
-        return RelayAddResult.ADDED
+        return if (alreadyPresent) RelayAddResult.ALREADY_PRESENT else RelayAddResult.ADDED
     }
 
     override suspend fun removeCustomRelay(url: String) {
@@ -80,8 +85,12 @@ internal class DefaultRelayConfig @Inject constructor(
             withTimeout(timeout) { socket = connector.connect(url.dartTrim()) }
             true
         } catch (e: CancellationException) {
-            // withTimeout's TimeoutCancellationException means "unreachable"; a real cancel propagates.
-            if (e is TimeoutCancellationException) false else throw e
+            // Only our own withTimeout means "unreachable". A real cancel, or the caller's outer
+            // timeout firing during the connect (it arrives as the outer
+            // TimeoutCancellationException, kotlinx.coroutines #1374), propagates.
+            if (e !is TimeoutCancellationException) throw e
+            currentCoroutineContext().ensureActive()
+            false
         } catch (_: Exception) {
             false
         } finally {

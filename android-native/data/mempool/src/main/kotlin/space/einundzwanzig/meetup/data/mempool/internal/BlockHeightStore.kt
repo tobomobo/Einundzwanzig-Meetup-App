@@ -19,28 +19,44 @@ internal class BlockHeightStore @Inject constructor(
     private val store: KeyValueStore,
     private val log: DiagnosticLog,
 ) {
+    /** Serialises store access so a lower height never overwrites a higher one. */
     private val mutex = Mutex()
 
-    @Volatile
+    /** Guards [ramHeight] and [clears]; never held across a suspension point. */
+    private val ramLock = Any()
+
     private var ramHeight: Long = 0
+
+    /** Bumped by [clear]; a [load] that read the store in an older generation adopts nothing. */
+    private var clears = 0
 
     /** `max(RAM, stored)`; store failures fall back to the RAM value. */
     suspend fun load(): Long = mutex.withLock {
+        val gen = synchronized(ramLock) { clears }
         try {
             val stored = store.getInt(MempoolPrefs.LAST_HEIGHT) ?: 0L
-            if (stored > ramHeight) ramHeight = stored
+            synchronized(ramLock) {
+                if (clears == gen && stored > ramHeight) ramHeight = stored
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             log.debug(TAG, "mempool_last_height nicht lesbar: ${e::class.simpleName}")
         }
-        ramHeight
+        synchronized(ramLock) { ramHeight }
     }
 
     /** Raises the known height to [height]; ignored unless strictly greater. */
     suspend fun save(height: Long) = mutex.withLock {
-        if (height <= ramHeight) return@withLock
-        ramHeight = height
+        val raised = synchronized(ramLock) {
+            if (height <= ramHeight) {
+                false
+            } else {
+                ramHeight = height
+                true
+            }
+        }
+        if (!raised) return@withLock
         try {
             store.setInt(MempoolPrefs.LAST_HEIGHT, height)
         } catch (e: CancellationException) {
@@ -50,9 +66,17 @@ internal class BlockHeightStore @Inject constructor(
         }
     }
 
-    /** App reset: forgets the RAM value (the store itself is wiped by the reset). */
+    /**
+     * App reset: forgets the RAM value; a [load] still reading the store when this runs does
+     * not bring the old value back. The store itself is wiped by the reset, which must happen
+     * **before** this call: a [load] after [clear] but before the wipe would re-read the old
+     * height.
+     */
     fun clear() {
-        ramHeight = 0
+        synchronized(ramLock) {
+            clears++
+            ramHeight = 0
+        }
     }
 
     private companion object {

@@ -421,12 +421,29 @@ object BadgeSecurity {
     internal fun npubOrEmpty(hex: String): String =
         if (Hex.decodeOrNull(hex) == null) "" else runCatching { Nip19.encodeNpub(hex) }.getOrDefault("")
 
-    /** Dart `int.tryParse` for decimal text (optional sign, surrounding whitespace ignored). */
-    private fun dartIntTryParse(s: String): Long? {
-        val t = DartString.trim(s)
-        val body = if (t.startsWith("+")) t.substring(1) else t
-        if (body.isEmpty() || body.startsWith("+")) return null
-        return body.toLongOrNull()
+    /**
+     * Dart VM `int.tryParse(s)` without radix: surrounding whitespace ignored, optional `+`/`-`,
+     * ASCII decimal digits within the int64 range, or a `0x`/`0X` hex literal of up to 64 bits
+     * (wrapping like Dart, so `0xFFFFFFFFFFFFFFFF` is `-1`).
+     */
+    internal fun dartIntTryParse(s: String): Long? {
+        var body = DartString.trim(s)
+        var negative = false
+        if (body.startsWith("+") || body.startsWith("-")) {
+            negative = body[0] == '-'
+            body = body.substring(1)
+        }
+        if (body.isEmpty()) return null
+        if (body.length >= 2 && body[0] == '0' && (body[1] == 'x' || body[1] == 'X')) {
+            val hex = body.substring(2)
+            if (hex.isEmpty() || !hex.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) return null
+            val significant = hex.trimStart('0')
+            if (significant.length > 16) return null
+            val value = if (significant.isEmpty()) 0L else significant.toULong(16).toLong()
+            return if (negative) -value else value
+        }
+        if (!body.all { it in '0'..'9' }) return null
+        return (if (negative) "-$body" else body).toLongOrNull()
     }
 
     private fun typeError(key: String, type: String) = "type mismatch: '$key' is not a $type"

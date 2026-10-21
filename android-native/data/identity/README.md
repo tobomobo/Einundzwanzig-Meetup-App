@@ -27,14 +27,14 @@ nsec/ncryptsec dialogs, the review-demo dialog) belong to `:feature:*`. Secret d
 | Exceptions | `SigningException` (+ `SigningCancelledException`, `SignerMissingException`, `WrongAccountException`, `KeyFormatException`, `SecureStorageUnreadableException`, `IdentityStorageException`), `LocalEasyAuthException`, `nip46.Nip46Exception` (+ `Nip46RemoteException`, `Nip46TimeoutException`, `Nip46RelayRejectedException`), `passkey.PasskeyPrfException` (`code`, `isUnavailable`, `isCancelled`), `core.crypto.Nip49Exception`. `message` = the Flutter German text |
 | `signer.NostrSigner`, `signer.verifySignerResponse(...)`, `signer.SignerActor` | Signer seam + the shared N1 verification (account, sig, kind, content, real BIP-340, 10-digit `created_at`) |
 | `nip46.BunkerPointer` (`parse`, `normalizePubkey`, `toBunkerUri`, `buildNostrConnectUri`), `nip46.Nip46Client`, `Nip46ClientMetadata`, `Nip46Timeouts`, `Nip46RelayLink`/`Nip46RelayOpener` | NIP-46 transport (kind 24133, NIP-44, multi-relay, OK/CLOSED handling, relay cooldown, pairing). Byte-identical URIs (fixture `nip46`) |
-| `nip55.ExternalSignerBridge` (`pendingLaunch`, `onLaunched(id): Boolean`, `onResult(id, resultCode, data)`, `onLaunchFailed(id, e)`), `ExternalSignerLaunch` | Host side of Amber foreground intents (see wiring below). The data layer holds no Activity |
+| `nip55.ExternalSignerBridge` (`pendingLaunch`, `attachHost(): AutoCloseable`, `onLaunched(id): Boolean`, `onResult(id, resultCode, data)`, `onLaunchFailed(id, e)`), `ExternalSignerLaunch` | Host side of Amber foreground intents (see wiring below). The data layer holds no Activity |
 | `keys.SecureKeyStore` | `ensureMigrated`, `saveKeys`, `getNsec/getNpub/getPrivHex`, `loadKeys(): StoredKeys?`, `hasKey`, `deleteKeys`, `save/get/deleteNip46ClientKey` |
 | `keys.LocalKeyVault` | `savePasswordWrap(ncryptsec, npub)`, `getPasswordWrap`, `getPasswordWrapNpub`, `passwordWrapMatchesNpub`, `savePasskeyWrap`, `getPasskeyWrap`, `getPasskeyCredentialId`, `hasPasskeyWrap`, `clearPasskeyWrap`, `clearAll` |
 | `keys.NostrKeyService` | `generateKeyPair`, `importNsec`, `importPrivHex`, `importNcryptsec` → `GeneratedKeys(nsec, npub, pubHex)`. Stores keys only — callers then do `LocalKeyVault.clearAll()` + `useLocalMode()` (spec 01 §8.2) |
 | `keys.IdentityKeys` | All pref / secure key names, `RECOVERY_PREFIXES`, `IDENTITY_SECRET_NAMES`, `recoveryName(prefix, name)` |
 | `keys.IdentityRecovery` (`candidates()`, `adopt(candidate, password?)`, `exportNsec(candidate)`, `discard(candidate)`, `discardAll()`), `RecoveryCandidate` (`source`, `npub`, `hasPrivateKey`, `needsPassword`), `RecoverySource` (`ESP`/`BACKUP`/`RECOVERED`) | Identities `:data:migration` parked under `legacy_esp/`, `legacy_backup/`, `legacy_recovered/` (spec 14 §4.8). The identity area shows the one-time notice when `candidates()` is non-empty: restore (`adopt`, then `LocalKeyVault.clearAll()` + `useLocalMode()` as after every import), export (`exportNsec` behind `DeviceAuthenticator` + `SecureDialog`), or `discard`. Never adopted automatically (R5) |
-| `easyauth.LocalEasyAuth` | `register(nickname, password)`, `addPasskeyWrap(activity, displayName)`, `unlockWithPassword(pw)`, `unlockWithPasskey(activity)`; `DefaultLocalEasyAuth.MIN_PASSWORD_LENGTH` = 8 is internal: use 8 in the UI (`kMinPasswordLength`) |
-| `passkey.PasskeyPrfService` (`isSupported`, `register(activity, …)`, `unlock(activity, …)`), `PasskeyPrfResult`, `passkey.PasskeyJson` | WebAuthn PRF via Credential Manager, RP `einundzwanzig.space`. Errors are mapped like the Flutter plugin + `tPasskeyError`: SecurityError / "RP ID cannot be validated" / missing provider / every `android-unhandled` error → `isUnavailable`; cancel → `isCancelled`; only `FAILED` (timeout, no Google account, sync account, excluded credential) carries a platform text to show |
+| `easyauth.LocalEasyAuth`, `easyauth.PasskeyRegistration` | `register(nickname, password)`, `unlockWithPassword(pw)`, `LocalEasyAuth.MIN_PASSWORD_LENGTH` (= 8, `kMinPasswordLength`). Passkeys, ViewModel-safe split: add = `passkeyRegistration(name)` (VM) → `PasskeyPrfService.register(activity, req.userIdHex, req.userName)` (UI scope) → `savePasskeyWrap(req, result)` (VM, scrypt); unlock = `passkeyCredentialIds()` (VM) → `PasskeyPrfService.unlock(activity, ids)` (UI scope) → `unlockWithPrfSecret(result)` (VM). The combined `addPasskeyWrap(activity, name)` / `unlockWithPasskey(activity)` hold the Activity through scrypt: UI-scoped coroutines only |
+| `passkey.PasskeyPrfService` (`isSupported`, `register(activity, …)`, `unlock(activity, …)`), `PasskeyPrfResult`, `passkey.PasskeyJson` | WebAuthn PRF via Credential Manager, RP `einundzwanzig.space`. `isSupported()` is `false` unless the build sets `-PpasskeyRpAssociated=true` (→ `BuildConfig.PASSKEY_RP_ASSOCIATED`): turn it on once `https://einundzwanzig.space/.well-known/assetlinks.json` lists the release certificate (spec 14 F9); without it every registration fails with `DomainNotAssociated`, so onboarding should not offer the step. Errors are mapped like the Flutter plugin + `tPasskeyError`: SecurityError / "RP ID cannot be validated" / missing provider / every `android-unhandled` error → `isUnavailable`; cancel → `isCancelled`; only `FAILED` (timeout, no Google account, sync account, excluded credential) carries a platform text to show |
 | `profile.UserProfile`, `profile.UserProfileRepository` (`load`, `save`, `update { }`, `profile: Flow` — re-emits on its own prefs, `save`, and local key writes/deletes; an unreadable secure store is logged and skipped, the flow never fails) | Exact pref keys, npub precedence external > keystore > `nostr`, `isOnboarded`, `hasCustomNickname`, `isAdmin`, `promotionSource`, `withAdmin`, `withPromotionSource`, `withAdminVerification(isAdmin, source)` |
 | `review.AppReviewDemo` (`PAYLOAD`, `matches`, `isDemoLogin`, `SUCCESS_TITLE/BODY`), `review.AppReviewSignIn` (`isOffered`, `signIn`), `review.ReviewDemoBadgeWriter`, `ReviewDemoBadge` | Review demo; gated by `BuildConfig.DEBUG \|\| APP_REVIEW_SIGNIN` (`-PappReviewSignin=true`) |
 | `integrity.DeviceIntegrityService` (`check(forceRefresh)`, `warningMessage`), `IntegrityReport`, `DeviceIntegrityStatus` | Root/Magisk/BusyBox indicators, warn only |
@@ -71,19 +71,29 @@ private val signerLauncher = registerForActivityResult(StartActivityForResult())
 // in onCreate:
 lifecycleScope.launch {
     repeatOnLifecycle(Lifecycle.State.STARTED) {
-        externalSignerBridge.pendingLaunch.collect { launch ->
-            if (launch != null && !launch.launched && externalSignerBridge.onLaunched(launch.id)) {
-                launchedSignerId = launch.id
-                try { signerLauncher.launch(launch.intent) }
-                catch (e: ActivityNotFoundException) { externalSignerBridge.onLaunchFailed(launch.id, e) }
+        val host = externalSignerBridge.attachHost()   // "a UI can launch Amber now"
+        try {
+            externalSignerBridge.pendingLaunch.collect { launch ->
+                if (launch != null && !launch.launched && externalSignerBridge.onLaunched(launch.id)) {
+                    launchedSignerId = launch.id
+                    try { signerLauncher.launch(launch.intent) }
+                    catch (e: ActivityNotFoundException) { externalSignerBridge.onLaunchFailed(launch.id, e) }
+                }
             }
+        } finally {
+            host.close()
         }
     }
 }
 ```
 
 A launched Amber request stays reserved (`busy`) until its result arrives, even if the caller
-gave up; results with another id are dropped, so a late answer never completes a newer request.
+gave up; results for another id or for a request that was never launched are dropped, and ids
+start at a random value per process, so a late answer (also one delivered to a recreated Activity
+after process death) never completes a newer request. Without an attached host a foreground
+request waits at most 5 s (configuration change) and then fails with `cancelled`
+(`SigningCancelledException`), so background callers such as badge sync never block the slot or
+pop Amber up out of context later.
 
 Root scaffold: collect `signingService.authUrlEvents` and show the 60 s snackbar.
 Splash: `secureKeyStore.ensureMigrated()` (after the Flutter migration), then

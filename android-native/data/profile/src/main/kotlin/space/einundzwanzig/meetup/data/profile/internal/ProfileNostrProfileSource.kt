@@ -3,7 +3,9 @@ package space.einundzwanzig.meetup.data.profile.internal
 import kotlinx.coroutines.CancellationException
 import space.einundzwanzig.meetup.core.crypto.Nip19
 import space.einundzwanzig.meetup.core.ui.nostr.NostrProfileSource
+import space.einundzwanzig.meetup.data.identity.SigningService
 import space.einundzwanzig.meetup.data.profile.NostrProfileService
+import javax.inject.Inject
 
 /**
  * The `:core:ui` [NostrProfileSource] for `NostrAvatar` / `NpubChip` (Dart: `NostrAvatar`
@@ -14,6 +16,10 @@ internal class ProfileNostrProfileSource(
     private val activeNpub: suspend () -> String?,
     private val profiles: NostrProfileService,
 ) : NostrProfileSource {
+
+    /** Hilt entry point: the active identity is [SigningService.npub]. */
+    @Inject
+    constructor(signing: SigningService, profiles: NostrProfileService) : this(signing::npub, profiles)
 
     override suspend fun activePubkeyHex(): String? {
         val npub = activeNpub()?.takeIf { it.isNotEmpty() } ?: return null

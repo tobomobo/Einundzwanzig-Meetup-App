@@ -36,16 +36,18 @@ class TestSigner(
     var canSign: Boolean = true,
     /** Overrides `created_at` per call (call index → value); `null` = clock. */
     var createdAtOverride: ((call: Int) -> Long?)? = null,
+    /** Signs with a requested `created_at` (like a signer that supports it); `false` = picks its own. */
+    var honourCreatedAt: Boolean = true,
 ) : BadgeSigner {
     var calls = 0
         private set
 
     override suspend fun canSign(): Boolean = canSign
 
-    override suspend fun signEvent(kind: Int, tags: List<List<String>>, content: String): NostrEvent {
+    override suspend fun signEvent(kind: Int, tags: List<List<String>>, content: String, createdAt: Long?): NostrEvent {
         val call = calls++
-        val createdAt = createdAtOverride?.invoke(call) ?: time.nowSeconds()
-        return EventIds.sign(keyPair, createdAt, kind, tags, content)
+        val effective = createdAtOverride?.invoke(call) ?: (if (honourCreatedAt) createdAt else null) ?: time.nowSeconds()
+        return EventIds.sign(keyPair, effective, kind, tags, content)
     }
 }
 

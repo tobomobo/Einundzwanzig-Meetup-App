@@ -45,7 +45,7 @@ interface LocaleController {
      * into `app_locale` (a language the app does not support is stored as "system"); otherwise
      * does nothing. Runs at startup; `MainActivity.onCreate` should call it as well, because a
      * change in the system settings recreates the activity without restarting the process.
-     * No-op below API 33.
+     * Never throws for platform failures (logged instead). No-op below API 33.
      */
     suspend fun syncWithSystem()
 

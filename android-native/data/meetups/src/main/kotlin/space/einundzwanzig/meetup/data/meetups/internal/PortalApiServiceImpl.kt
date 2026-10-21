@@ -1,11 +1,14 @@
 package space.einundzwanzig.meetup.data.meetups.internal
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.OkHttpClient
+import space.einundzwanzig.meetup.core.common.IoDispatcher
 import space.einundzwanzig.meetup.core.common.TimeSource
 import space.einundzwanzig.meetup.core.common.dart.dartTrim
 import space.einundzwanzig.meetup.core.common.json.DartJson
@@ -18,8 +21,6 @@ import space.einundzwanzig.meetup.core.data.prefs.KeyValueStore
 import space.einundzwanzig.meetup.core.data.secure.SecureRead
 import space.einundzwanzig.meetup.core.data.secure.SecureStore
 import space.einundzwanzig.meetup.core.network.HttpResult
-import space.einundzwanzig.meetup.core.network.getCapped
-import space.einundzwanzig.meetup.core.network.sendJson
 import space.einundzwanzig.meetup.data.identity.SigningService
 import space.einundzwanzig.meetup.data.meetups.portal.Attendee
 import space.einundzwanzig.meetup.data.meetups.portal.PortalApiService
@@ -34,7 +35,9 @@ import space.einundzwanzig.meetup.data.meetups.portal.PortalMeetupEvent
 import space.einundzwanzig.meetup.data.meetups.portal.PortalResult
 import space.einundzwanzig.meetup.data.meetups.portal.PortalUrls
 import space.einundzwanzig.meetup.data.meetups.portal.StatusBody
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -47,6 +50,7 @@ internal class PortalApiServiceImpl @Inject constructor(
     private val signing: SigningService,
     private val time: TimeSource,
     private val log: DiagnosticLog,
+    @IoDispatcher private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : PortalApiService {
 
     // ---- token ---------------------------------------------------------------------------
@@ -64,12 +68,23 @@ internal class PortalApiServiceImpl @Inject constructor(
     override suspend fun hasToken(): Boolean = getToken() != null
 
     override suspend fun storeToken(token: String) {
-        if (!secure.write(TOKEN_KEY, token)) log.warn(TAG, "Portal-Token konnte nicht gespeichert werden.")
-        // Bind the token to the active identity (mode-aware: Amber/NIP-46/local; Amber bug v1.3.1).
+        persistToken(token)
+    }
+
+    /**
+     * Stores [token] bound to the active identity (mode-aware: Amber/NIP-46/local; Amber bug
+     * v1.3.1). Token and binding are written in one transaction when the npub is known.
+     * `false` (and a log line) if nothing was stored; Dart threw in that case.
+     */
+    private suspend fun persistToken(token: String): Boolean {
         val ownNpub = runCatching { signing.npub() }.getOrNull()
-        if (!ownNpub.isNullOrEmpty() && !secure.write(TOKEN_NPUB_KEY, ownNpub)) {
-            log.warn(TAG, "Portal-Token-Bindung konnte nicht gespeichert werden.")
+        val ok = if (ownNpub.isNullOrEmpty()) {
+            secure.write(TOKEN_KEY, token)
+        } else {
+            secure.writeAll(mapOf(TOKEN_KEY to token, TOKEN_NPUB_KEY to ownNpub))
         }
+        if (!ok) log.warn(TAG, "Portal-Token konnte nicht gespeichert werden.")
+        return ok
     }
 
     override suspend fun setManualToken(token: String) = storeToken(token.dartTrim())
@@ -94,7 +109,8 @@ internal class PortalApiServiceImpl @Inject constructor(
                 content = "",
             )
             val body = DartJson.encode(jsonObjectOf("k1" to k1, "event" to signed.toMap(), "device_name" to deviceName))
-            val r = client.sendJson(
+            val r = client.sendJsonOn(
+                io,
                 "POST",
                 "$API/mobile/token",
                 body,
@@ -112,7 +128,7 @@ internal class PortalApiServiceImpl @Inject constructor(
             if (token.isNullOrEmpty()) {
                 return PortalResult(false, r.status, PortalErrors.NO_TOKEN, PortalErrorKind.NO_TOKEN)
             }
-            storeToken(token)
+            if (!persistToken(token)) return loginFailed(TOKEN_NOT_STORED)
             return PortalResult(true, r.status, data = (decoded as JsonObject)["user"])
         } catch (e: CancellationException) {
             throw e
@@ -130,7 +146,8 @@ internal class PortalApiServiceImpl @Inject constructor(
         val token = getToken()
         if (token != null) {
             // Best effort: the token expires server-side anyway.
-            client.sendJson(
+            client.sendJsonOn(
+                io,
                 "DELETE",
                 "$API/mobile/token",
                 null,
@@ -150,7 +167,7 @@ internal class PortalApiServiceImpl @Inject constructor(
         val stored = secure.read(TOKEN_NPUB_KEY)
         if (stored != null && stored == cur) return true
 
-        val r = client.getCapped(
+        val r = client.getCappedOn(io, 
             "$API/user",
             headers = mapOf("Accept" to JSON, "Authorization" to "Bearer $t"),
             maxBytes = MAX_BYTES,
@@ -205,7 +222,7 @@ internal class PortalApiServiceImpl @Inject constructor(
 
     override suspend fun getProfile(): JsonObject? {
         if (getToken() == null) return null
-        val r = client.getCapped("$API/user", headers = authHeaders(), maxBytes = MAX_BYTES, timeout = PortalUrls.TIMEOUT)
+        val r = client.getCappedOn(io, "$API/user", headers = authHeaders(), maxBytes = MAX_BYTES, timeout = PortalUrls.TIMEOUT)
         if (r !is HttpResult.Response) {
             log.warn(TAG, "getProfile Fehler: ${describe(r)}")
             return null
@@ -239,7 +256,7 @@ internal class PortalApiServiceImpl @Inject constructor(
 
     /** Dart `_get`: `null` on non-200, undecodable body or no response. */
     private suspend fun get(path: String): JsonElement? {
-        val r = client.getCapped("$API$path", headers = optAuthHeaders(), maxBytes = MAX_BYTES, timeout = PortalUrls.TIMEOUT)
+        val r = client.getCappedOn(io, "$API$path", headers = optAuthHeaders(), maxBytes = MAX_BYTES, timeout = PortalUrls.TIMEOUT)
         if (r !is HttpResult.Response) {
             log.warn(TAG, "GET $path Fehler: ${describe(r)}")
             return null
@@ -254,7 +271,7 @@ internal class PortalApiServiceImpl @Inject constructor(
     override suspend fun rawGet(path: String): JsonElement? = get(path)
 
     override suspend fun rawGetStatus(path: String): StatusBody {
-        val r = client.getCapped("$API$path", headers = optAuthHeaders(), maxBytes = MAX_BYTES, timeout = PortalUrls.TIMEOUT)
+        val r = client.getCappedOn(io, "$API$path", headers = optAuthHeaders(), maxBytes = MAX_BYTES, timeout = PortalUrls.TIMEOUT)
         if (r !is HttpResult.Response) {
             log.warn(TAG, "GET $path Netzfehler", describe(r))
             return StatusBody(0, null)
@@ -275,7 +292,8 @@ internal class PortalApiServiceImpl @Inject constructor(
             return PortalResult(false, 401, PortalErrors.NOT_LOGGED_IN, PortalErrorKind.NOT_LOGGED_IN)
         }
         if (method !in WRITE_METHODS) return PortalResult(false, 0, "Unbekannte Methode.", PortalErrorKind.NETWORK)
-        val r = client.sendJson(
+        val r = client.sendJsonOn(
+            io,
             method,
             url,
             payload?.let { DartJson.encode(it) },
@@ -309,7 +327,7 @@ internal class PortalApiServiceImpl @Inject constructor(
 
     /** `body.data` objects of an authenticated GET; `[]` on any failure. */
     private suspend fun dataList(path: String, label: String): List<JsonObject> {
-        val r = client.getCapped("$API$path", headers = authHeaders(), maxBytes = MAX_BYTES, timeout = PortalUrls.TIMEOUT)
+        val r = client.getCappedOn(io, "$API$path", headers = authHeaders(), maxBytes = MAX_BYTES, timeout = PortalUrls.TIMEOUT)
         if (r !is HttpResult.Response) {
             log.warn(TAG, "$label Fehler: ${describe(r)}")
             return emptyList()
@@ -375,6 +393,9 @@ internal class PortalApiServiceImpl @Inject constructor(
         write("DELETE", "$API/meetup/$meetupId/leaders/$userId", null)
 
     // ---- public events + RSVP ------------------------------------------------------------
+
+    override suspend fun getAllMeetupEvents(): List<JsonObject> =
+        getAllMeetupEvents(Instant.ofEpochMilli(time.nowMillis()).atZone(ZoneId.systemDefault()).toLocalDate())
 
     override suspend fun getAllMeetupEvents(today: LocalDate): List<JsonObject> {
         val byId = LinkedHashMap<String, JsonObject>()
@@ -502,6 +523,7 @@ internal class PortalApiServiceImpl @Inject constructor(
 
     companion object {
         private const val TAG = "PortalAPI"
+        private const val TOKEN_NOT_STORED = "Token konnte nicht gespeichert werden"
         private const val TAG_PORTAL = "Portal"
         private const val API = PortalUrls.API_BASE
         private const val JSON = "application/json"

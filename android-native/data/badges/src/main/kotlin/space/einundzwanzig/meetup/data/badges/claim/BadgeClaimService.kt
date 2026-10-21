@@ -9,9 +9,10 @@ import space.einundzwanzig.meetup.data.badges.model.MeetupBadge
 interface BadgeClaimService {
 
     /**
-     * Signs a claim for a scanned badge with the active identity. `claimed_at` and the event's
-     * `created_at` are guaranteed equal: if a (remote) signer returns another `created_at`, the
-     * claim is requested once more and otherwise reported as failure (a mismatching claim would
+     * Signs a claim for a scanned badge with the active identity, asking the signer for
+     * `created_at == claimed_at`. Both are guaranteed equal: if a signer that cannot honour the
+     * requested value returns another `created_at`, the claim is requested once more and
+     * otherwise reported as failure (a mismatching claim would
      * be unverifiable; spec 02 §7.4).
      *
      * Never throws (except cancellation); failures come back as `success = false` with Flutter's
@@ -40,9 +41,15 @@ interface BadgeClaimService {
 
     /**
      * Dart `claimUnboundBadges`: claims every badge with an organizer proof but no claim, in
-     * list order, marks it `isRetroactive` (keeping its `presenceVerified`), and saves the list
-     * through the badge repository if anything was claimed. A failed save returns count 0
-     * (claims are retried on the next start).
+     * list order, marks it `isRetroactive` (keeping its `presenceVerified`), and applies the claims
+     * atomically ([space.einundzwanzig.meetup.data.badges.store.BadgeRepository.update]) to the
+     * collection as stored **after** signing: badges scanned meanwhile survive, badges removed
+     * meanwhile are not brought back. Pass the repository's current badges.
+     *
+     * Single flight: a concurrent second batch waits and skips badges the first one claimed.
+     * Returns the stored collection and the number of claims applied; if nothing was stored
+     * (failed save, nothing applicable) the input list with count 0 (claims are retried on the
+     * next start).
      */
     suspend fun claimUnboundBadges(badges: List<MeetupBadge>): ClaimBatchResult
 

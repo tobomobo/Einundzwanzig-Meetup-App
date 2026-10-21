@@ -20,6 +20,7 @@ import space.einundzwanzig.meetup.data.mempool.FakeMempool.Companion.ok
 import space.einundzwanzig.meetup.data.mempool.FakeMempool.Companion.status
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.time.Duration.Companion.milliseconds
 
 /** Spec 13 §10.3 recommended native tests (MockWebServer + in-memory prefs). */
 class MempoolServiceTest {
@@ -237,12 +238,67 @@ class MempoolServiceTest {
     // 10
     @Test
     fun blockHeightIsZeroOnAnyFailure() = runBlocking {
-        for (response in listOf(ok("abc"), ok("0"), ok("-5"), ok("900000.0"), status(500, "x"), status(404, ""))) {
+        // "٩٠٠٠٠٠" (Arabic-Indic digits): Dart int.tryParse gives null, Kotlin toIntOrNull 900000.
+        for (response in listOf(ok("abc"), ok("0"), ok("-5"), ok("900000.0"), ok("٩٠٠٠٠٠"), ok("9_00000"), status(500, "x"), status(404, ""))) {
             env.fake.respond = { _, _ -> response }
             assertEquals(0, env.service.getBlockHeight())
         }
         env.fake.respond = { _, _ -> ok(" +900000\n") }
         assertEquals(900_000, env.service.getBlockHeight())
+        // Dart int.tryParse also reads hex.
+        env.fake.respond = { _, _ -> ok("0xDBBA0") }
+        assertEquals(900_000, env.service.getBlockHeight())
+    }
+
+    @Test
+    fun testHostRejectsNonAsciiDigits() = runBlocking {
+        env.fake.respond = { _, _ -> ok("٩٠٠٠٠٠") }
+        try {
+            env.service.testHost("mempool.space")
+            fail("expected MempoolHttpException")
+        } catch (e: MempoolHttpException) {
+            assertEquals(HostTestFailure.Http(200), HostTestFailure.of(e, "mempool.space"))
+        }
+    }
+
+    // Whole-call timeout -> Dart's `TimeoutException` name (dashboard banner, connection test).
+    @Test
+    fun wholeCallTimeoutIsReportedAsTimeoutException() = runBlocking {
+        env.close()
+        env = TestEnv(timeoutFor = { 200.milliseconds })
+        val slow = FakeMempool.healthy()
+        env.fake.respond = { host, path -> slow(host, path).newBuilder().headersDelay(1, TimeUnit.SECONDS).build() }
+
+        val d = env.service.getDashboardData()
+        assertEquals(0, d.sourcesOk)
+        assertEquals("TimeoutException", d.lastError)
+
+        try {
+            env.service.testHost("mempool.space")
+            fail("expected a timeout")
+        } catch (e: java.io.IOException) {
+            assertEquals(HostTestFailure.Other("TimeoutException"), HostTestFailure.of(e, "mempool.space"))
+        }
+        assertEquals(200L, env.fake.seen.last().timeoutMs)
+    }
+
+    @Test
+    fun logsNeverContainUserInfo() = runBlocking {
+        env.config.setMode(MempoolMode.CUSTOM, "https://user:secret@node.local:3006")
+        assertEquals("https://user:secret@node.local:3006", env.config.host) // persisted unchanged
+        env.fake.respond = failing(MempoolService.PATH_HASHRATE, status(502, "Bad Gateway"))
+        env.service.getDashboardData()
+        env.fake.respond = { _, _ -> status(500, "x") }
+        env.service.getDashboardData()
+        env.fake.respond = FakeMempool.healthy()
+        env.service.testHost("https://user:secret@node.local:3006")
+        env.service.resetClient()
+        val logs = env.logMessages()
+        assertTrue(logs.any { "HTTP 502 @ https://node.local:3006/v1/mining/hashrate/3d" in it })
+        assertTrue(logs.any { it.startsWith("ALLE Quellen fehlgeschlagen @ https://node.local:3006") })
+        assertTrue(logs.any { it == "Verbindungstest OK: https://node.local:3006 -> Block 900000" })
+        assertTrue(logs.any { it == "HTTP-Client neu aufgebaut für https://node.local:3006" })
+        assertTrue(logs.none { "secret" in it || "user:" in it })
     }
 
     @Test

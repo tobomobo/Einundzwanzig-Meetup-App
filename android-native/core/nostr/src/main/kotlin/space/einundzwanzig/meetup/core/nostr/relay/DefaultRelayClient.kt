@@ -9,6 +9,8 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.channelFlow
@@ -54,7 +56,7 @@ internal class DefaultRelayClient @Inject constructor(
     ): RelayQueryResult = withContext(dispatcher) {
         val subId = options.subscriptionId ?: SubscriptionIds.secure("q")
         val events = mutableListOf<JsonObject>()
-        when (val opened = open(relay, options.connectTimeout, options.authenticator, options.parseTally)) {
+        when (val opened = open(relay, options.connectTimeout, options.authenticator, options.authTimeout, options.parseTally)) {
             is Opened.Failed -> RelayQueryResult(relay, emptyList(), opened.status.toQueryStatus(), error = opened.error)
             is Opened.Session -> opened.use { session ->
                 if (!session.socket.send(RelayFrames.req(subId, filters))) {
@@ -125,7 +127,7 @@ internal class DefaultRelayClient @Inject constructor(
         val byId = requests.associateBy { it.subscriptionId }
         require(byId.size == requests.size) { "Subscription-IDs von queryMulti müssen eindeutig sein" }
         return withContext(dispatcher) {
-            when (val opened = open(relay, options.connectTimeout, options.authenticator, options.parseTally)) {
+            when (val opened = open(relay, options.connectTimeout, options.authenticator, options.authTimeout, options.parseTally)) {
                 is Opened.Failed -> {
                     val status = opened.status.toQueryStatus()
                     RelayMultiQueryResult(relay, emptyList(), status, byId.mapValues { status }, error = opened.error)
@@ -231,7 +233,7 @@ internal class DefaultRelayClient @Inject constructor(
         frame: String,
         options: RelayPublishOptions,
     ): RelayPublishResult = withContext(dispatcher) {
-        when (val opened = open(relay, options.connectTimeout, options.authenticator, tally = null)) {
+        when (val opened = open(relay, options.connectTimeout, options.authenticator, options.authTimeout, tally = null)) {
             is Opened.Failed -> RelayPublishResult(relay, opened.status, error = opened.error)
             is Opened.Session -> opened.use { session ->
                 if (!session.socket.send(frame)) {
@@ -279,7 +281,7 @@ internal class DefaultRelayClient @Inject constructor(
         options: RelayQueryOptions,
     ): Flow<RelaySubscriptionEvent> = channelFlow {
         val subId = options.subscriptionId ?: SubscriptionIds.secure("live")
-        val session = when (val opened = open(relay, options.connectTimeout, options.authenticator, options.parseTally)) {
+        val session = when (val opened = open(relay, options.connectTimeout, options.authenticator, options.authTimeout, options.parseTally)) {
             is Opened.Failed -> throw when (opened.status) {
                 RelayPublishStatus.AUTH_FAILED -> RelayAuthException(relay, opened.error)
                 else -> opened.error as? RelayConnectException ?: RelayConnectException(relay, opened.error)
@@ -365,13 +367,18 @@ internal class DefaultRelayClient @Inject constructor(
 
     /**
      * Connects within [connectTimeout], then either listens itself or lets [authenticator] run
-     * the handshake. Decoded messages arrive on [Opened.Session.messages], which closes when the
-     * connection ends.
+     * the handshake (bounded by [authTimeout] if set). Decoded messages arrive on
+     * [Opened.Session.messages], which closes when the connection ends.
+     *
+     * Only this call's own connect deadline maps to CONNECT_FAILED: when the caller's outer
+     * `withTimeout` fires during the connect, the inner block is cancelled with the *outer*
+     * TimeoutCancellationException (kotlinx.coroutines #1374), which must propagate.
      */
     private suspend fun open(
         relay: String,
         connectTimeout: Duration,
         authenticator: RelayAuthenticator?,
+        authTimeout: Duration?,
         tally: RelayParseTally?,
     ): Opened {
         // Assigned inside the block: withTimeout may still throw after connect() returned a
@@ -381,6 +388,8 @@ internal class DefaultRelayClient @Inject constructor(
             withTimeout(connectTimeout) { connected = connector.connect(relay) }
         } catch (e: TimeoutCancellationException) {
             connected?.cancel()
+            // The caller's own timeout (or cancellation) propagates; only ours means "connect failed".
+            currentCoroutineContext().ensureActive()
             return Opened.Failed(RelayPublishStatus.CONNECT_FAILED, RelayConnectException(relay, e))
         } catch (e: CancellationException) {
             connected?.cancel()
@@ -411,10 +420,19 @@ internal class DefaultRelayClient @Inject constructor(
             return session
         }
         val authed = try {
-            authenticator.authenticate(socket) { array -> deliver(RelayMessage.of(array)) }
+            val handshake: suspend () -> RelaySocket? = {
+                authenticator.authenticate(socket) { array -> deliver(RelayMessage.of(array)) }
+            }
+            // withTimeoutOrNull returns null only for its own deadline; an outer timeout propagates.
+            if (authTimeout == null) handshake() else withTimeoutOrNull(authTimeout) { handshake() }
         } catch (e: CancellationException) {
             socket.close()
-            throw e
+            // A TimeoutCancellationException leaking from the authenticator's own withTimeout is a
+            // failed handshake; our own cancellation (or the caller's timeout) propagates.
+            currentCoroutineContext().ensureActive()
+            if (e !is TimeoutCancellationException) throw e
+            AppLogger.warn(TAG, "NIP-42-Anmeldung an $relay abgelaufen", e)
+            return Opened.Failed(RelayPublishStatus.AUTH_FAILED, e)
         } catch (e: Exception) {
             AppLogger.warn(TAG, "NIP-42-Anmeldung an $relay fehlgeschlagen", e)
             socket.close()

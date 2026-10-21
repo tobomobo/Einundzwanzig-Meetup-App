@@ -1,5 +1,9 @@
 package space.einundzwanzig.meetup.data.meetups
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -51,6 +55,23 @@ class PortalLeaderServiceTest {
     fun `no data means unknown`() = runTest {
         server.respond = { _, _ -> status(500, "") }
         assertNull(service().isLeaderOf(2, "npub1a"))
+    }
+
+    @Test
+    fun `concurrent callers queued behind a failing fetch share it`() = runTest {
+        server.respond = { _, _ ->
+            Thread.sleep(300)
+            status(500, "")
+        }
+        val s = service()
+        val results = coroutineScope {
+            List(5) { async(Dispatchers.Default) { s.isLeaderOf(2, "npub1a") } }.awaitAll()
+        }
+        assertEquals(List(5) { null }, results)
+        assertEquals(1, server.seen.size)
+        // A later call (nobody fetching) tries again.
+        assertNull(s.isLeaderOf(2, "npub1a"))
+        assertEquals(2, server.seen.size)
     }
 
     @Test

@@ -17,7 +17,8 @@ import space.einundzwanzig.meetup.core.common.log.AppLogger
  *
  * Semantics (shared by every implementation):
  * - **One listener** ([listen] or [frames], once). Frames that arrive before it is registered
- *   are buffered and delivered first, in order. Callbacks are never invoked concurrently.
+ *   are buffered (at most [MAX_PENDING_FRAMES]; further ones are dropped and logged) and
+ *   delivered first, in order. Callbacks are never invoked concurrently. Register promptly.
  * - Text frames longer than [MAX_MESSAGE_CHARS] UTF-16 chars are dropped before delivery
  *   (Security Audit M4, debug log `Frame über 524288 verworfen`). Binary frames are ignored.
  * - `onDone` fires exactly once: `null` after a normal close (by either side, including a local
@@ -35,8 +36,11 @@ interface RelaySocket {
     /**
      * Registers the single listener (Dart `ws.listen(onData, onError:, onDone:)`).
      *
-     * [onFrame] runs on a transport thread: keep it short and non-blocking, hand heavy work to
-     * a coroutine. @throws IllegalStateException if a listener is already registered.
+     * Frames buffered before this call are delivered **synchronously on the calling thread**
+     * during [listen] (so registering from Main runs them on Main); later frames run on a
+     * transport thread (or on the thread of a [send]/[close] that synchronously produced them,
+     * e.g. in fakes). Keep [onFrame] short and non-blocking, hand heavy work to a coroutine.
+     * @throws IllegalStateException if a listener is already registered.
      */
     fun listen(onFrame: (String) -> Unit, onDone: (Throwable?) -> Unit = {})
 
@@ -76,6 +80,12 @@ interface RelaySocket {
     companion object {
         /** Frame limit in UTF-16 chars (Dart `RelaySocket.maxMessageChars`, 512 KiB). */
         const val MAX_MESSAGE_CHARS: Int = 512 * 1024
+
+        /**
+         * Cap on frames buffered before a listener registers; later frames are dropped (warn
+         * log once per socket). Guards against a socket nobody listens to growing without bound.
+         */
+        const val MAX_PENDING_FRAMES: Int = 1_000
     }
 }
 
@@ -87,6 +97,7 @@ interface RelaySocket {
 abstract class BufferedRelaySocket(
     final override val url: String,
     private val maxFrameChars: Int = RelaySocket.MAX_MESSAGE_CHARS,
+    private val maxPendingFrames: Int = RelaySocket.MAX_PENDING_FRAMES,
 ) : RelaySocket {
 
     private val lock = Any()
@@ -98,6 +109,7 @@ abstract class BufferedRelaySocket(
     private var draining = false
     private var finished = false
     private var doneDelivered = false
+    private var overflowLogged = false
     private val closedSignal = CompletableDeferred<Throwable?>()
 
     private class Ended(val error: Throwable?)
@@ -142,6 +154,14 @@ abstract class BufferedRelaySocket(
     private fun enqueue(item: Any) {
         synchronized(lock) {
             if (item is String && finished) return
+            if (item is String && frameListener == null && queue.size >= maxPendingFrames) {
+                // Nobody listens yet and the buffer is full: drop (log once per socket).
+                if (!overflowLogged) {
+                    overflowLogged = true
+                    AppLogger.warn(LOG_TAG, "$url: mehr als $maxPendingFrames Frames ohne Listener, weitere verworfen")
+                }
+                return
+            }
             queue.addLast(item)
             if (draining || frameListener == null) return
             draining = true

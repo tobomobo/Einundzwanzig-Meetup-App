@@ -146,6 +146,9 @@ class BlossomUploadServiceTest {
     @Test
     fun `early failures - missing file, empty file, signing failure`() = runBlocking<Unit> {
         assertEquals(UploadResult.failure("Datei nicht gefunden"), service().uploadImage(File("/does/not/exist.png")))
+        // Dart File.exists() is false for a directory.
+        val dir = kotlin.io.path.createTempDirectory("blossom-dir").toFile().apply { deleteOnExit() }
+        assertEquals(UploadResult.failure("Datei nicht gefunden"), service().uploadImage(dir))
         assertEquals(UploadResult.failure("Datei ist leer"), service().uploadImage(image(bytes = ByteArray(0))))
         val failing = EventSigner { _, _, _ -> throw IllegalStateException("cancelled") }
         assertEquals(UploadResult.failure("Signieren fehlgeschlagen"), service(failing).uploadImage(image()))

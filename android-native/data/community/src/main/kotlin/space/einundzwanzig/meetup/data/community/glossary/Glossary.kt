@@ -3,6 +3,7 @@ package space.einundzwanzig.meetup.data.community.glossary
 import androidx.annotation.StringRes
 import space.einundzwanzig.meetup.core.common.dart.dartTrim
 import space.einundzwanzig.meetup.core.l10n.R as L10nR
+import space.einundzwanzig.meetup.data.community.internal.dartLowerCase
 
 /**
  * Glossary categories in display order (`GlossaryCategory` in `lib/screens/glossary_screen.dart`).
@@ -114,8 +115,8 @@ object Glossary {
     fun resolve(string: (Int) -> String): List<ResolvedGlossaryEntry> =
         entries.map { ResolvedGlossaryEntry(it, string(it.titleRes), string(it.bodyRes)) }
 
-    /** `query.trim().toLowerCase()` as the screen uses it. */
-    fun normalizeQuery(query: String): String = query.dartTrim().lowercase()
+    /** `query.trim().toLowerCase()` as the screen uses it (Dart case mapping, see resolution #12). */
+    fun normalizeQuery(query: String): String = query.dartTrim().dartLowerCase()
 
     /**
      * Search of the Glossary screen: a blank query returns everything; otherwise entries whose
@@ -124,7 +125,7 @@ object Glossary {
     fun search(entries: List<ResolvedGlossaryEntry>, query: String): List<ResolvedGlossaryEntry> {
         val q = normalizeQuery(query)
         if (q.isEmpty()) return entries
-        return entries.filter { it.title.lowercase().contains(q) || it.body.lowercase().contains(q) }
+        return entries.filter { it.title.dartLowerCase().contains(q) || it.body.dartLowerCase().contains(q) }
     }
 
     /** Hits grouped by category in enum order; categories without hits are omitted. */

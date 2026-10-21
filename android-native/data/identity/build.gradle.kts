@@ -15,6 +15,14 @@ android {
             "APP_REVIEW_SIGNIN",
             (providers.gradleProperty("appReviewSignin").orNull == "true").toString(),
         )
+        // Passkeys need https://einundzwanzig.space/.well-known/assetlinks.json with the release
+        // certificate (spec 14 F9, missing today). Until it is deployed, isSupported() is false so
+        // onboarding does not offer a step that can only fail. Enable with -PpasskeyRpAssociated=true.
+        buildConfigField(
+            "boolean",
+            "PASSKEY_RP_ASSOCIATED",
+            (providers.gradleProperty("passkeyRpAssociated").orNull == "true").toString(),
+        )
     }
 }
 

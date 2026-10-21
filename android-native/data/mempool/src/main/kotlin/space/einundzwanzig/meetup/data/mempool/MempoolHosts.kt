@@ -1,6 +1,7 @@
 package space.einundzwanzig.meetup.data.mempool
 
 import space.einundzwanzig.meetup.core.common.dart.dartTrim
+import space.einundzwanzig.meetup.data.mempool.internal.DartUriHost
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -28,8 +29,8 @@ object MempoolHosts {
     /**
      * Dart `MempoolConfig.normalize`, verbatim: trims, returns [CLEARNET] for empty input, adds
      * `http://` for `.onion` and `https://` otherwise when no (lower-case) scheme is present,
-     * strips trailing slashes, strips one trailing `/api` (case-insensitive), strips trailing
-     * slashes again.
+     * strips trailing slashes, strips one trailing `/api` (case-insensitive with Dart's
+     * per-character mapping, so `/APİ` counts too), strips trailing slashes again.
      */
     fun normalize(raw: String): String {
         var s = raw.dartTrim()
@@ -38,7 +39,9 @@ object MempoolHosts {
             s = if (s.contains(".onion")) "http://$s" else "https://$s"
         }
         s = s.trimEnd('/')
-        if (s.lowercase().endsWith("/api")) s = s.substring(0, s.length - 4)
+        // Dart `s.toLowerCase().endsWith('/api')`. Dart maps each UTF-16 unit on its own
+        // ('İ' -> 'i'); Java's full mapping would turn 'İ' into two chars.
+        if (s.length >= 4 && s.regionMatchesDartLower(s.length - 4, "/api")) s = s.substring(0, s.length - 4)
         return s.trimEnd('/')
     }
 
@@ -68,30 +71,25 @@ object MempoolHosts {
     }
 
     /**
-     * Host part the way Dart's `Uri.tryParse(s).host` sees it for the URLs [normalize] produces;
-     * `null` when Dart's parser would reject the URL (non-numeric port, unterminated IPv6).
+     * Dart `Uri.tryParse(url)?.host` (see [DartUriHost]); `null` when Dart's parser rejects [url].
      */
-    internal fun hostOf(url: String): String? {
-        val schemeEnd = url.indexOf("://")
-        if (schemeEnd < 0) return ""
-        val rest = url.substring(schemeEnd + 3)
-        val end = rest.indexOfAny(charArrayOf('/', '?', '#')).let { if (it < 0) rest.length else it }
-        var authority = rest.substring(0, end)
-        val at = authority.lastIndexOf('@')
-        if (at >= 0) authority = authority.substring(at + 1)
-        if (authority.startsWith("[")) {
-            val close = authority.indexOf(']')
-            if (close < 0) return null
-            val port = authority.substring(close + 1)
-            if (port.isNotEmpty() && !(port.startsWith(":") && port.drop(1).all { it in '0'..'9' })) return null
-            return authority.substring(1, close)
-        }
-        val colon = authority.lastIndexOf(':')
-        if (colon >= 0) {
-            val port = authority.substring(colon + 1)
-            if (!port.all { it in '0'..'9' }) return null
-            authority = authority.substring(0, colon)
-        }
-        return authority
+    internal fun hostOf(url: String): String? = DartUriHost.hostOrNull(url)
+
+    /**
+     * [host] for diagnostic log lines: any user info (`user:pass@`) in the authority is
+     * dropped so credentials of a custom instance never reach the exportable log. The
+     * persisted value and the request URL are not affected.
+     */
+    internal fun forLog(host: String): String {
+        val schemeEnd = host.indexOf("://")
+        val authorityStart = if (schemeEnd < 0) 0 else schemeEnd + 3
+        val authorityEnd = host.indexOfAny(charArrayOf('/', '?', '#', '\\'), authorityStart).let { if (it < 0) host.length else it }
+        val at = host.lastIndexOf('@', authorityEnd - 1)
+        if (at < authorityStart) return host
+        return host.substring(0, authorityStart) + host.substring(at + 1)
     }
+
+    /** `true` if `this[start..]` lower-cased per UTF-16 unit (Dart `toLowerCase`) equals [lower]. */
+    private fun String.regionMatchesDartLower(start: Int, lower: String): Boolean =
+        lower.indices.all { this[start + it].lowercaseChar() == lower[it] }
 }

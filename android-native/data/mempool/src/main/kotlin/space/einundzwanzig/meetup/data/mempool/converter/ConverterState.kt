@@ -59,8 +59,12 @@ data class ConverterState(
             return if (sats.isFinite()) sats.dartRound() else 0
         }
 
-    /** Slider position: [premiumPercent] clamped to −20..20. */
-    val sliderValue: Double get() = premiumPercent.coerceIn(-PREMIUM_LIMIT, PREMIUM_LIMIT)
+    /**
+     * Slider position: [premiumPercent] clamped to −20..20; `0.0` for NaN (a pasted `"NaN"`
+     * parses like Dart `double.tryParse`, and a NaN slider value would crash Compose).
+     */
+    val sliderValue: Double
+        get() = if (premiumPercent.isNaN()) 0.0 else premiumPercent.coerceIn(-PREMIUM_LIMIT, PREMIUM_LIMIT)
 
     /** Slider value-indicator label: `+2.5%`, `0.0%`, `-0.5%` (uses the unclamped value). */
     val premiumLabel: String get() = premiumLabel(premiumPercent)

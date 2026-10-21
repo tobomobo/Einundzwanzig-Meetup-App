@@ -25,9 +25,10 @@ import space.einundzwanzig.meetup.data.profile.LightningAddressLookup.Companion.
 import space.einundzwanzig.meetup.data.profile.LightningAddressLookup.Companion.OVERALL_TIMEOUT
 import space.einundzwanzig.meetup.data.profile.LightningAddressLookup.Companion.READ_ONLY_RELAYS
 import space.einundzwanzig.meetup.data.profile.LightningAddressLookup.Companion.SUBSCRIPTION_ID
+import javax.inject.Inject
 
 /** Port of `NewsZapService.fetchLightningAddress` + `NewsReactionsService.readTargets`. */
-internal class DefaultLightningAddressLookup(
+internal class DefaultLightningAddressLookup @Inject constructor(
     private val relayConfig: RelayConfig,
     private val relayClient: RelayClient,
     private val time: TimeSource,

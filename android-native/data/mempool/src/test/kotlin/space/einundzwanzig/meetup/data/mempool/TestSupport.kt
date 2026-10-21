@@ -20,6 +20,7 @@ import space.einundzwanzig.meetup.data.mempool.internal.MempoolServiceImpl
 import java.net.InetAddress
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration
 
 /** Settable wall clock. */
 class FakeTime(var now: Long = 1_700_000_000_000L) : TimeSource {
@@ -117,6 +118,8 @@ class FakeMempool : AutoCloseable {
 /** Wires the real implementations against a [FakeMempool]. */
 class TestEnv(
     initialPrefs: Map<String, PrefValue> = emptyMap(),
+    /** Whole-call timeout per host; `null` = production values ([MempoolHosts.timeoutFor]). */
+    timeoutFor: ((String) -> Duration)? = null,
 ) : AutoCloseable {
     val fake = FakeMempool()
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -125,7 +128,9 @@ class TestEnv(
     val store = InMemoryKeyValueStore(initialPrefs)
     internal val config = MempoolConfigImpl(store, log, scope)
     internal val heights = BlockHeightStore(store, log)
-    internal val service = MempoolServiceImpl(fake.client, config, heights, time, log, scope, Dispatchers.IO)
+    internal val service = MempoolServiceImpl(
+        fake.client, config, heights, time, log, scope, Dispatchers.IO, timeoutFor ?: MempoolHosts::timeoutFor,
+    )
 
     fun logMessages(): List<String> = log.entries.value.map { it.message }
 

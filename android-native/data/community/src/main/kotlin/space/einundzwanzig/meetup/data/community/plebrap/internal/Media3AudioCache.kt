@@ -101,9 +101,24 @@ internal class Media3AudioCache(
             .setFlags(CacheDataSource.FLAG_BLOCK_ON_CACHE)
     }
 
+    /**
+     * The in-memory index alone is not enough: Android may delete files under `cacheDir` when
+     * storage runs low, and [SimpleCache] only notices (and drops the spans) on the next read. So
+     * every span file is checked on disk; if one is missing or truncated the whole entry is removed
+     * and `false` is returned, so the caller downloads it again.
+     */
     override suspend fun isFullyCached(url: String): Boolean = withContext(io) {
         val length = ContentMetadata.getContentLength(cache.getContentMetadata(url))
-        length != C.LENGTH_UNSET.toLong() && cache.isCached(url, 0, length)
+        if (length == C.LENGTH_UNSET.toLong() || !cache.isCached(url, 0, length)) return@withContext false
+        val intact = cache.getCachedSpans(url).all { span -> span.file?.let { it.length() == span.length } == true }
+        if (!intact) {
+            try {
+                cache.removeResource(url)
+            } catch (e: Exception) {
+                // Best effort: a stale index entry is dropped by SimpleCache on the next read anyway.
+            }
+        }
+        intact
     }
 
     override fun download(url: String): Flow<Float> = channelFlow {

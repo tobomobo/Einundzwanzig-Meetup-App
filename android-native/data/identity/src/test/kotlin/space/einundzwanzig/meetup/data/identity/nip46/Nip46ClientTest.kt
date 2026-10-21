@@ -567,7 +567,7 @@ class Nip46ClientTest {
         val rpcError = rpc.await().exceptionOrNull()
         val pairingError = pairing.await().exceptionOrNull()
         // Not a silent CancellationException in a coroutine that was not cancelled.
-        assertTrue("got $rpcError", rpcError is Nip46Exception && rpcError !is kotlinx.coroutines.CancellationException)
+        assertTrue("got $rpcError", rpcError is Nip46Exception) // Nip46Exception is never a CancellationException
         assertTrue("got $pairingError", pairingError is Nip46Exception)
         assertTrue(mark.elapsedNow() < 2_000.milliseconds)
         // After close a new pairing fails at once.

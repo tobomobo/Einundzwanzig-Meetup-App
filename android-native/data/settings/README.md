@@ -102,11 +102,22 @@ violating spec 12 §9.3/§14.17).
   outside the activity should resolve strings from `localeController.wrapContext(appContext)`.
   (Wrapping in `Application.attachBaseContext` is not possible: DataStore needs the attached
   context to read `app_locale`.)
+- **Fingerprint `Sprache` line (owner `:core:common`)**: Dart logs `Platform.localeName` (device
+  locale). `AndroidEnvironmentProbe.localeName()` uses `Locale.getDefault()`, which follows the
+  in-app language (LocaleManager on 33+, `wrapContext` below), so with app language `en` on a
+  German device the line reads `en` instead of `de_DE`. Fix belongs in `:core:common`:
+  `Resources.getSystem().configuration.locales[0].toString()`. `DiagnosticsSources` has no
+  locale override, so this module cannot correct it.
+- **APP-START header position**: `AppStartupTask`s run after the Flutter migration, so log lines
+  written in `Application.onCreate` and by the migration precede this start's `APP-START` block
+  (spec 12 §2.1 wants the fingerprint right after logger setup). Moving it earlier needs `:app` to
+  call `logEnvironment` in `Application.onCreate` with a `signingMode` source that awaits migration
+  completion, and to drop the `DiagnosticsFingerprint` task binding.
 `app/build.gradle.kts` already has `generateLocaleConfig = true` for the system settings entry.
 
 ## Tests
 
-`tools/gradlew-locked :data:settings:testDebugUnitTest` — 42 JVM tests:
+`tools/gradlew-locked :data:settings:testDebugUnitTest` — 47 JVM tests:
 
 - `TourProgressStoreTest` (10): the persistence part of `guide_service_host_test.dart`
   (`finishTourNow` clears synchronously and persists `guide_completed_wallet`,
@@ -115,10 +126,12 @@ violating spec 12 §9.3/§14.17).
   all 10 keys + `guide_onboarding_asked`, `resetAllTours`/`resetTour` remove them), migrated flags.
 - `SettingsRepositoryTest` (13): defaults, locale write/remove/empty, flows, haptics without stale
   cache, theme round trip/fallback, `nostr_last_seen` as Int seconds, reset via `clear()`, flags.
-- `LocaleControllerTest` (13): store + apply, system, platform already showing the language,
+- `LocaleControllerTest` (18): store + apply, system, platform already showing the language,
   below API 33, migrated preference vs system settings, external change adoption, unsupported
   system language (`fr-FR`) adopted as system without a platform write, startup task
-  incl. reset, `AppLocales` names/flags.
+  incl. reset, `AppLocales` names/flags; last write wins under concurrent `setLocale`, platform
+  canonical tag recorded, binder failures swallowed (collector still starts), failed adoption
+  does not advance `native_applied_locale`.
 - `DiagnosticsStartupTaskTest` (6): signing-mode line, inventory present/absent/failing,
   `getMode` mapping, task order, header written before `run()` returns.
 

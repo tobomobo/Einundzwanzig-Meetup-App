@@ -11,7 +11,10 @@ import space.einundzwanzig.meetup.core.crypto.KeySecurity
 import space.einundzwanzig.meetup.core.crypto.Nip49
 import space.einundzwanzig.meetup.core.crypto.Nip49Exception
 import space.einundzwanzig.meetup.core.data.prefs.PrefValue
+import space.einundzwanzig.meetup.core.crypto.Nip19
+import space.einundzwanzig.meetup.data.identity.easyauth.LocalEasyAuth
 import space.einundzwanzig.meetup.data.identity.keys.IdentityKeys
+import space.einundzwanzig.meetup.data.identity.passkey.PasskeyPrfResult
 
 /** Port of `local_easy_auth_test.dart` (scrypt log_n 16 runs for real, like in Dart). */
 class LocalEasyAuthTest {
@@ -97,5 +100,63 @@ class LocalEasyAuthTest {
             assertEquals("Falsches Passwort — oder der Schlüssel ist beschädigt.", e.message)
         }
         assertFalse(id.keyStore.hasKey())
+    }
+
+    @Test
+    fun splitPasskeyStepsWrapAndUnlockWithoutAnActivity() = runBlocking {
+        val id = identity()
+        assertEquals(8, LocalEasyAuth.MIN_PASSWORD_LENGTH)
+        try {
+            id.easyAuth.passkeyRegistration("Ralph")
+            fail()
+        } catch (e: LocalEasyAuthException) {
+            assertEquals("Kein lokaler Schlüssel vorhanden.", e.message)
+        }
+        try {
+            id.easyAuth.passkeyCredentialIds()
+            fail()
+        } catch (e: LocalEasyAuthException) {
+            assertEquals("Kein Passkey hinterlegt.", e.message)
+        }
+
+        id.easyAuth.register("Ralph", "test-password-ok")
+        val npub = id.keyStore.getNpub()!!
+        val req = id.easyAuth.passkeyRegistration("  ")
+        assertEquals(Nip19.decodeNpub(npub), req.userIdHex)
+        assertEquals("21meetup", req.userName)
+
+        val prf = PasskeyPrfResult("cred-1", "ab".repeat(32))
+        id.easyAuth.savePasskeyWrap(req, prf)
+        val wrap = id.vault.getPasskeyWrap()!!
+        assertEquals(8, Nip49.debugDecodePayload(wrap)[1].toInt())
+        assertEquals(listOf("cred-1"), id.easyAuth.passkeyCredentialIds())
+
+        val priv = id.keyStore.getPrivHex()
+        id.keyStore.deleteKeys()
+        try {
+            id.easyAuth.unlockWithPrfSecret(PasskeyPrfResult("cred-1", "cd".repeat(32)))
+            fail()
+        } catch (e: Nip49Exception) {
+            // wrong PRF secret
+        }
+        id.easyAuth.unlockWithPrfSecret(prf)
+        assertEquals(priv, id.keyStore.getPrivHex())
+        assertEquals(SigningMode.LOCAL, id.signing.getMode())
+    }
+
+    @Test
+    fun passkeyWrapIsRefusedWhenTheKeyChangedMeanwhile() = runBlocking {
+        val id = identity()
+        id.easyAuth.register("Ralph", "test-password-ok")
+        val req = id.easyAuth.passkeyRegistration("Ralph")
+        // A new identity was created while the passkey dialog was open.
+        id.easyAuth.register("Ralph", "another-password")
+        try {
+            id.easyAuth.savePasskeyWrap(req, PasskeyPrfResult("cred-1", "ab".repeat(32)))
+            fail()
+        } catch (e: LocalEasyAuthException) {
+            assertEquals("Kein lokaler Schlüssel vorhanden.", e.message)
+        }
+        assertFalse(id.vault.hasPasskeyWrap())
     }
 }

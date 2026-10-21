@@ -23,3 +23,24 @@ fun dartTryParseDouble(s: String): Double? {
     }
     return null
 }
+
+private val DART_INT = Regex("^([+-]?)(?:0[xX]([0-9a-fA-F]+)|([0-9]+))$")
+
+/**
+ * Dart (VM, 64-bit) `int.tryParse(s)`: surrounding whitespace is ignored; optional sign;
+ * ASCII decimal digits or `0x` hex. Decimal values outside the signed 64-bit range give `null`;
+ * hex magnitudes below 2^64 wrap to two's complement as in Dart. Non-ASCII digits (`"٩"`),
+ * `_` separators and empty input give `null` (Kotlin's `toLongOrNull` accepts Unicode digits).
+ */
+internal fun dartTryParseInt(s: String): Long? {
+    val m = DART_INT.matchEntire(s.dartTrim()) ?: return null
+    val negative = m.groupValues[1] == "-"
+    val hex = m.groupValues[2]
+    val magnitude = if (hex.isNotEmpty()) java.math.BigInteger(hex, 16) else java.math.BigInteger(m.groupValues[3])
+    val value = if (negative) magnitude.negate() else magnitude
+    return when {
+        value.bitLength() < 64 -> value.toLong()
+        hex.isNotEmpty() && !negative && magnitude.bitLength() <= 64 -> magnitude.toLong()
+        else -> null
+    }
+}

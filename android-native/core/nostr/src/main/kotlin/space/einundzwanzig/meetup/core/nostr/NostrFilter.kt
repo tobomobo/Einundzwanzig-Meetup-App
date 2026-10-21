@@ -16,6 +16,11 @@ import kotlinx.serialization.json.JsonPrimitive
  *
  * Code that already builds the filter as a [JsonObject] (as the Dart services do with maps) can
  * pass that object directly to `RelayClient` and [EventGuard]; this class is a typed builder.
+ *
+ * **Byte parity:** the key order of [toJson] is fixed and often differs from the Dart map
+ * literal (e.g. spec 07 §5.2 batch nicknames send `{"kinds","authors","limit","#d"}`). Where the
+ * exact REQ string matters (ported Dart tests that assert the frame), build the filter with
+ * `jsonObjectOf(...)` from `:core:common` in Dart insertion order and pass that [JsonObject].
  */
 data class NostrFilter(
     val ids: List<String>? = null,

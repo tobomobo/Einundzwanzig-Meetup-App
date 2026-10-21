@@ -20,7 +20,7 @@ Package root: `space.einundzwanzig.meetup.data.mempool`. All services are Hilt `
 | `MempoolService.USER_AGENT`, `SUPPORTED_CURRENCIES`, `PATH_*` | `21Meetup/1.3 (Einundzwanzig Meetup App)`, `EUR USD GBP CHF CAD AUD JPY`, endpoint paths |
 | `interface MempoolConfig` | `host` (session override ?: persisted), `hostFlow`, `persistedHost`, `apiBase`, `mode` (from persisted host only), `isOnion`, `suspend ensureLoaded()`, `suspend setHost(raw)`, `suspend setMode(mode, custom)`, `setSessionOverride(host?)`, `suspend resetToDefaults()` |
 | `enum MempoolMode` | `CLEARNET`, `TOR`, `CUSTOM` |
-| `object MempoolHosts` | `CLEARNET`, `TOR`, `FALLBACKS`, `normalize(raw)`, `looksValid(raw)`, `isOnion(host)`, `timeoutFor(host)`, `label(host)` (dashboard footer, `first12…last12`) |
+| `object MempoolHosts` | `CLEARNET`, `TOR`, `FALLBACKS`, `normalize(raw)`, `looksValid(raw)` (exact Dart `Uri.tryParse(...).host` semantics via a port of Dart's URI scanner), `isOnion(host)`, `timeoutFor(host)`, `label(host)` (dashboard footer, `first12…last12`) |
 | `data class BitcoinDashboardData` | All dashboard values; `isLive`, `isDead`, `priceIn(code)`, `moscowTime`; companion `moscowTime(usd)`, `circulatingSupply(height)`, `SOURCES_TOTAL = 6`. `updatedAtMillis` is epoch millis |
 | `class MempoolHttpException(path, statusCode, body)` | `snippet` (≤120 chars + `…`), `looksBlocked`, message `HTTP 500 bei /v1/prices — …` |
 | `sealed interface HostTestFailure` | `of(error, rawHost)` → `Blocked(code)` / `Http(code)` / `OnionUnreachable` / `Other(typeName)` for the settings connection-test text (rethrow `CancellationException` before classifying; `of` itself rethrows it as a safety net); `errorTypeName(e)` |
@@ -64,11 +64,20 @@ Derived: `btcPrice`, `currentFiat`, `fiatWithPremium`, `satsWithPremium`, `slide
 | `data class BitcoinWidgetValues` | The 10 `HomeWidgetPreferences` strings; `toMap()` with the exact keys (`block`, `priceFiat`, `priceSymbol`, `priceEur`, `moscow`, `fees`, `hashrate`, `supply`, `difficulty`, `updated`); `of(d, currency, nowMillis, zone)` |
 | `interface BitcoinWidgetBridge` | `publish(d)` (skips dead data; home tile after every refresh), `refreshBitcoin()` (widget refresh button: fetch, skip-if-dead with log) |
 
+## Logging
+
+Hosts in diagnostic log lines go through `MempoolHosts.forLog` (internal), which drops user
+info (`https://user:pass@node.local` is logged as `https://node.local`). The persisted
+`mempool_host` and the request URL keep it.
+
 ## App reset
 
 Call `MempoolConfig.resetToDefaults()`, `CurrencyRepository.reset()` and
 `MempoolService.clearState()` (the in-memory state survives `KeyValueStore.clear()` otherwise;
-config and currency also follow a store wipe on their own).
+config and currency also follow a store wipe on their own). **Order:** call
+`MempoolService.clearState()` only **after** `KeyValueStore.clear()` has finished. A dashboard
+run that starts between `clearState()` and the wipe would otherwise read the old
+`mempool_last_height` back into memory, and the monotonic guard would keep it.
 
 ## Tests
 
@@ -76,7 +85,8 @@ config and currency also follow a store wipe on their own).
 tools/gradlew-locked :data:mempool:testDebugUnitTest
 ```
 
-73 JVM tests: port of `test/mempool_web_headers_test.dart` (native branch), all §10.2 vectors
+JVM tests (87), including 4114 `normalize`/`looksValid` differential vectors generated with
+Dart 3.13 (`src/test/resources/dart_mempool_host_vectors.tsv`): port of `test/mempool_web_headers_test.dart` (native branch), all §10.2 vectors
 (normalize/looksValid, Moscow time, supply, grouping, symbols, toStringAsFixed, round,
 difficulty/hashrate/LN labels, HTTP exception, host label, converter, premium, slider, tile)
 and the §10.3 MockWebServer scenarios (single-flight, mirror order, no Tor/custom fallback,

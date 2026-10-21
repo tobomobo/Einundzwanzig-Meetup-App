@@ -19,7 +19,6 @@ import space.einundzwanzig.meetup.core.common.ApplicationScope
 import space.einundzwanzig.meetup.core.common.IoDispatcher
 import space.einundzwanzig.meetup.core.common.TimeSource
 import space.einundzwanzig.meetup.core.common.dart.dartToInt
-import space.einundzwanzig.meetup.core.common.dart.dartTrim
 import space.einundzwanzig.meetup.core.common.json.dartNumOrNull
 import space.einundzwanzig.meetup.core.common.log.DiagnosticLog
 import space.einundzwanzig.meetup.core.network.HttpResult
@@ -38,6 +37,7 @@ import space.einundzwanzig.meetup.data.mempool.MempoolService.Companion.PATH_PRI
 import space.einundzwanzig.meetup.data.mempool.MempoolService.Companion.PATH_TIP_HEIGHT
 import space.einundzwanzig.meetup.data.mempool.MempoolService.Companion.SUPPORTED_CURRENCIES
 import space.einundzwanzig.meetup.data.mempool.MempoolService.Companion.USER_AGENT
+import space.einundzwanzig.meetup.data.mempool.format.dartTryParseInt
 import java.io.IOException
 import java.io.InterruptedIOException
 import java.util.concurrent.atomic.AtomicInteger
@@ -52,17 +52,32 @@ import kotlin.time.Duration.Companion.seconds
  * Uses a variant of the shared client with its **own** connection pool, so [resetClient] can
  * drop this domain's keep-alive sockets without touching other domains. Every request runs
  * with a whole-call timeout via `getCapped`.
+ *
+ * [timeoutFor] gives the whole-call timeout per host ([MempoolHosts.timeoutFor] in production;
+ * tests pass short values to exercise the timeout path).
  */
 @Singleton
-internal class MempoolServiceImpl @Inject constructor(
+internal class MempoolServiceImpl(
     private val baseClient: OkHttpClient,
     private val config: MempoolConfigImpl,
     private val heights: BlockHeightStore,
     private val time: TimeSource,
     private val log: DiagnosticLog,
-    @ApplicationScope private val scope: CoroutineScope,
-    @IoDispatcher private val io: CoroutineDispatcher,
+    private val scope: CoroutineScope,
+    private val io: CoroutineDispatcher,
+    private val timeoutFor: (host: String) -> Duration,
 ) : MempoolService {
+
+    @Inject
+    constructor(
+        baseClient: OkHttpClient,
+        config: MempoolConfigImpl,
+        heights: BlockHeightStore,
+        time: TimeSource,
+        log: DiagnosticLog,
+        @ApplicationScope scope: CoroutineScope,
+        @IoDispatcher io: CoroutineDispatcher,
+    ) : this(baseClient, config, heights, time, log, scope, io, MempoolHosts::timeoutFor)
 
     private val pool = ConnectionPool()
     private val client: OkHttpClient = baseClient.newBuilder().connectionPool(pool).build()
@@ -102,7 +117,7 @@ internal class MempoolServiceImpl @Inject constructor(
             pool.evictAll()
             clientHost = host
         }
-        log.diag(TAG, "HTTP-Client neu aufgebaut für $host")
+        log.diag(TAG, "HTTP-Client neu aufgebaut für ${MempoolHosts.forLog(host)}")
     }
 
     /** Resets the client once per host change, even with six parallel sources (Dart `_get`). */
@@ -116,7 +131,7 @@ internal class MempoolServiceImpl @Inject constructor(
                 true
             }
         }
-        if (reset) log.diag(TAG, "HTTP-Client neu aufgebaut für $host")
+        if (reset) log.diag(TAG, "HTTP-Client neu aufgebaut für ${MempoolHosts.forLog(host)}")
     }
 
     override fun clearLastDashboard() {
@@ -146,7 +161,7 @@ internal class MempoolServiceImpl @Inject constructor(
         config.ensureLoaded()
         val host = config.host
         ensureClientFor(host)
-        var timeout = MempoolHosts.timeoutFor(host)
+        var timeout = timeoutFor(host)
         if (maxTimeout != null && maxTimeout < timeout) timeout = maxTimeout
         val result = client.getCapped("$host/api$path", DEFAULT_HEADERS, MAX_BODY_BYTES, timeout)
         return result.bodyOf(path)
@@ -156,7 +171,7 @@ internal class MempoolServiceImpl @Inject constructor(
 
     override suspend fun getBlockHeight(): Int = try {
         val body = get(PATH_TIP_HEIGHT, maxTimeout = BLOCK_HEIGHT_MAX_TIMEOUT)
-        val h = body.dartTrim().toIntOrNull()
+        val h = parseHeight(body)
         if (h == null || h <= 0) {
             val shown = if (body.length > 60) "${body.substring(0, 60)}…" else body
             log.diag(TAG, "Blockhöhe: unlesbare Antwort (kein Integer): \"$shown\"")
@@ -196,12 +211,12 @@ internal class MempoolServiceImpl @Inject constructor(
                 "$host/api$PATH_TIP_HEIGHT",
                 TEST_HEADERS,
                 MAX_BODY_BYTES,
-                MempoolHosts.timeoutFor(host),
+                timeoutFor(host),
             )
             val body = result.bodyOf(PATH_TIP_HEIGHT)
-            val h = body.dartTrim().toIntOrNull()
+            val h = parseHeight(body)
             if (h == null || h <= 0) throw MempoolHttpException(PATH_TIP_HEIGHT, 200, "Keine Zahl: $body")
-            log.diag(TAG, "Verbindungstest OK: $host -> Block $h")
+            log.diag(TAG, "Verbindungstest OK: ${MempoolHosts.forLog(host)} -> Block $h")
             return h
         } finally {
             testPool.evictAll()
@@ -255,7 +270,7 @@ internal class MempoolServiceImpl @Inject constructor(
                 log.diag(TAG, "Host-Auswahl während des Fallbacks geändert — kein Spiegelserver")
                 return data
             }
-            log.warn(TAG, "Keine Daten von $original — Fallback $fb")
+            log.warn(TAG, "Keine Daten von ${MempoolHosts.forLog(original)} — Fallback $fb")
             resetClient()
             data = fetchFromCurrentHost(gen)
             if (data.sourcesOk > 0) {
@@ -363,7 +378,7 @@ internal class MempoolServiceImpl @Inject constructor(
             } else {
                 ""
             }
-            log.warn(TAG, "ALLE Quellen fehlgeschlagen @ ${config.host}$hint")
+            log.warn(TAG, "ALLE Quellen fehlgeschlagen @ ${MempoolHosts.forLog(config.host)}$hint")
             resetClient()
         } else if (okCount < BitcoinDashboardData.SOURCES_TOTAL) {
             log.diag(TAG, "Nur $okCount von 6 Quellen geliefert.")
@@ -442,7 +457,7 @@ internal class MempoolServiceImpl @Inject constructor(
 
     /** Dart `_logFailure`: records the error code and logs, suppressing repeated network errors. */
     private fun logFailure(source: String, e: Throwable) {
-        val host = config.host
+        val host = MempoolHosts.forLog(config.host) // never log user info of a custom instance
         if (e is MempoolHttpException) {
             lastError = "HTTP ${e.statusCode}"
             if (e.looksBlocked) lastBlocked = true
@@ -505,6 +520,13 @@ internal class MempoolServiceImpl @Inject constructor(
             "User-Agent" to USER_AGENT,
             "Accept" to "text/plain, */*",
         )
+
+        /**
+         * Dart `int.tryParse(body.trim())` (ASCII digits, optional sign, `0x` hex). Values beyond
+         * [Int.MAX_VALUE] (Dart would keep them as 64-bit) count as unreadable, like `null`.
+         */
+        private fun parseHeight(body: String): Int? =
+            dartTryParseInt(body)?.takeIf { it <= Int.MAX_VALUE }?.toInt()
 
         /** Turns a capped HTTP result into the body text or the exception Dart would have thrown. */
         private fun HttpResult.bodyOf(path: String): String = when (this) {

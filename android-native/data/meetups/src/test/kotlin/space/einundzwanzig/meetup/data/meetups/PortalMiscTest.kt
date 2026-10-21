@@ -97,6 +97,33 @@ class PortalMiscTest {
     }
 
     @Test
+    fun `seeded short city names do not beat calendar entries`() = runTest {
+        var loads = 0
+        val registry = PortalLogoRegistryImpl(Optional.of(PortalLogoLoader { loads++ }), testLog())
+        registry.seedFrom(
+            listOf(
+                Meetup(id = "1", name = "", city = "Ulm", country = "DE", telegramLink = "", lat = 0.0, lng = 0.0, logoUrl = "ulm.png"),
+                Meetup(id = "2", name = "", city = "Bern", country = "CH", telegramLink = "", lat = 0.0, lng = 0.0, logoUrl = "bern.png"),
+            ),
+        )
+        // Seeding does not count as loaded: the calendar load still runs.
+        registry.ensureLoaded()
+        assertEquals(1, loads)
+        registry.put("Einundzwanzig Neu-Ulm", "neu-ulm.png")
+        registry.put("Bernau", "bernau.png")
+        assertEquals(PortalUrls.absoluteImageUrl("neu-ulm.png"), registry.logoFor("Einundzwanzig Neu-Ulm"))
+        assertEquals(PortalUrls.absoluteImageUrl("bernau.png"), registry.logoFor("Bernau"))
+        // A containing calendar entry still wins (Dart rule): "einundzwanzig neu-ulm" contains "ulm".
+        assertEquals(PortalUrls.absoluteImageUrl("neu-ulm.png"), registry.logoFor("Ulm"))
+        // No calendar match → seeded entry.
+        assertEquals(PortalUrls.absoluteImageUrl("bern.png"), registry.logoFor("Einundzwanzig Bern"))
+        assertEquals(
+            listOf("Einundzwanzig Neu-Ulm", "Bernau", "Ulm", "Bern"),
+            registry.logos.value.keys.toList(),
+        )
+    }
+
+    @Test
     fun `registry without loader is a no-op`() = runTest {
         val registry = PortalLogoRegistryImpl(Optional.empty(), testLog())
         registry.ensureLoaded()

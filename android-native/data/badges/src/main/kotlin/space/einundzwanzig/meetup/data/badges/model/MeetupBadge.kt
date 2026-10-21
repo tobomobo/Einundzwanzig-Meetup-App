@@ -64,7 +64,7 @@ class MeetupBadge(
     val sig: String = "",
     val sigId: String = "",
     val adminPubkey: String = "",
-    val sigVersion: Int = 0,
+    val sigVersion: Long = 0,
     val sigContent: String = "",
     val claimSig: String = "",
     val claimEventId: String = "",
@@ -84,7 +84,7 @@ class MeetupBadge(
     /** v2, 128-hex sig, 64-hex pubkey and a non-zero signature (format check only, no verification). */
     val isNostrSigned: Boolean
         get() {
-            if (sigVersion != 2) return false
+            if (sigVersion != 2L) return false
             if (!HEX128.matches(sig)) return false
             if (!HEX64.matches(adminPubkey)) return false
             return BigInteger(sig, 16).signum() != 0
@@ -199,7 +199,7 @@ class MeetupBadge(
         sig: String = this.sig,
         sigId: String = this.sigId,
         adminPubkey: String = this.adminPubkey,
-        sigVersion: Int = this.sigVersion,
+        sigVersion: Long = this.sigVersion,
         sigContent: String = this.sigContent,
         claimSig: String = this.claimSig,
         claimEventId: String = this.claimEventId,
@@ -254,10 +254,7 @@ class MeetupBadge(
                     sig = o.optString("sig", ""),
                     sigId = o.optString("sigId", ""),
                     adminPubkey = o.optString("adminPubkey", ""),
-                    sigVersion = o.optInt("sigVersion").let {
-                        if (it !in Int.MIN_VALUE..Int.MAX_VALUE) throw BadgeFormatException("sigVersion out of range")
-                        it.toInt()
-                    },
+                    sigVersion = o.optInt("sigVersion"),
                     sigContent = o.optString("sigContent", ""),
                     claimSig = o.optString("claimSig", ""),
                     claimEventId = o.optString("claimEventId", ""),

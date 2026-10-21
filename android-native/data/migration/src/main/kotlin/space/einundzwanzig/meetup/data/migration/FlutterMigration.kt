@@ -21,9 +21,11 @@ interface FlutterMigration {
     val gate: MigrationGate
 
     /**
-     * Runs the migration if it has not run yet (idempotent, process-wide mutex). Retries only the
-     * failed secrets after an `IMPORTED_WITH_ERRORS` result, at most [MAX_AUTOMATIC_ATTEMPTS]
-     * times. Never throws (except cancellation); always completes [gate].
+     * Runs the migration if it has not run yet (idempotent, process-wide mutex). After an
+     * `IMPORTED_WITH_ERRORS` result it retries every secret not yet imported, once per process
+     * start and at most [MAX_AUTOMATIC_ATTEMPTS] times. The attempt runs in a process-wide scope:
+     * cancelling the caller only stops its wait, never the import. Never throws (except the
+     * caller's own cancellation); always completes [gate] once the attempt has finished.
      */
     suspend fun ensureMigrated(): MigrationReport
 
@@ -39,7 +41,10 @@ interface FlutterMigration {
     /**
      * flutter_secure_storage key names that exist in the Flutter files but could not be imported
      * yet. A domain must treat these keys as **unreadable** (never generate a replacement), like
-     * Dart `resetOnError: false`. Empty unless the state is `IMPORTED_WITH_ERRORS`.
+     * Dart `resetOnError: false`. For `IMPORTED_WITH_ERRORS` the failed names (all known keys
+     * when the secure-storage or prefs file was unreadable); for `NOT_STARTED` with Flutter files
+     * present (an attempt aborted before finishing, or a corrupt state file) every legacy secret
+     * name; otherwise empty.
      */
     suspend fun pendingLegacySecrets(): Set<String>
 
@@ -82,6 +87,8 @@ interface MigrationGate {
 /**
  * Optional hook run after an import attempt wrote data (state `IMPORTED` or
  * `IMPORTED_WITH_ERRORS`), e.g. `MeetupWidget().updateAll(context)` in `:feature:widget`.
+ * Runs after the migration mutex is released and the [MigrationGate] is complete, so a hook may
+ * await the gate, call [FlutterMigration.ensureMigrated] or read the stores.
  * Contribute with `@Binds @IntoSet`. Failures are logged and ignored.
  */
 fun interface MigrationCompletedHook {

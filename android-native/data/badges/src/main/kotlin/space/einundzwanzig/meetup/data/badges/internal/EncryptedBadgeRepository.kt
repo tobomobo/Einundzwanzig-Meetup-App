@@ -38,6 +38,7 @@ import space.einundzwanzig.meetup.data.badges.security.BadgeSecurity
 import space.einundzwanzig.meetup.data.badges.store.BadgeRepository
 import space.einundzwanzig.meetup.data.badges.store.BadgeStoreKeys
 import space.einundzwanzig.meetup.data.badges.text.DartString
+import space.einundzwanzig.meetup.data.identity.keys.IdentityKeys
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -57,10 +58,12 @@ internal class EncryptedBadgeRepository @Inject constructor(
     private val mutex = Mutex()
     private val _badges = MutableStateFlow<List<MeetupBadge>>(emptyList())
     private val _unreadable = MutableStateFlow(false)
+    private val _loaded = MutableStateFlow(false)
     private val _saved = MutableSharedFlow<Unit>(extraBufferCapacity = 16, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
     override val badges: StateFlow<List<MeetupBadge>> = _badges.asStateFlow()
     override val badgesUnreadable: StateFlow<Boolean> = _unreadable.asStateFlow()
+    override val loaded: StateFlow<Boolean> = _loaded.asStateFlow()
     override val savedEvents: SharedFlow<Unit> = _saved.asSharedFlow()
 
     private var unreadable: Boolean
@@ -71,6 +74,16 @@ internal class EncryptedBadgeRepository @Inject constructor(
 
     private suspend fun <T> locked(block: suspend () -> T): T = withContext(dispatcher) { mutex.withLock { block() } }
 
+    /**
+     * Writers must know whether the file is readable before they touch it: without a load in this
+     * process [unreadable] is still `false`, and a save would encrypt with whatever key sits in
+     * [BadgeStoreKeys.KEY] and overwrite a file only the `_BACKUP` (or another) key opens. Dart
+     * relied on `main()` loading first; here every write path loads once on its own.
+     */
+    private suspend fun ensureLoaded() {
+        if (!_loaded.value) _badges.value = loadInternal()
+    }
+
     // ------------------------------------------------------------------ public API
 
     override suspend fun loadBadges(): List<MeetupBadge> = locked {
@@ -78,9 +91,24 @@ internal class EncryptedBadgeRepository @Inject constructor(
     }
 
     override suspend fun saveBadges(badges: List<MeetupBadge>, replaceUnreadable: Boolean, discardLocked: Boolean): Boolean =
-        locked { saveInternal(badges, replaceUnreadable, discardLocked) }
+        locked {
+            ensureLoaded()
+            saveInternal(badges, replaceUnreadable, discardLocked)
+        }
+
+    override suspend fun update(transform: (current: List<MeetupBadge>) -> List<MeetupBadge>?): Boolean = locked {
+        // Every write goes through this singleton under the mutex, so after the first load the
+        // in-memory state is the stored collection (kept-aside badges included).
+        ensureLoaded()
+        if (unreadable) return@locked false
+        val current = _badges.value
+        val next = transform(current) ?: return@locked true
+        if (next === current) return@locked true
+        saveInternal(next)
+    }
 
     override suspend fun keepAside(badge: MeetupBadge): Boolean = locked {
+        ensureLoaded()
         val pending = readPending()
         if (pending == null) {
             AppLogger.error(TAG, "Badge nicht vorgemerkt, Vormerkung nicht lesbar")
@@ -97,6 +125,7 @@ internal class EncryptedBadgeRepository @Inject constructor(
 
     override suspend fun stageIncoming(badges: List<MeetupBadge>): Boolean = locked {
         if (badges.isEmpty()) return@locked false
+        ensureLoaded()
         val key = getBadgeKey(create = true) ?: return@locked false
         try {
             commitString(BadgeStoreKeys.INCOMING, encryptBlob(badges, key))
@@ -109,6 +138,7 @@ internal class EncryptedBadgeRepository @Inject constructor(
     override suspend fun promoteIncoming(formerNpub: String): Boolean = locked {
         val incoming = prefs.getString(BadgeStoreKeys.INCOMING)
         if (incoming == null || !incoming.contains(':')) return@locked false
+        ensureLoaded()
         // A crash between primary and staging cleanup: the promotion already happened.
         if (prefs.getString(BadgeStoreKeys.PRIMARY) != incoming) {
             val retained = retainCurrent(REASON_REPLACED, npub = formerNpub)
@@ -173,12 +203,21 @@ internal class EncryptedBadgeRepository @Inject constructor(
             if (resetStillPending()) AppLogger.warn(TAG, "Reset unvollständig, die Zweitkopie bleibt gesperrt")
             unreadable = false
             _badges.value = emptyList()
+            _loaded.value = true
         }
     }
 
     // ------------------------------------------------------------------ load / save
 
     private suspend fun loadInternal(): List<MeetupBadge> {
+        // The first identityKey() (wallet filter, union) must not read the case table on the main thread.
+        DartString.warmUp()
+        val result = loadFromStores()
+        _loaded.value = true
+        return result
+    }
+
+    private suspend fun loadFromStores(): List<MeetupBadge> {
         val blob = prefs.getString(BadgeStoreKeys.PRIMARY)
         val preserved = prefs.getString(BadgeStoreKeys.PRESERVED)
         val older = prefs.getString(BadgeStoreKeys.OLDER)
@@ -376,7 +415,12 @@ internal class EncryptedBadgeRepository @Inject constructor(
         if (!secure.write(BadgeStoreKeys.KEY, hex)) AppLogger.warn(TAG, "Funktionierender Schlüssel nicht zurückgeschrieben")
     }
 
-    /** [primary], the `_BACKUP` migration copy, then every 64-hex value in the secure store (deduplicated). */
+    /**
+     * [primary], the `_BACKUP` migration copy, then every 64-hex value in the secure store
+     * (deduplicated) except the identity secrets (spec 02 §14 risk 14): the Nostr private key and
+     * the NIP-46 session key, including their `_BACKUP` and `:data:migration` recovery copies,
+     * are never tried as AES keys.
+     */
     private suspend fun candidateKeys(primary: ByteArray?): List<ByteArray> {
         val out = ArrayList<ByteArray>()
         val seen = HashSet<String>()
@@ -387,9 +431,22 @@ internal class EncryptedBadgeRepository @Inject constructor(
         if (primary != null) add(primary.toHex())
         add((secure.readChecked(BadgeStoreKeys.KEY_BACKUP) as? SecureRead.Present)?.value)
         secure.readAllChecked()
-            .onSuccess { all -> all.values.forEach(::add) }
+            .onSuccess { all -> all.forEach { (name, value) -> if (!isIdentitySecret(name)) add(value) } }
             .onFailure { AppLogger.debug(TAG, "Schlüsselsuche unvollständig: ${it::class.simpleName}") }
         return out
+    }
+
+    /** `true` for a secure entry that holds (a copy of) an identity secret, never a badge key. */
+    private fun isIdentitySecret(name: String): Boolean {
+        var base = name
+        for (prefix in IdentityKeys.RECOVERY_PREFIXES) {
+            if (base.startsWith("$prefix/")) {
+                base = base.substring(prefix.length + 1)
+                break
+            }
+        }
+        base = base.removeSuffix(BACKUP_SUFFIX)
+        return base in IdentityKeys.IDENTITY_SECRET_NAMES
     }
 
     /** Own key for kept-aside scans, independent of the badge key; deleted together with them. */
@@ -716,6 +773,7 @@ internal class EncryptedBadgeRepository @Inject constructor(
         internal const val REASON_REPLACED = "replaced"
         internal const val REASON_ROTATED = "rotated"
         internal const val REASON_CLEARED = "cleared"
+        private const val BACKUP_SUFFIX = "_BACKUP"
 
         private val HEX64 = Regex("^[0-9a-fA-F]{64}$")
 

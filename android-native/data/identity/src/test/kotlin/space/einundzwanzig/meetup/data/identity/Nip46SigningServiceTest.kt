@@ -183,6 +183,24 @@ class Nip46SigningServiceTest {
     }
 
     @Test
+    fun failedPrefsWriteRestoresThePreviousSessionKey() = runBlocking {
+        val id = TestIdentity()
+        id.signing.restoreNip46(myNpub, bunkerUri, clientKey)
+        val otherUri = bunkerUri.replace("relay.damus.io", "nos.lol")
+        id.prefs.failingKeys = setOf(IdentityKeys.NIP46_BUNKER_URI)
+
+        // New key: rolled back to the old one, prefs still describe the old session.
+        assertTrue(runCatching { id.signing.restoreNip46(myNpub, otherUri, "2".repeat(64)) }.exceptionOrNull() is IdentityStorageException)
+        assertEquals(clientKey, id.secure.entries.value[IdentityKeys.NIP46_CLIENT_SK])
+        assertEquals(bunkerUri, id.prefs.getString(IdentityKeys.NIP46_BUNKER_URI))
+
+        // No key (delete): the old key comes back as well.
+        assertTrue(runCatching { id.signing.restoreNip46(myNpub, otherUri) }.exceptionOrNull() is IdentityStorageException)
+        assertEquals(clientKey, id.secure.entries.value[IdentityKeys.NIP46_CLIENT_SK])
+        assertTrue(id.signing.canSign())
+    }
+
+    @Test
     fun sessionAliveIsFalseOutsideNip46AndWithoutReachableRelays() = runBlocking {
         val id = TestIdentity()
         assertFalse(id.signing.nip46SessionAlive())

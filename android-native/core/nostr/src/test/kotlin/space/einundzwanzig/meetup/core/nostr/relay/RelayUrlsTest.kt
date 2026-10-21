@@ -135,6 +135,26 @@ class RelayUrlsTest {
             DartUriCase("wss://a.b:9223372036854775807", true, "wss://a.b:9223372036854775807", "wss://a.b:9223372036854775807"),
             DartUriCase("wss://relay.example.com:443", true, "wss://relay.example.com:443", "wss://relay.example.com:443"),
             DartUriCase("wss://relay.example.com/", true, "wss://relay.example.com", "wss://relay.example.com"),
+            // More than one '@' or '[' / ']' outside an IP literal: Dart's Uri.tryParse returns null.
+            DartUriCase("wss://u@a@b.c", false, null, null),
+            DartUriCase("wss://[::1]@a.b", false, null, null),
+            DartUriCase("wss://a[b.c", false, null, null),
+            DartUriCase("wss://a]b.c", false, null, null),
+            DartUriCase("wss://u[@a.b", false, null, null),
+            DartUriCase("wss://u]@a.b", false, null, null),
+            DartUriCase("wss://x@y@relay.example", false, null, null),
+            DartUriCase("wss://a]b.example", false, null, null),
+            DartUriCase("wss://a[b.example", false, null, null),
+            DartUriCase("wss://u@@a.b", false, null, null),
+            DartUriCase("wss://a.b:1[", false, null, null),
+            DartUriCase("wss://u%5B@a.b", true, null, null),
+            // int.tryParse overflow: the host is not an IPv4 literal; hex ports wrap like Dart.
+            DartUriCase("wss://99999999999999999999.1.1.1", true, "wss://99999999999999999999.1.1.1", "wss://99999999999999999999.1.1.1"),
+            DartUriCase("wss://0xffffffffffffffff.1.1.1", true, "wss://0xffffffffffffffff.1.1.1", null),
+            DartUriCase("wss://0x1ffffffffffffffff.1.1.1", true, "wss://0x1ffffffffffffffff.1.1.1", "wss://0x1ffffffffffffffff.1.1.1"),
+            DartUriCase("wss://a.b:0xffffffffffffffff", true, "wss://a.b:-1", "wss://a.b:-1"),
+            DartUriCase("wss://a.b:0x8000000000000000", true, "wss://a.b:-9223372036854775808", "wss://a.b:-9223372036854775808"),
+            DartUriCase("wss://a.b:-0x8000000000000001", false, null, null),
         )
         for (c in cases) {
             assertEquals("[${c.input}] wellFormed", c.wellFormed, RelayUrls.isWellFormedRelayUrl(c.input))
@@ -155,5 +175,20 @@ class RelayUrlsTest {
         assertNull(RelayUrls.dartIntTryParse("1_0"))
         assertNull(RelayUrls.dartIntTryParse(""))
         assertNull(RelayUrls.dartIntTryParse("local"))
+        // Dart VM vectors: decimal overflow → null; hex below 2^64 wraps (two's complement).
+        assertNull(RelayUrls.dartIntTryParse("99999999999999999999"))
+        assertNull(RelayUrls.dartIntTryParse("9223372036854775808"))
+        assertNull(RelayUrls.dartIntTryParse("-9223372036854775809"))
+        assertEquals(Long.MIN_VALUE, RelayUrls.dartIntTryParse("-9223372036854775808"))
+        assertEquals(Long.MAX_VALUE, RelayUrls.dartIntTryParse("9223372036854775807"))
+        assertNull(RelayUrls.dartIntTryParse("0x1ffffffffffffffff"))
+        assertEquals(-1L, RelayUrls.dartIntTryParse("0xffffffffffffffff"))
+        assertEquals(-1L, RelayUrls.dartIntTryParse("+0xffffffffffffffff"))
+        assertEquals(Long.MIN_VALUE, RelayUrls.dartIntTryParse("0x8000000000000000"))
+        assertEquals(Long.MIN_VALUE, RelayUrls.dartIntTryParse("-0x8000000000000000"))
+        assertNull(RelayUrls.dartIntTryParse("-0x8000000000000001"))
+        assertNull(RelayUrls.dartIntTryParse("-0xffffffffffffffff"))
+        assertEquals(-1L, RelayUrls.dartIntTryParse("-0x1"))
+        assertEquals(1L, RelayUrls.dartIntTryParse("00000000000000000000001"))
     }
 }

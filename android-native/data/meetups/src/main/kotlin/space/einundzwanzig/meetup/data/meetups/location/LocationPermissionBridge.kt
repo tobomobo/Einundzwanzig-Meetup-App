@@ -13,15 +13,18 @@ import kotlinx.coroutines.flow.StateFlow
  *     val granted = r.values.any { it }
  *     val forever = !granted && !shouldShowRequestPermissionRationale(ACCESS_FINE_LOCATION) &&
  *         !shouldShowRequestPermissionRationale(ACCESS_COARSE_LOCATION)
- *     bridge.onResult(pendingId, granted, permanentlyDenied = forever)
+ *     bridge.onResult(granted, permanentlyDenied = forever)
  * }
  * bridge.pendingRequest.collect { req ->
  *     if (req != null && bridge.onLaunched(req.id)) {
- *         pendingId = req.id
  *         locationLauncher.launch(arrayOf(ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION))
  *     }
  * }
  * ```
+ * Use the id-less [onResult]: the Activity Result API re-delivers the answer to the launcher of a
+ * recreated Activity (rotation, configuration change), and an id kept in an Activity field would be
+ * lost at that point. If no answer arrives at all, the request resolves to
+ * [LocationPermission.DENIED] after a safety timeout (120 s), so later requests are never blocked.
  * Request both permissions; approximate-only is sufficient (spec 09 §14 item 21).
  *
  * If nothing collects [pendingRequest] (no Activity in the foreground), the request resolves to
@@ -43,6 +46,12 @@ interface LocationPermissionBridge {
      * longer show the dialog (`shouldShowRequestPermissionRationale` is `false` after a denial).
      */
     fun onResult(id: Long, granted: Boolean, permanentlyDenied: Boolean)
+
+    /**
+     * Delivers the result of whichever request is currently launched (preferred: survives
+     * Activity recreation). Ignored if no launched request is waiting.
+     */
+    fun onResult(granted: Boolean, permanentlyDenied: Boolean)
 
     /** The prompt could not be shown; resolves request [id] as denied. */
     fun onLaunchFailed(id: Long)

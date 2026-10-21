@@ -67,10 +67,13 @@ class PortalFieldsTest {
 
     @Test
     fun intIdOnlyForJsonInts() {
-        assertEquals(5L, PortalFields.intId(obj("""{"id":5}""")))
+        assertEquals(5, PortalFields.intId(obj("""{"id":5}""")))
         assertNull(PortalFields.intId(obj("""{"id":"5"}""")))
         assertNull(PortalFields.intId(obj("""{"id":5.0}""")))
         assertNull(PortalFields.intId(obj("""{}""")))
+        // 64-bit Dart ints beyond the Int-typed portal API are rejected, never wrapped.
+        assertEquals(Int.MAX_VALUE, PortalFields.intId(obj("""{"id":2147483647}""")))
+        assertNull(PortalFields.intId(obj("""{"id":2147483648}""")))
     }
 
     @Test
@@ -92,7 +95,7 @@ class PortalFieldsTest {
         assertEquals("Anna", c.lecturerName)
         assertEquals("Dozentin", c.lecturerIntro)
         assertEquals("https://anna", c.lecturerImage)
-        assertEquals(9L, c.lecturerId)
+        assertEquals(9, c.lecturerId)
         assertEquals("https://portal/c/3", c.portalLink)
         assertEquals(listOf("https://x.de/a"), c.links)
         assertEquals(3, c.events.size)

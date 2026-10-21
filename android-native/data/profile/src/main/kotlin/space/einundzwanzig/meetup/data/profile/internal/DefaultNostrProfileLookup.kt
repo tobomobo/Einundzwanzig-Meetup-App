@@ -8,6 +8,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import space.einundzwanzig.meetup.core.common.ApplicationScope
 import space.einundzwanzig.meetup.core.common.TimeSource
 import space.einundzwanzig.meetup.core.common.json.DartJson
 import space.einundzwanzig.meetup.core.common.json.dartIntOrNull
@@ -25,6 +26,7 @@ import space.einundzwanzig.meetup.data.profile.NostrProfileLookup.Companion.MAX_
 import space.einundzwanzig.meetup.data.profile.NostrProfileLookup.Companion.pictureUrl
 import space.einundzwanzig.meetup.data.profile.NostrProfileLookup.Companion.relayUrl
 import space.einundzwanzig.meetup.data.profile.ProfileCacheKeys
+import javax.inject.Inject
 
 /**
  * Port of `NostrProfileLookup._fetch` (spec 07 §8.3). The shared lookups run in [scope]
@@ -37,6 +39,16 @@ internal class DefaultNostrProfileLookup(
     private val store: KeyValueStore,
     private val scope: CoroutineScope,
 ) : NostrProfileLookup {
+
+    /** Hilt entry point: the relay list comes from [RelayConfig.getActiveRelays]. */
+    @Inject
+    constructor(
+        relayConfig: RelayConfig,
+        query: ProfileRelayQuery,
+        time: TimeSource,
+        store: KeyValueStore,
+        @ApplicationScope scope: CoroutineScope,
+    ) : this(relayConfig::getActiveRelays, query, time, store, scope)
 
     private val lock = Any()
     private val pending = HashMap<String, Deferred<String?>>()
@@ -118,15 +130,19 @@ internal class DefaultNostrProfileLookup(
         }
         // Newer hints from author relays are kept for the next lookup (no recursion here).
         val latestRelays = newest(listOfNotNull(cachedRelays) + events.filter { it.kind == 10002 })
-        if (latestRelays != null && isCurrent(gen)) {
-            store.setString(relayKey, latestRelays.toJson())
+        // The generation check runs inside the serialized edit: clearCache() invalidates before
+        // its own edit, so a write committing later is skipped and an earlier one is removed.
+        if (latestRelays != null) {
+            val json = latestRelays.toJson()
+            store.edit { if (isCurrent(gen)) setString(relayKey, json) }
         }
 
         val latest = newest(listOfNotNull(cached) + events.filter { it.kind == 0 })
         val receivedProfile = events.any { it.kind == 0 }
-        if (latest != null && receivedProfile && isCurrent(gen)) {
+        if (latest != null && receivedProfile) {
             val json = DartJson.encode(linkedMapOf("event" to latest.toMap(), "fetchedAt" to time.nowMillis()))
             store.edit {
+                if (!isCurrent(gen)) return@edit
                 setString(key, json)
                 // A known signed profile must never revive an old URL.
                 remove(ProfileCacheKeys.legacyPicture(pubkey))

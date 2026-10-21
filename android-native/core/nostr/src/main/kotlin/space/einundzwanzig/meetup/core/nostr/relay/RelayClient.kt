@@ -177,6 +177,10 @@ enum class RelayFanOut {
  * @property maxEvents stop after this many accepted events (status [RelayQueryStatus.LIMIT]).
  * @property logTag tag for the rejected-signature debug log.
  * @property authenticator NIP-42 handshake run right after connecting (see [RelayAuthenticator]).
+ * @property authTimeout upper bound for the [authenticator] (not part of [connectTimeout]);
+ *   expiry → [RelayQueryStatus.AUTH_FAILED] and the socket is closed. `null`: no bound here, the
+ *   authenticator must enforce its own deadline (Dart `authenticateSocket(timeout:)`: 8 s local
+ *   key, NIP-46 `signTimeout` + 20 s, 25 s Amber). [responseTimeout] starts after the handshake.
  * @property parseTally Dart `RelayParseTally` of the calling service: `message()` is called for
  *   every received frame, `failed()` for every frame that is not a non-empty JSON array (as the
  *   Dart `catch (e) { tally.failed(e); }` did). The caller adds its own failures and calls
@@ -194,6 +198,7 @@ data class RelayQueryOptions(
     val logTag: String = "RelaySocket",
     val authenticator: RelayAuthenticator? = null,
     val parseTally: RelayParseTally? = null,
+    val authTimeout: Duration? = null,
 )
 
 /** Why a [RelayClient.query] ended. */
@@ -298,7 +303,7 @@ data class RelayMultiQueryResult(
  *   connect → `ws.add` → wait 2 s → close, success when connect and send did not throw):
  *   `RelayPublishOptions(awaitOk = false)` → [RelayPublishStatus.SENT].
  *
- * @property connectTimeout budget for the WebSocket handshake (and the NIP-42 handshake).
+ * @property connectTimeout budget for the WebSocket handshake only (not the NIP-42 handshake).
  * @property ackTimeout total wait for the OK; ignored with [awaitOk] = `false`.
  * @property ackInactivityTimeout if set, the wait for the OK also ends after this long without
  *   any incoming frame (the timer restarts on every frame); [RelayPublishStatus.TIMEOUT].
@@ -306,6 +311,10 @@ data class RelayMultiQueryResult(
  *   takes the first OK.
  * @property awaitOk `false`: do not wait for an OK; send, wait [linger], close, and report
  *   [RelayPublishStatus.SENT] (also when the relay closes during the linger, as in Dart).
+ * @property authenticator NIP-42 handshake run right after connecting (see [RelayAuthenticator]).
+ * @property authTimeout upper bound for the [authenticator]; expiry →
+ *   [RelayPublishStatus.AUTH_FAILED] and the socket is closed. `null`: the authenticator must
+ *   enforce its own deadline. [ackTimeout] starts after the handshake.
  * @property linger how long the socket stays open after sending when [awaitOk] is `false`
  *   (Dart `Future.delayed(2 s)`).
  */
@@ -317,6 +326,7 @@ data class RelayPublishOptions(
     val authenticator: RelayAuthenticator? = null,
     val awaitOk: Boolean = true,
     val linger: Duration = DEFAULT_LINGER,
+    val authTimeout: Duration? = null,
 ) {
     companion object {
         /** The Dart fire-and-linger delay after `ws.add`. */

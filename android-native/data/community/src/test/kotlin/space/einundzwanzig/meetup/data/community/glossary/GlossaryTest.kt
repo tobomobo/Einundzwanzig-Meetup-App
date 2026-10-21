@@ -63,6 +63,15 @@ class GlossaryTest {
     }
 
     @Test
+    fun normalizeQueryUsesDartCaseMapping() {
+        // Resolution #12: no final-sigma rule, İ -> i (not i + U+0307).
+        assertEquals("οδοσ", Glossary.normalizeQuery(" ΟΔΟΣ "))
+        assertEquals("istanbul", Glossary.normalizeQuery("İSTANBUL"))
+        val greek = listOf(entry(GlossaryCategory.Start, "ΟΔΟΣ", ""))
+        assertEquals(greek, Glossary.search(greek, "οδοσ"))
+    }
+
+    @Test
     fun groupsHitsByCategoryInEnumOrder() {
         val grouped = Glossary.groupByCategory(sample.reversed())
         assertEquals(listOf(GlossaryCategory.Start, GlossaryCategory.Badges, GlossaryCategory.Nostr), grouped.keys.toList())

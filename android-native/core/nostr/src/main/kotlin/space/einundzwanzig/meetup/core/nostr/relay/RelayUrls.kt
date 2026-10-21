@@ -2,6 +2,7 @@ package space.einundzwanzig.meetup.core.nostr.relay
 
 import space.einundzwanzig.meetup.core.common.dart.dartTrim
 import space.einundzwanzig.meetup.core.nostr.internal.DartRelayUri
+import space.einundzwanzig.meetup.core.nostr.internal.dartIntTryParse as dartIntTryParseImpl
 
 /**
  * The two relay URL validators of the Flutter app (spec 07 §8.2). They differ on purpose; keep
@@ -68,20 +69,8 @@ object RelayUrls {
     }
 
     /**
-     * Dart `int.tryParse(s)`: optional surrounding whitespace, optional sign, decimal or `0x`
-     * hex digits. Values beyond 64 bit are treated as "numeric but out of range" (they fail the
-     * `0..255` check either way).
+     * Dart `int.tryParse(s)` (see the internal `dartIntTryParse`): `null` for decimal overflow
+     * and hex beyond 64 bit, so such a label makes the host *not* an IPv4 literal, as in Dart.
      */
-    internal fun dartIntTryParse(s: String): Long? {
-        val t = s.dartTrim()
-        val m = DART_INT.matchEntire(t) ?: return null
-        val negative = m.groupValues[1] == "-"
-        val hex = m.groupValues[2]
-        val dec = m.groupValues[3]
-        val magnitude = if (hex.isNotEmpty()) hex.toBigInteger(16) else dec.toBigInteger()
-        val value = if (negative) magnitude.negate() else magnitude
-        return if (value.bitLength() < 64) value.toLong() else if (negative) Long.MIN_VALUE else Long.MAX_VALUE
-    }
-
-    private val DART_INT = Regex("""([+-]?)(?:0[xX]([0-9a-fA-F]+)|([0-9]+))""")
+    internal fun dartIntTryParse(s: String): Long? = dartIntTryParseImpl(s)
 }

@@ -55,8 +55,14 @@ object PortalFields {
     fun extractLinks(text: String): List<String> =
         URL_REGEX.findAll(text).map { it.value }.toCollection(LinkedHashSet()).toList()
 
-    /** `e['id'] is int` → the id, else `null` (then the list shows a bottom sheet instead of a detail screen). */
-    fun intId(e: JsonObject): Long? = e["id"].dartIntOrNull()
+    /**
+     * `e['id'] is int` → the id, else `null` (then the list shows a bottom sheet instead of a
+     * detail screen). Typed `Int` to match `PortalApiService.getCourse/getLecturer(id: Int)` and the
+     * `CourseDetails`/`LecturerDetails` routes; a JSON integer outside the 32-bit range is treated
+     * like a non-int id (`null`) instead of silently wrapping to a different id.
+     */
+    fun intId(e: JsonObject): Int? =
+        e["id"].dartIntOrNull()?.takeIf { it in Int.MIN_VALUE..Int.MAX_VALUE }?.toInt()
 
     /** List row title: `(e.name ?? e.title ?? '').toString()`. */
     fun listName(e: JsonObject): String = firstPresent(e, "name", "title")?.dartToString() ?: ""
@@ -157,8 +163,8 @@ data class PortalCourse(
     val lecturerName: String,
     val lecturerIntro: String,
     val lecturerImage: String,
-    /** Lecturer id if `lecturer.id is int` (enables the lecturer detail navigation). */
-    val lecturerId: Long?,
+    /** Lecturer id if `lecturer.id is int` and fits 32 bits (enables the lecturer detail navigation); see [PortalFields.intId]. */
+    val lecturerId: Int?,
     /** Raw lecturer object, the fallback for the lecturer detail screen. */
     val lecturer: JsonObject?,
     val events: List<PortalCourseEvent>,

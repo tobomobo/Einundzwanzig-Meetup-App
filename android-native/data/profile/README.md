@@ -81,6 +81,13 @@ re-encode (≤1200 px, q85) to a temp file, then `uploadImage(file)`; show
 `profile_relay_client_test.dart` is transport-level and ported in `:core:nostr`;
 `nostr_avatar_test.dart` is in `:core:ui`.
 
+## DI
+
+`ProfileModule` binds every implementation with `@Binds @Singleton`; the `@Inject` constructors
+take `RelayConfig`, `ProfileRelayQuery`, `RelayClient`, `KeyValueStore`, `SigningService`,
+`OkHttpClient`, `TimeSource`, `DiagnosticLog`, `@IoDispatcher` and `@ApplicationScope`, so tests
+can replace any of them via `@TestInstallIn`.
+
 ## Deviations from the Dart code
 
 - `pictureUrl` uses `:core:common` `SafeUrl` instead of Dart `Uri.toString()` normalisation: the
@@ -88,7 +95,13 @@ re-encode (≤1200 px, q85) to a temp file, then `uploadImage(file)`; show
   rejected), but the returned string is the input (control characters/spaces percent-encoded,
   trailing whitespace trimmed) and host/scheme are not lower-cased. Only display is affected.
 - `fetchDisplayName` queries the relays in parallel instead of one after the other (allowed by
-  spec 07 §8.4/§14 risk 12; identical results).
+  spec 07 §8.4/§14 risk 12; identical results). Concurrent calls for the same pubkey share one
+  in-flight lookup (run in `@ApplicationScope`), and at most `MAX_PARALLEL_NAME_LOOKUPS` (4)
+  lookups query the relays at once, so a list of `NpubChip`s does not open chips × relays sockets.
+- `uploadImage` treats a directory or an unreadable file as `failure("Datei nicht gefunden")`
+  (Dart: directory = not found, unreadable = uncaught exception); reading and hashing run on IO.
+- Profile cache writes check the lookup generation inside the atomic `KeyValueStore.edit`, so a
+  lookup that was in flight during `clearCache()` cannot write its result back (spec 07 §14 risk 14).
 - `RelayClient` ignores frames with a foreign subscription id and also stops on `CLOSED`; Dart
   name/lud16 sockets accepted any `EOSE`. Same results with well-behaved relays.
 - Blossom error texts for exceptions are Kotlin/OkHttp `toString()`s (e.g.

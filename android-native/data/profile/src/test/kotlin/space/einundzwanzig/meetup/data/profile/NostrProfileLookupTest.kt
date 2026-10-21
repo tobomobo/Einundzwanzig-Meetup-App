@@ -18,6 +18,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import space.einundzwanzig.meetup.core.common.json.DartJson
 import space.einundzwanzig.meetup.core.common.json.jsonObjectOf
+import space.einundzwanzig.meetup.core.data.prefs.KeyValueEditor
+import space.einundzwanzig.meetup.core.data.prefs.KeyValueStore
 import space.einundzwanzig.meetup.core.data.prefs.PrefValue
 import space.einundzwanzig.meetup.core.data.testing.InMemoryKeyValueStore
 import space.einundzwanzig.meetup.core.nostr.relay.ProfileRelayQuery
@@ -309,6 +311,7 @@ class NostrProfileLookupTest {
             store = store,
             time = time,
             ioDispatcher = UnconfinedTestDispatcher(testScheduler),
+            scope = backgroundScope,
         )
         service.clearCache()
         assertEquals(setOf("nickname"), store.keys())
@@ -364,5 +367,39 @@ class NostrProfileLookupTest {
         // Not fresh (fetchedAt = 0) → network; outage → stale cached picture.
         assertEquals(image, lookup.fetchPicture(pubkey))
         assertTrue(calls.isNotEmpty())
+    }
+
+    /** Runs [beforeFirstEdit] once, right before the next transaction (an app reset racing a lookup). */
+    private class RacingStore(private val inner: KeyValueStore) : KeyValueStore by inner {
+        var beforeFirstEdit: (suspend () -> Unit)? = null
+
+        override suspend fun edit(block: KeyValueEditor.() -> Unit): Boolean {
+            beforeFirstEdit?.let {
+                beforeFirstEdit = null
+                it()
+            }
+            return inner.edit(block)
+        }
+    }
+
+    @Test
+    fun `app reset during an in-flight lookup is not undone by its late cache write`() = runTest {
+        val racing = RacingStore(store)
+        val lookup = DefaultNostrProfileLookup({ listOf("wss://app.example") }, defaultQuery, time, racing, backgroundScope)
+        val service = DefaultNostrProfileService(
+            lookup = lookup,
+            relayConfig = RelayConfig(store, FakeRelayConnector.unreachable()),
+            relayClient = RelayClient(FakeRelayConnector.unreachable()),
+            store = racing,
+            time = time,
+            ioDispatcher = UnconfinedTestDispatcher(testScheduler),
+            scope = backgroundScope,
+        )
+        responses["wss://app.example"] = listOf(event())
+        // The reset lands after the lookup decided to write, before its transaction commits.
+        racing.beforeFirstEdit = { service.clearCache() }
+        assertEquals(image, lookup.fetchPicture(pubkey))
+        assertFalse(has("nostr_profile_metadata_v2_$pubkey"))
+        assertFalse(has("nostr_profile_relays_v2_$pubkey"))
     }
 }

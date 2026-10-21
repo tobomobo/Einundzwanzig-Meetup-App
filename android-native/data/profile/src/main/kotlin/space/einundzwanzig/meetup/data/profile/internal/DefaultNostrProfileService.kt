@@ -2,11 +2,18 @@ package space.einundzwanzig.meetup.data.profile.internal
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import space.einundzwanzig.meetup.core.common.ApplicationScope
+import space.einundzwanzig.meetup.core.common.IoDispatcher
 import space.einundzwanzig.meetup.core.common.TimeSource
 import space.einundzwanzig.meetup.core.common.dart.dartTrim
 import space.einundzwanzig.meetup.core.common.json.DartJson
@@ -33,15 +40,20 @@ import space.einundzwanzig.meetup.data.profile.NostrProfileService.Companion.REP
 import space.einundzwanzig.meetup.data.profile.ProfileCacheKeys
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+import javax.inject.Inject
 
-/** Port of `NostrProfileService` (spec 07 §8.4) on [RelayClient] and the shared [KeyValueStore]. */
-internal class DefaultNostrProfileService(
+/**
+ * Port of `NostrProfileService` (spec 07 §8.4) on [RelayClient] and the shared [KeyValueStore].
+ * Single-name lookups run in [scope] (application scope) and are coalesced per pubkey.
+ */
+internal class DefaultNostrProfileService @Inject constructor(
     private val lookup: NostrProfileLookup,
     private val relayConfig: RelayConfig,
     private val relayClient: RelayClient,
     private val store: KeyValueStore,
     private val time: TimeSource,
-    private val ioDispatcher: CoroutineDispatcher,
+    @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
+    @ApplicationScope private val scope: CoroutineScope,
     private val log: DiagnosticLog = AppLogger,
 ) : NostrProfileService {
 
@@ -57,10 +69,33 @@ internal class DefaultNostrProfileService(
 
     // ---------------------------------------------------------------- single name
 
+    /** In-flight [fetchDisplayName] lookups by pubkey, guarded by [namesLock]. */
+    private val namesLock = Any()
+    private val pendingNames = HashMap<String, Deferred<String?>>()
+
+    /** Bounds concurrent single-name lookups (each fans out to every relay) across all chips. */
+    private val nameLimiter = Semaphore(MAX_PARALLEL_NAME_LOOKUPS)
+
     override suspend fun fetchDisplayName(pubkeyHex: String): String? {
         if (pubkeyHex.isEmpty()) return null
         nameCache[pubkeyHex]?.let { return it.value }
+        // Several chips with the same npub share one lookup. The body runs in the application
+        // scope so a cancelled caller does not cancel the lookup of the others.
+        val deferred = synchronized(namesLock) {
+            nameCache[pubkeyHex]?.let { return it.value }
+            pendingNames[pubkeyHex] ?: scope.async { lookupDisplayName(pubkeyHex) }.also { job ->
+                pendingNames[pubkeyHex] = job
+                job.invokeOnCompletion {
+                    synchronized(namesLock) { if (pendingNames[pubkeyHex] === job) pendingNames.remove(pubkeyHex) }
+                }
+            }
+        }
+        return deferred.await()
+    }
 
+    /** Dart `fetchDisplayName` body; writes [nameCache] before the pending entry is removed. */
+    private suspend fun lookupDisplayName(pubkeyHex: String): String? = nameLimiter.withPermit {
+        nameCache[pubkeyHex]?.let { return@withPermit it.value }
         var found: String? = null
         try {
             val relays = relayConfig.getActiveRelays()
@@ -101,7 +136,7 @@ internal class DefaultNostrProfileService(
             // Without a name the shortened npub stays — no reason to fail.
         }
         nameCache[pubkeyHex] = Name(found)
-        return found
+        found
     }
 
     /**
@@ -332,6 +367,9 @@ internal class DefaultNostrProfileService(
 
     companion object {
         const val TAG: String = "NostrProfile"
+
+        /** At most this many single-name lookups query the relays at the same time. */
+        internal const val MAX_PARALLEL_NAME_LOOKUPS = 4
 
         /** Dart `profile['x'] as String?`: absent/null → null, string → value, else throws. */
         private fun optString(o: JsonObject, key: String): String? {

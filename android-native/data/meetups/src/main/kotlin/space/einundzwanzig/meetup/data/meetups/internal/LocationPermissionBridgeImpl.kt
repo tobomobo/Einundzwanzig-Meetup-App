@@ -6,11 +6,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import space.einundzwanzig.meetup.data.meetups.location.LocationPermission
 import space.einundzwanzig.meetup.data.meetups.location.LocationPermissionBridge
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 /** Single-request permission handshake between the location service and the Activity. */
 @Singleton
@@ -30,9 +33,20 @@ internal class LocationPermissionBridgeImpl @Inject constructor() : LocationPerm
     var deniedForever: Boolean = false
         private set
 
+    /**
+     * Safety net: a request that gets no answer within this time (e.g. the result was lost
+     * across an Activity recreation) resolves to [LocationPermission.DENIED], so [requestMutex]
+     * is always released. Mutable for tests only.
+     */
+    @Volatile
+    internal var answerTimeout: Duration = DEFAULT_ANSWER_TIMEOUT
+
     override val pendingRequest: StateFlow<LocationPermissionBridge.Request?> = state.asStateFlow()
 
-    /** Asks the Activity for the permission and suspends until it answers. */
+    /**
+     * Asks the Activity for the permission and suspends until it answers, at most
+     * [answerTimeout] (then [LocationPermission.DENIED]).
+     */
     suspend fun request(): LocationPermission = requestMutex.withLock {
         if (state.subscriptionCount.value == 0) return LocationPermission.DENIED
         val id = ids.incrementAndGet()
@@ -42,7 +56,7 @@ internal class LocationPermissionBridgeImpl @Inject constructor() : LocationPerm
             state.value = LocationPermissionBridge.Request(id)
         }
         try {
-            deferred.await()
+            withTimeoutOrNull(answerTimeout) { deferred.await() } ?: LocationPermission.DENIED
         } finally {
             synchronized(lock) {
                 if (waiting?.first == id) waiting = null
@@ -64,13 +78,26 @@ internal class LocationPermissionBridgeImpl @Inject constructor() : LocationPerm
     }
 
     override fun onResult(id: Long, granted: Boolean, permanentlyDenied: Boolean) {
-        val result = when {
-            granted -> LocationPermission.GRANTED
-            permanentlyDenied -> LocationPermission.DENIED_FOREVER
-            else -> LocationPermission.DENIED
+        answer(id, resultOf(granted, permanentlyDenied))
+    }
+
+    override fun onResult(granted: Boolean, permanentlyDenied: Boolean) {
+        val id = synchronized(lock) {
+            state.value?.takeIf { it.launched && waiting?.first == it.id }?.id
         }
-        deniedForever = result == LocationPermission.DENIED_FOREVER
-        complete(id, result)
+        val result = resultOf(granted, permanentlyDenied)
+        if (id == null) {
+            // Late answer (request timed out): still remember the "don't ask again" state.
+            deniedForever = result == LocationPermission.DENIED_FOREVER
+            return
+        }
+        answer(id, result)
+    }
+
+    private fun resultOf(granted: Boolean, permanentlyDenied: Boolean): LocationPermission = when {
+        granted -> LocationPermission.GRANTED
+        permanentlyDenied -> LocationPermission.DENIED_FOREVER
+        else -> LocationPermission.DENIED
     }
 
     override fun onLaunchFailed(id: Long) = complete(id, LocationPermission.DENIED)
@@ -83,5 +110,15 @@ internal class LocationPermissionBridgeImpl @Inject constructor() : LocationPerm
             w.second
         }
         deferred.complete(result)
+    }
+
+    /** Remembers the system's answer and resolves request [id] with it. */
+    private fun answer(id: Long, result: LocationPermission) {
+        deniedForever = result == LocationPermission.DENIED_FOREVER
+        complete(id, result)
+    }
+
+    private companion object {
+        val DEFAULT_ANSWER_TIMEOUT: Duration = 120.seconds
     }
 }

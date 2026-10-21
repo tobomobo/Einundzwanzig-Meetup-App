@@ -3,8 +3,14 @@ package space.einundzwanzig.meetup.data.migration
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -60,13 +66,16 @@ class FlutterMigrationTest {
     fun setUp() = device.reset()
 
     /** A new instance = a new process start. */
-    private fun migration(secureStore: SecureStore = secure) = DefaultFlutterMigration(
+    private fun migration(
+        secureStore: SecureStore = secure,
+        hooks: Set<MigrationCompletedHook> = setOf(MigrationCompletedHook { hookReports += it }),
+    ) = DefaultFlutterMigration(
         context = context,
         keyValueStore = kv,
         secureStore = secureStore,
         keystore = keystore,
         logImporter = LegacyLogImporter { raw, verbose -> importedLogs += raw to verbose },
-        hooks = setOf(MigrationCompletedHook { hookReports += it }),
+        hooks = hooks,
         timeSource = time,
         log = logger,
         io = Dispatchers.IO,
@@ -286,6 +295,25 @@ class FlutterMigrationTest {
         assertEquals(FlutterMigration.MAX_AUTOMATIC_ATTEMPTS + 1, manual.attempts)
         assertEquals(fixtureNsec, secure.read("nostr_nsec_key"))
         assertEquals(fixtureToken, secure.read("portal_api_token"))
+    }
+
+    @Test
+    fun failedSecretsAreRetriedOncePerProcessEvenWithSeveralAwaiters() = runBlocking {
+        writeFixtureE2()
+        keystore.oaepPresent = false
+        keystore.pkcs1Present = false
+        val process = migration()
+        // App start, widget and worker all wait on the gate concurrently.
+        val results = List(4) { async(Dispatchers.IO) { process.ensureMigrated() } }.awaitAll()
+        results.forEach { assertEquals(MigrationState.IMPORTED_WITH_ERRORS, it.state) }
+        process.gate.await()
+        process.ensureMigrated()
+        assertEquals(1, process.currentReport().attempts)
+        assertTrue(process.gate.isComplete)
+
+        // The next process start retries once more.
+        migration().ensureMigrated()
+        assertEquals(2, migration().currentReport().attempts)
     }
 
     @Test
@@ -533,5 +561,116 @@ class FlutterMigrationTest {
         assertEquals(PrefValue.StringValue("npub1legacy"), kv.get("badge_restore_expect"))
         assertEquals(PrefValue.StringListValue(listOf("room|1786000000")), kv.get("chat_last_read"))
         assertEquals(PrefValue.IntValue(1786000000L), kv.get("news_last_read_ts"))
+    }
+
+    // ------------------------------------------------------------------ review fixes: cancellation, hooks, pending, retry scope
+
+    @Test
+    fun cancelledCallerNeverAbortsTheImport() = runBlocking {
+        writeFixtureE2()
+        device.write(FlutterPrefs.FILE, mapOf("flutter.nickname" to "Satoshi"))
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val gated = object : SecureStore by secure {
+            override suspend fun write(key: String, value: String): Boolean {
+                entered.complete(Unit)
+                release.await()
+                return secure.write(key, value)
+            }
+        }
+        val m = migration(gated)
+        // e.g. a Glance session that ends while the import is still writing secrets.
+        val caller = launch(Dispatchers.IO) { m.ensureMigrated() }
+        entered.await()
+        caller.cancelAndJoin()
+        assertFalse(m.gate.isComplete)
+
+        release.complete(Unit)
+        withTimeout(10_000) { m.gate.await() }
+        assertTrue(m.gate.isComplete)
+        assertEquals(MigrationState.IMPORTED, m.currentReport().state)
+        assertEquals(fixtureNsec, secure.read("nostr_nsec_key"))
+        assertEquals(fixtureBadgeKey, secure.read("badge_encryption_key"))
+        assertEquals(fixtureToken, secure.read("portal_api_token"))
+        assertEquals("Satoshi", kv.getString("nickname"))
+        assertEquals(1, m.currentReport().attempts)
+    }
+
+    @Test
+    fun hookThatAwaitsTheGateDoesNotDeadlock() = runBlocking {
+        device.write(FlutterPrefs.FILE, mapOf("flutter.nickname" to "Satoshi"))
+        lateinit var m: DefaultFlutterMigration
+        val seen = mutableListOf<MigrationState>()
+        m = migration(
+            hooks = setOf(
+                MigrationCompletedHook {
+                    // e.g. MeetupWidget().updateAll → provideGlance awaits the gate.
+                    m.gate.await()
+                    seen += m.ensureMigrated().state
+                },
+            ),
+        )
+        val r = withTimeout(10_000) { m.ensureMigrated() }
+        assertEquals(MigrationState.IMPORTED, r.state)
+        assertEquals(listOf(MigrationState.IMPORTED), seen)
+        assertTrue(m.gate.isComplete)
+    }
+
+    @Test
+    fun abortedOrCorruptStateReportsEverySecretAsPendingWhileFlutterDataExists() = runBlocking {
+        assertTrue(migration().pendingLegacySecrets().isEmpty()) // fresh install, nothing ran yet
+        writeFixtureE2()
+        // An attempt that died before writing its state leaves NOT_STARTED.
+        val pending = migration().pendingLegacySecrets()
+        assertTrue("nostr_nsec_key" in pending)
+        assertTrue("badge_encryption_key" in pending)
+        assertTrue("rqr_session_seed_secure" in pending)
+        // A corrupt state file reads as NOT_STARTED as well.
+        stateFile().parentFile!!.mkdirs()
+        stateFile().writeText("{not json")
+        assertTrue("nostr_nsec_key" in migration().pendingLegacySecrets())
+        // After the import nothing is pending.
+        assertEquals(MigrationState.IMPORTED, migration().ensureMigrated().state)
+        assertTrue(migration().pendingLegacySecrets().isEmpty())
+    }
+
+    @Test
+    fun retryAfterUnreadablePrefsImportsE0SecretsAndEspIdentity() = runBlocking {
+        writeKeys()
+        // ESP identity of alice; only the Flutter prefs (`nostr`) make it primary.
+        device.write(
+            Fss.DATA,
+            FssWriter.espEntries(keystore.masterAeadForWriting(), mapOf("nostr_npub_key" to alice.npub)) +
+                mapOf(Fss.ENTRY + "badge_reset_pending" to FssWriter.gcmEntry(aes, "1")),
+        )
+        device.writeRaw(FlutterPrefs.FILE, "<?xml version='1.0' encoding='utf-8' standalone='yes' ?>\n<map>\n    <string name=\"flutter.nostr")
+        val first = migration().ensureMigrated()
+        assertEquals(MigrationState.IMPORTED_WITH_ERRORS, first.state)
+        assertTrue("<prefs>" in first.failedKeys)
+        assertEquals("alice parked", alice.npub, secure.read("legacy_esp/nostr_npub_key"))
+        assertNull(secure.read("nostr_npub_key"))
+        val pending = migration().pendingLegacySecrets()
+        assertTrue("nostr_nsec_key" in pending && "rqr_session_seed_secure" in pending)
+
+        // The prefs file is readable on the next start (e.g. storage pressure gone).
+        device.write(
+            FlutterPrefs.FILE,
+            mapOf(
+                "flutter.nostr" to alice.npub,
+                "flutter.nostr_nsec_key" to alice.nsec,
+                "flutter.rqr_session_seed" to "ab".repeat(32),
+                "flutter.nickname" to "Anon",
+            ),
+        )
+        val second = migration().ensureMigrated()
+        assertEquals(MigrationState.IMPORTED, second.state)
+        assertEquals(alice.nsec, secure.read("nostr_nsec_key"))
+        assertEquals(alice.npub, secure.read("nostr_npub_key"))
+        assertEquals("ab".repeat(32), secure.read("rqr_session_seed_secure"))
+        assertEquals("1", secure.read("badge_reset_pending"))
+        assertEquals("Anon", kv.getString("nickname"))
+        assertEquals(true, kv.getBool("secure_migration_done"))
+        assertFalse(flutterPrefs().containsKey("flutter.nostr_nsec_key"))
+        assertTrue(migration().pendingLegacySecrets().isEmpty())
     }
 }

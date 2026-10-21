@@ -240,6 +240,23 @@ class RelaySocketTest {
     }
 
     @Test
+    fun preListenBufferIsCapped() {
+        val socket = FakeRelaySocket()
+        repeat(RelaySocket.MAX_PENDING_FRAMES + 5) { socket.pushFrame("f$it") }
+        val got = mutableListOf<String>()
+        val listenThread = Thread.currentThread()
+        var sameThread = true
+        socket.listen(onFrame = { got += it; if (Thread.currentThread() !== listenThread) sameThread = false })
+        assertEquals(RelaySocket.MAX_PENDING_FRAMES, got.size)
+        assertEquals("f0", got.first())
+        assertEquals("f${RelaySocket.MAX_PENDING_FRAMES - 1}", got.last())
+        assertTrue("buffered frames run on the thread calling listen()", sameThread)
+        // Once a listener is registered nothing is dropped.
+        repeat(5) { socket.pushFrame("live$it") }
+        assertEquals(RelaySocket.MAX_PENDING_FRAMES + 5, got.size)
+    }
+
+    @Test
     fun listenerAfterEndStillGetsBufferedFramesThenDone() {
         val socket = FakeRelaySocket()
         socket.pushFrame("x")

@@ -49,6 +49,10 @@ internal fun JsonElement?.dartInt(): Int? {
  * locale-free) Unicode mapping. Unlike Kotlin `lowercase()` it never applies final-sigma or
  * special casing (`İ` → `i`, `Σ` → `σ`), like Dart. Only used for display/lookup comparisons in
  * this module, never for hashed or signed values.
+ *
+ * WARNING: `Character.toLowerCase` follows the device's Unicode/ICU version, not Dart's case table;
+ * the canonical port is `DartString` in `:data:badges` (spec 00 item 12). Replace this with it once
+ * `DartString` lives in `:core:common`.
  */
 internal fun String.dartLower(): String {
     val out = StringBuilder(length)

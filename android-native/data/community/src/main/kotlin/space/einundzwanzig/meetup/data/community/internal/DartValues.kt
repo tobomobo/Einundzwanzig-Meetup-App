@@ -38,3 +38,20 @@ internal val JsonElement?.isPresent: Boolean get() = this != null && this !is Js
  */
 internal const val DART_REGEX_WHITESPACE =
     "\\t\\n\\u000B\\f\\r \\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF"
+
+/**
+ * Dart `String.toLowerCase()` (resolution #12 in spec 00): per-code-point simple case mapping,
+ * i.e. no final-sigma rule (`ΟΔΟΣ` → `οδοσ`) and `İ` (U+0130) → `i` without U+0307. Kotlin's
+ * `lowercase()` applies the full SpecialCasing rules and differs for exactly those inputs.
+ * Local stand-in until `:core:common` ships `DartString.lower` (spec 02 §8.14).
+ */
+internal fun String.dartLowerCase(): String {
+    val sb = StringBuilder(length)
+    var i = 0
+    while (i < length) {
+        val cp = codePointAt(i)
+        sb.appendCodePoint(Character.toLowerCase(cp))
+        i += Character.charCount(cp)
+    }
+    return sb.toString()
+}

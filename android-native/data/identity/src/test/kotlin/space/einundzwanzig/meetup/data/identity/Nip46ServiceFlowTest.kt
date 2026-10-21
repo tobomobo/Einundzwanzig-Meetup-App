@@ -209,6 +209,23 @@ class Nip46ServiceFlowTest {
         pairing.cancel()
     }
 
+    @Test
+    fun throwingAuthHandlerFallsBackToTheGlobalEvents() = runBlocking {
+        val id = identity()
+        val global = CopyOnWriteArrayList<String>()
+        val job = CoroutineScope(Dispatchers.Unconfined).launch(start = CoroutineStart.UNDISPATCHED) {
+            id.signing.authUrlEvents.collect { global += it }
+        }
+        val pairing = id.signing.startNip46Pairing()
+        val onAuthUrl = id.authCallbacks.single()
+        val handle = id.signing.interceptAuthUrls { throw IllegalStateException("UI weg") }
+        onAuthUrl("https://a.test/approve")
+        assertEquals(listOf("https://a.test/approve"), global)
+        handle.close()
+        job.cancel()
+        pairing.cancel()
+    }
+
     // ---------------- Amber ----------------
 
     @Test

@@ -454,6 +454,43 @@ class BadgeSecurityTest {
     }
 
     @Test
+    fun `parseQrV3 reads created_at like Dart int tryParse, including hex`() {
+        val o = Fixtures["reputationQrV3"].jsonObject
+        val code = o["qr_string"]!!.jsonPrimitive.content
+        val fields = code.substring(BadgeSecurity.QR_V3_PREFIX.length).split('.').toMutableList()
+        fields[3] = "0x68E77800" // 1760000000 in hex
+        val hexCode = BadgeSecurity.QR_V3_PREFIX + fields.joinToString(".")
+        val parts = BadgeSecurity.parseQrV3(hexCode)!!
+        assertEquals(1760000000L, parts.createdAt)
+        assertEquals(o["valid"]!!.jsonPrimitive.boolean, BadgeSecurity.verifyQrV3(parts).isValid)
+    }
+
+    @Test
+    fun `dartIntTryParse vectors`() {
+        val cases = mapOf(
+            "1760000000" to 1760000000L,
+            " 42 " to 42L,
+            "+7" to 7L,
+            "-7" to -7L,
+            "0x68E77800" to 1760000000L,
+            "0X68e77800" to 1760000000L,
+            "-0x10" to -16L,
+            "+0x10" to 16L,
+            "0x0000000000000000001" to 1L,
+            "0xFFFFFFFFFFFFFFFF" to -1L,
+            "0x8000000000000000" to Long.MIN_VALUE,
+            "9223372036854775807" to Long.MAX_VALUE,
+            "-9223372036854775808" to Long.MIN_VALUE,
+            "007" to 7L,
+            "0" to 0L,
+        )
+        for ((input, expected) in cases) assertEquals(input, expected, BadgeSecurity.dartIntTryParse(input))
+        for (bad in listOf("", " ", "+", "-", "0x", "0xG", "0x10000000000000000", "9223372036854775808", "1.0", "++1", "+-1", "1_000", "\u0661", "x10", "0b1")) {
+            assertNull(bad, BadgeSecurity.dartIntTryParse(bad))
+        }
+    }
+
+    @Test
     fun `signQrV3 signs kind 21001 with empty tags`() = runTest {
         val signer = TestSigner(time = FakeTime(now * 1000))
         val r = BadgeSecurity.signQrV3(signer, """{"v":6}""")

@@ -1,11 +1,15 @@
 package space.einundzwanzig.meetup.data.meetups.internal
 
+import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import okhttp3.OkHttpClient
+import space.einundzwanzig.meetup.core.common.IoDispatcher
 import space.einundzwanzig.meetup.core.common.TimeSource
 import space.einundzwanzig.meetup.core.common.dart.DartUri
 import space.einundzwanzig.meetup.core.common.dart.dartTrim
@@ -13,12 +17,10 @@ import space.einundzwanzig.meetup.core.common.json.DartJson
 import space.einundzwanzig.meetup.core.common.log.DiagnosticLog
 import space.einundzwanzig.meetup.core.common.result.runSuspendCatching
 import space.einundzwanzig.meetup.core.network.HttpResult
-import space.einundzwanzig.meetup.core.network.getCapped
 import space.einundzwanzig.meetup.data.meetups.geocoding.GeoPlace
 import space.einundzwanzig.meetup.data.meetups.geocoding.GeocodingService
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.time.Duration.Companion.seconds
 
 /** OkHttp port of Dart `GeocodingService.search` (spec 09 §5.4). */
 @Singleton
@@ -26,6 +28,7 @@ internal class GeocodingServiceImpl @Inject constructor(
     private val client: OkHttpClient,
     private val time: TimeSource,
     private val log: DiagnosticLog,
+    @IoDispatcher private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : GeocodingService {
 
     private val throttle = Mutex()
@@ -51,7 +54,7 @@ internal class GeocodingServiceImpl @Inject constructor(
             lastRequestAt = time.nowMillis()
         }
 
-        val result = client.getCapped(
+        val result = client.getCappedOn(io, 
             url,
             headers = mapOf("User-Agent" to GeocodingService.USER_AGENT),
             maxBytes = MAX_BYTES,

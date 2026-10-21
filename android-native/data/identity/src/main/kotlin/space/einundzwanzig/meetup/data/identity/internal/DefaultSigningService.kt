@@ -87,8 +87,13 @@ internal class DefaultSigningService @Inject constructor(
     private fun onAuthUrl(url: String) {
         val handler = synchronized(authHandlers) { authHandlers.lastOrNull() }
         if (handler != null) {
-            handler(url)
-            return
+            try {
+                handler(url)
+                return
+            } catch (e: Exception) {
+                // Feature code on the relay reader thread: never let it swallow the prompt.
+                AppLogger.warn("Nip46", "auth_url-Handler fehlgeschlagen (Host: ${SafeUrl.hostForLog(url)})", e)
+            }
         }
         if (authUrlFlow.subscriptionCount.value == 0) {
             AppLogger.warn(
@@ -444,12 +449,7 @@ internal class DefaultSigningService @Inject constructor(
         bunkerUri: String,
     ) {
         replaceNip46Session(client) {
-            keyStore.saveNip46ClientKey(clientSecretKeyHex)
-            writePrefs(
-                IdentityKeys.NIP46_PUBKEY_HEX to userPubkeyHex,
-                IdentityKeys.NIP46_NPUB to Nip19.encodeNpub(userPubkeyHex),
-                IdentityKeys.NIP46_BUNKER_URI to bunkerUri,
-            )
+            writeNip46Session(clientSecretKeyHex, userPubkeyHex, bunkerUri)
         }
         setMode(SigningMode.NIP46)
     }
@@ -481,12 +481,7 @@ internal class DefaultSigningService @Inject constructor(
         BunkerPointer.parse(bunkerUri)
         val clientKey = clientSecretKeyHex?.dartTrim().orEmpty()
         replaceNip46Session(null) {
-            if (clientKey.isEmpty()) keyStore.deleteNip46ClientKey() else keyStore.saveNip46ClientKey(clientKey)
-            writePrefs(
-                IdentityKeys.NIP46_PUBKEY_HEX to hex,
-                IdentityKeys.NIP46_NPUB to Nip19.encodeNpub(hex),
-                IdentityKeys.NIP46_BUNKER_URI to bunkerUri.dartTrim(),
-            )
+            writeNip46Session(clientKey.ifEmpty { null }, hex, bunkerUri.dartTrim())
         }
         setMode(SigningMode.NIP46)
         noteSignerReady()
@@ -495,6 +490,40 @@ internal class DefaultSigningService @Inject constructor(
     override suspend fun disconnectNip46() {
         clearNip46Artifacts()
         setMode(SigningMode.LOCAL)
+    }
+
+    /**
+     * Writes the session key ([clientKey] `null` deletes it) and the bunker prefs as one unit: if
+     * the prefs cannot be written, the previous key is put back, so key and prefs always describe
+     * the same session. Caller holds [sessionMutex] (inside [replaceNip46Session]).
+     */
+    private suspend fun writeNip46Session(clientKey: String?, userPubkeyHex: String, bunkerUri: String) {
+        // An unreadable old key must not block a new session; rolling back then means deleting.
+        val previousKey = try {
+            keyStore.getNip46ClientKey()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+        if (clientKey == null) keyStore.deleteNip46ClientKey() else keyStore.saveNip46ClientKey(clientKey)
+        try {
+            writePrefs(
+                IdentityKeys.NIP46_PUBKEY_HEX to userPubkeyHex,
+                IdentityKeys.NIP46_NPUB to Nip19.encodeNpub(userPubkeyHex),
+                IdentityKeys.NIP46_BUNKER_URI to bunkerUri,
+            )
+        } catch (e: Exception) {
+            try {
+                withContext(NonCancellable) {
+                    if (previousKey == null) keyStore.deleteNip46ClientKey() else keyStore.saveNip46ClientKey(previousKey)
+                }
+            } catch (rollback: Exception) {
+                e.addSuppressed(rollback)
+                AppLogger.warn("SigningService", "NIP-46-Sitzungsschlüssel konnte nicht zurückgesetzt werden", rollback)
+            }
+            throw e
+        }
     }
 
     private suspend fun writePrefs(vararg entries: Pair<String, String>) {

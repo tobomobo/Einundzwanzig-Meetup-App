@@ -1,7 +1,9 @@
 package space.einundzwanzig.meetup.core.nostr.relay
 
 import app.cash.turbine.test
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -349,5 +351,79 @@ class RelayClientTest {
         assertEquals(5.seconds, RelayPublishOptions().connectTimeout)
         assertEquals(5.seconds, RelayPublishOptions().ackTimeout)
         assertEquals(100.milliseconds, RelayQueryOptions(responseTimeout = 100.milliseconds).responseTimeout)
+    }
+
+    // ---- timeouts: own vs. caller's ------------------------------------------------------
+
+    private val hangingConnector = FakeRelayConnector { awaitCancellation() }
+
+    @Test
+    fun ownConnectTimeoutIsConnectFailed() = runTest {
+        val result = client(hangingConnector).query("wss://slow", filter, RelayQueryOptions(connectTimeout = 100.milliseconds))
+        assertEquals(RelayQueryStatus.CONNECT_FAILED, result.status)
+    }
+
+    @Test
+    fun callersOuterTimeoutDuringConnectPropagates() = runTest {
+        val client = client(hangingConnector)
+        var thrown: Throwable? = null
+        try {
+            withTimeout(100.milliseconds) { client.query("wss://slow", filter, RelayQueryOptions(connectTimeout = 5.seconds)) }
+        } catch (e: TimeoutCancellationException) {
+            thrown = e
+        }
+        assertTrue("outer timeout must propagate", thrown is TimeoutCancellationException)
+        thrown = null
+        try {
+            withTimeout(100.milliseconds) { client.publish("wss://slow", note("x"), RelayPublishOptions(connectTimeout = 5.seconds)) }
+        } catch (e: TimeoutCancellationException) {
+            thrown = e
+        }
+        assertTrue("outer timeout must propagate from publish", thrown is TimeoutCancellationException)
+    }
+
+    @Test
+    fun authTimeoutBoundsAHangingAuthenticator() = runTest {
+        val connector = FakeRelayConnector { url -> FakeRelaySocket(url) }
+        val hanging = RelayAuthenticator { _, _ -> awaitCancellation() }
+        val result = client(connector).query(
+            "wss://group",
+            filter,
+            RelayQueryOptions(authenticator = hanging, authTimeout = 200.milliseconds),
+        )
+        assertEquals(RelayQueryStatus.AUTH_FAILED, result.status)
+        assertTrue((connector.sockets.single() as FakeRelaySocket).closedByClient)
+
+        val publish = client(connector).publish(
+            "wss://group",
+            note("x"),
+            RelayPublishOptions(authenticator = hanging, authTimeout = 200.milliseconds),
+        )
+        assertEquals(RelayPublishStatus.AUTH_FAILED, publish.status)
+    }
+
+    @Test
+    fun authenticatorsOwnLeakedTimeoutIsAuthFailed() = runTest {
+        val connector = FakeRelayConnector { url -> FakeRelaySocket(url) }
+        val selfTimed = RelayAuthenticator { _, _ -> withTimeout(50.milliseconds) { awaitCancellation() } }
+        val result = client(connector).query("wss://group", filter, RelayQueryOptions(authenticator = selfTimed))
+        assertEquals(RelayQueryStatus.AUTH_FAILED, result.status)
+        assertTrue((connector.sockets.single() as FakeRelaySocket).closedByClient)
+    }
+
+    @Test
+    fun callersOuterTimeoutDuringAuthenticationPropagates() = runTest {
+        val connector = FakeRelayConnector { url -> FakeRelaySocket(url) }
+        val hanging = RelayAuthenticator { _, _ -> awaitCancellation() }
+        var thrown: Throwable? = null
+        try {
+            withTimeout(100.milliseconds) {
+                client(connector).query("wss://group", filter, RelayQueryOptions(authenticator = hanging, authTimeout = 5.seconds))
+            }
+        } catch (e: TimeoutCancellationException) {
+            thrown = e
+        }
+        assertTrue(thrown is TimeoutCancellationException)
+        assertTrue((connector.sockets.single() as FakeRelaySocket).closedByClient)
     }
 }

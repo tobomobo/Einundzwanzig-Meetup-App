@@ -1,5 +1,6 @@
 package space.einundzwanzig.meetup.data.meetups
 
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -208,5 +209,53 @@ class LocationTest {
         assertTrue(bridge.deniedForever)
         assertNull(bridge.pendingRequest.value)
         job.cancel()
+    }
+
+    @Test
+    fun `bridge with a stale id times out instead of hanging`() = runTest {
+        val bridge = LocationPermissionBridgeImpl()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            bridge.pendingRequest.collect { r ->
+                if (r != null && bridge.onLaunched(r.id)) bridge.onResult(r.id + 99, granted = true, permanentlyDenied = false)
+            }
+        }
+        assertEquals(LocationPermission.DENIED, bridge.request())
+        assertNull(bridge.pendingRequest.value)
+        // The mutex is released: a second request is answered normally.
+        job.cancel()
+        val job2 = launch(UnconfinedTestDispatcher(testScheduler)) {
+            bridge.pendingRequest.collect { r ->
+                if (r != null && bridge.onLaunched(r.id)) bridge.onResult(granted = true, permanentlyDenied = false)
+            }
+        }
+        assertEquals(LocationPermission.GRANTED, bridge.request())
+        job2.cancel()
+    }
+
+    @Test
+    fun `bridge id-less result completes the launched request after recreation`() = runTest {
+        val bridge = LocationPermissionBridgeImpl()
+        // First collector launches, then "dies" with the dialog open.
+        val first = launch(UnconfinedTestDispatcher(testScheduler)) {
+            bridge.pendingRequest.collect { r -> if (r != null) bridge.onLaunched(r.id) }
+        }
+        val result = async(UnconfinedTestDispatcher(testScheduler)) { bridge.request() }
+        first.cancel()
+        // Recreated Activity: sees a launched request (no relaunch), then receives the result.
+        val second = launch(UnconfinedTestDispatcher(testScheduler)) {
+            bridge.pendingRequest.collect { r -> if (r != null) assertFalse(bridge.onLaunched(r.id)) }
+        }
+        assertTrue(bridge.pendingRequest.value!!.launched)
+        bridge.onResult(granted = false, permanentlyDenied = true)
+        assertEquals(LocationPermission.DENIED_FOREVER, result.await())
+        assertTrue(bridge.deniedForever)
+        second.cancel()
+    }
+
+    @Test
+    fun `bridge id-less result without a launched request is ignored`() = runTest {
+        val bridge = LocationPermissionBridgeImpl()
+        bridge.onResult(granted = true, permanentlyDenied = false)
+        assertNull(bridge.pendingRequest.value)
     }
 }

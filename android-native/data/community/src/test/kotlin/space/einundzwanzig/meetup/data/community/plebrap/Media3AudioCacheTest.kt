@@ -143,6 +143,27 @@ class Media3AudioCacheTest {
     }
 
     @Test
+    fun spanFilesDeletedBehindTheIndexAreNotFullyCachedAndDownloadAgain() = runBlocking {
+        withTimeout(TIMEOUT_MS) { audioCache.download(url).toList() }
+        assertTrue(audioCache.isFullyCached(url))
+
+        // Android trimmed cacheDir under storage pressure; SimpleCache's index still lists the spans.
+        simpleCache.getCachedSpans(url).forEach { checkNotNull(it.file).delete() }
+        assertTrue(simpleCache.isCached(url, 0, BODY_SIZE.toLong()))
+
+        assertFalse(audioCache.isFullyCached(url))
+        assertTrue(simpleCache.getCachedSpans(url).isEmpty())
+
+        val progress = withTimeout(TIMEOUT_MS) { audioCache.download(url).toList() }
+        assertEquals(1f, progress.last())
+        assertEquals(2, server.requestCount)
+        assertTrue(audioCache.isFullyCached(url))
+        val source = audioCache.playerDataSourceFactory.createDataSource()
+        assertEquals(BODY_SIZE.toLong(), source.open(DataSpec(Uri.parse(url))))
+        assertArrayEquals(body, source.readAllAndClose())
+    }
+
+    @Test
     fun writerWaitsForALockedSpanInsteadOfBypassingTheCache() = runBlocking {
         // Someone else (the player opening a source, or a cancelled writer winding down) holds the hole.
         val hole = checkNotNull(simpleCache.startReadWriteNonBlocking(url, 0, C.LENGTH_UNSET.toLong()))

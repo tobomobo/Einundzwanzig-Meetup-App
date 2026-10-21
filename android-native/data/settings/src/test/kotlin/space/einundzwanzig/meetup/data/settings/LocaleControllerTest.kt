@@ -1,5 +1,6 @@
 package space.einundzwanzig.meetup.data.settings
 
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -25,6 +26,21 @@ class LocaleControllerTest {
             writes += tag
             this.tag = tag
         }
+    }
+
+    /** Reports a canonical form (region added) after a write, like OEM `LocaleManager` normalization. */
+    private class CanonicalPlatform(var tag: String? = null) : PlatformLocales {
+        override val isAvailable: Boolean = true
+        override fun applicationLanguageTag(): String? = tag
+        override fun setApplicationLanguageTag(tag: String?) {
+            this.tag = tag?.let { "$it-AT" }
+        }
+    }
+
+    private class ThrowingPlatform : PlatformLocales {
+        override val isAvailable: Boolean = true
+        override fun applicationLanguageTag(): String? = throw IllegalStateException("binder died")
+        override fun setApplicationLanguageTag(tag: String?) = throw IllegalStateException("binder died")
     }
 
     private val prefs = InMemoryKeyValueStore()
@@ -94,7 +110,7 @@ class LocaleControllerTest {
         c.syncWithSystem()
         assertEquals("es", c.current())
 
-        c.applyToPlatform(c.current())
+        c.applyToPlatform()
         assertEquals(listOf<String?>("es"), platform.writes)
     }
 
@@ -142,7 +158,7 @@ class LocaleControllerTest {
         assertNull(c.current())
         assertFalse("app_locale" in prefs.entries.value)
 
-        c.applyToPlatform(c.current())
+        c.applyToPlatform()
         assertTrue(platform.writes.isEmpty())
         assertEquals("fr-FR", platform.tag)
     }
@@ -176,6 +192,76 @@ class LocaleControllerTest {
         prefs.clear() // app reset
         runCurrent()
         assertNull(platform.tag)
+    }
+
+    // ---- robustness (API 33+) ----
+
+    @Test
+    fun `concurrent setLocale calls leave the platform on the stored language`() = runTest {
+        val platform = FakePlatform()
+        val c = controller(platform)
+
+        val a = async { c.setLocale("en") }
+        val b = async { c.setLocale("es") }
+        a.await()
+        b.await()
+
+        val stored = c.current()
+        assertEquals(stored, platform.tag)
+        assertEquals(PrefValue.StringValue(stored.orEmpty()), prefs.entries.value["native_applied_locale"])
+    }
+
+    @Test
+    fun `apply after a newer write applies the newer language`() = runTest {
+        val platform = FakePlatform()
+        val c = controller(platform)
+        c.setLocale("en")
+        prefs.setString("app_locale", "es") // a later write that a stale apply must not undo
+
+        c.applyToPlatform()
+
+        assertEquals("es", platform.tag)
+    }
+
+    @Test
+    fun `the tag reported by the platform is recorded, not the requested one`() = runTest {
+        val platform = CanonicalPlatform()
+        val c = controller(platform)
+
+        c.setLocale("en")
+        assertEquals(PrefValue.StringValue("en-AT"), prefs.entries.value["native_applied_locale"])
+
+        c.syncWithSystem() // own write is not mistaken for an external change
+        assertEquals("en", c.current())
+    }
+
+    @Test
+    fun `platform failures are logged, not thrown, and the startup collector still starts`() = runTest {
+        val c = controller(ThrowingPlatform())
+        c.syncWithSystem()
+        assertTrue(c.setLocale("en"))
+
+        val task = LocaleStartupTask(c, backgroundScope)
+        task.run()
+        runCurrent()
+        assertEquals("en", c.current())
+    }
+
+    @Test
+    fun `a failed adoption does not record the system tag`() = runTest {
+        val platform = FakePlatform()
+        val c = controller(platform)
+        c.setLocale("de")
+        platform.tag = "en"
+
+        prefs.failingKeys = setOf("app_locale")
+        c.syncWithSystem()
+        assertEquals("de", c.current())
+        assertEquals(PrefValue.StringValue("de"), prefs.entries.value["native_applied_locale"])
+
+        prefs.failingKeys = emptySet()
+        c.syncWithSystem() // retried on the next sync
+        assertEquals("en", c.current())
     }
 
     // ---- AppLocales ----

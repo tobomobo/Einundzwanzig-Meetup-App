@@ -19,7 +19,11 @@ import android.app.Activity
  * an activity context to show its UI); nothing keeps a reference.
  */
 interface PasskeyPrfService {
-    /** API ≥ 28 and a user-verifying platform authenticator (Play Services FIDO2); errors → `false`. */
+    /**
+     * The build declares the RP domain association (`BuildConfig.PASSKEY_RP_ASSOCIATED`, Gradle
+     * property `passkeyRpAssociated`, off until assetlinks.json is deployed), API ≥ 28 and a
+     * user-verifying platform authenticator (Play Services FIDO2); errors → `false`.
+     */
     suspend fun isSupported(): Boolean
 
     /**

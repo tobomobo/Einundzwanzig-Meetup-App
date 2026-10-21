@@ -188,6 +188,20 @@ class PortalApiServiceTest {
     }
 
     @Test
+    fun `login fails when the token cannot be stored`() = runTest {
+        server.respond = { _, _ -> json("""{"token":"t","user":{"id":1}}""", 201) }
+        secure.failWrite = { it == PortalApiService.TOKEN_NPUB_KEY }
+        val r = api.loginWithNostr()
+        assertFalse(r.ok)
+        assertEquals(0, r.statusCode)
+        assertEquals("Anmeldung fehlgeschlagen: Token konnte nicht gespeichert werden", r.error)
+        assertEquals(PortalErrorKind.LOGIN_FAILED, r.errorKind)
+        // Atomic: no unbound token left behind.
+        assertNull(api.getToken())
+        assertFalse(api.hasToken())
+    }
+
+    @Test
     fun `login error status and signer failure`() = runTest {
         server.respond = { _, _ -> json("""{"message":"Event zu alt"}""", 422) }
         assertEquals("Event zu alt (HTTP 422)", api.loginWithNostr().error)
@@ -353,6 +367,18 @@ class PortalApiServiceTest {
         assertEquals(3, server.seen.size)
         assertNull(server.seen[0].header("Authorization"))
         assertEquals("application/json", server.seen[0].header("Accept"))
+    }
+
+    @Test
+    fun `getAllMeetupEvents without a date uses the injected clock`() = runTest {
+        server.respond = { _, _ -> json("[]") }
+        time.now = java.time.LocalDate.of(2026, 3, 10).atTime(12, 0)
+            .atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        assertTrue(api.getAllMeetupEvents().isEmpty())
+        assertEquals(
+            listOf("/api/meetup-events/2026-03-10", "/api/meetup-events/2026-04-01", "/api/meetup-events/2026-05-01"),
+            server.seen.map { it.path },
+        )
     }
 
     // ---- RSVP ----------------------------------------------------------------------------

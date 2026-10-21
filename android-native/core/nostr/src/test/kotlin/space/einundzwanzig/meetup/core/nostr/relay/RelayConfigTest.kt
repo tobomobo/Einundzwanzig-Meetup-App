@@ -1,7 +1,12 @@
 package space.einundzwanzig.meetup.core.nostr.relay
 
 import app.cash.turbine.test
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -114,5 +119,40 @@ class RelayConfigTest {
     fun probeTimesOutOnAStalledHandshake() = runTest {
         val stalled = RelayConfig(store, FakeRelayConnector { awaitCancellation() })
         assertFalse(stalled.probeRelay("wss://slow.example", timeout = 100.milliseconds))
+    }
+
+    @Test
+    fun concurrentAddOfTheSameUrlStoresItOnce() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val gated = RelayConfig(store, FakeRelayConnector { url -> gate.await(); FakeRelaySocket(url) })
+        val first = async { gated.addCustomRelay("wss://twice.example") }
+        val second = async { gated.addCustomRelay("wss://twice.example") }
+        runCurrent() // both passed the duplicate check and wait in the probe
+        gate.complete(Unit)
+        assertEquals(
+            setOf(RelayAddResult.ADDED, RelayAddResult.ALREADY_PRESENT),
+            setOf(first.await(), second.await()),
+        )
+        assertEquals(listOf("wss://twice.example"), gated.getCustomRelays())
+    }
+
+    @Test
+    fun probeRelayOwnTimeoutIsFalseButCallersTimeoutPropagates() = runTest {
+        val hanging = RelayConfig(store, FakeRelayConnector { awaitCancellation() })
+        assertFalse(hanging.probeRelay("wss://slow.example", 100.milliseconds))
+        var thrown: Throwable? = null
+        try {
+            withTimeout(100.milliseconds) { hanging.probeRelay("wss://slow.example", 5.seconds) }
+        } catch (e: TimeoutCancellationException) {
+            thrown = e
+        }
+        assertTrue("outer timeout must propagate", thrown is TimeoutCancellationException)
+        thrown = null
+        try {
+            withTimeout(100.milliseconds) { hanging.addCustomRelay("wss://slow.example") }
+        } catch (e: TimeoutCancellationException) {
+            thrown = e
+        }
+        assertTrue("addCustomRelay must not report UNREACHABLE after the caller timed out", thrown is TimeoutCancellationException)
     }
 }

@@ -17,6 +17,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
 import space.einundzwanzig.meetup.core.common.log.AppLogger
+import space.einundzwanzig.meetup.data.identity.BuildConfig
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
@@ -29,6 +30,8 @@ internal class AndroidPasskeyPrfService @Inject constructor(
 ) : PasskeyPrfService {
 
     override suspend fun isSupported(): Boolean {
+        // Without Digital Asset Links for the RP id every registration fails (spec 14 F9).
+        if (!BuildConfig.PASSKEY_RP_ASSOCIATED) return false
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return false
         return try {
             Fido.getFido2ApiClient(appContext).isUserVerifyingPlatformAuthenticatorAvailable.await()
