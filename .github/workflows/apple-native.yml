@@ -1,0 +1,83 @@
+name: Apple native
+
+on:
+  pull_request:
+    paths:
+      - 'apple-native/**'
+      - '.github/workflows/apple-native.yml'
+  push:
+    paths:
+      - 'apple-native/**'
+      - '.github/workflows/apple-native.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apple-native-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Validate, test, and build iOS + macOS
+    runs-on: macos-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select an installed Xcode 26
+        run: python3 apple-native/Scripts/select_xcode.py
+
+      - name: Validate checked-in project and resources
+        run: python3 apple-native/Scripts/validate_project.py --require-route-matrix
+
+      - name: Test MeetupCore
+        run: swift test --package-path apple-native/Packages/MeetupCore
+
+      - name: Parse all Apple platform branches
+        run: python3 apple-native/Scripts/parse_swift.py
+
+      - name: Test real app import and local-state models
+        run: python3 apple-native/Scripts/test_local_models.py
+
+      - name: Test portable CalendarICS serializer
+        run: |
+          swiftc -swift-version 6 -D CALENDAR_ICS_TESTS apple-native/App/Platform/CalendarICS.swift apple-native/App/Platform/Tests/CalendarICSTests.swift -o /tmp/calendar-ics-tests
+          /tmp/calendar-ics-tests
+
+      - name: Build iOS simulator without signing
+        run: >-
+          xcodebuild
+          -project apple-native/Einundzwanzig.xcodeproj
+          -scheme Einundzwanzig
+          -configuration Debug
+          -sdk iphonesimulator
+          -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath /tmp/einundzwanzig-ios-derived-data
+          CODE_SIGNING_ALLOWED=NO
+          build
+
+      - name: Build iOS device VisionKit path without signing
+        run: >-
+          xcodebuild
+          -project apple-native/Einundzwanzig.xcodeproj
+          -scheme Einundzwanzig
+          -configuration Debug
+          -sdk iphoneos
+          -destination 'generic/platform=iOS'
+          -derivedDataPath /tmp/einundzwanzig-iphoneos-derived-data
+          CODE_SIGNING_ALLOWED=NO
+          build
+
+      - name: Build native macOS without signing
+        run: >-
+          xcodebuild
+          -project apple-native/Einundzwanzig.xcodeproj
+          -scheme Einundzwanzig
+          -configuration Debug
+          -sdk macosx
+          -destination 'platform=macOS'
+          -derivedDataPath /tmp/einundzwanzig-macos-derived-data
+          CODE_SIGNING_ALLOWED=NO
+          build

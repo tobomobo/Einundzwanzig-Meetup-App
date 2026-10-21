@@ -1,0 +1,515 @@
+/* Spanish localization for the native Apple prototype. */
+
+/* Invariant names, units and display formats */
+"%@ · %@" = "%@ · %@";
+"%lld sat/vB" = "%lld sat/vB";
+"BTC" = "BTC";
+"Deutsch" = "Deutsch";
+"EUR" = "EUR";
+"Einundzwanzig" = "Einundzwanzig";
+"English" = "English";
+"Español" = "Español";
+"Satoshis" = "Satoshis";
+"USD" = "USD";
+
+/* action */
+"action.add" = "Añadir";
+"action.cancel" = "Cancelar";
+"action.done" = "Listo";
+"action.edit" = "Editar";
+"action.loading" = "Cargando…";
+"action.ok" = "Aceptar";
+"action.refresh" = "Actualizar";
+"action.retry" = "Reintentar";
+"action.save" = "Guardar";
+
+/* appearance */
+"appearance.dark" = "Oscuro";
+"appearance.light" = "Claro";
+"appearance.system" = "Según el sistema";
+
+/* badge */
+"badge.byDate" = "Por fecha";
+"badge.byMeetup" = "Por meetup";
+"badge.delete" = "Eliminar vista previa";
+"badge.delete.confirm" = "¿Eliminar esta vista previa del dispositivo?";
+"badge.detail" = "Vista previa de insignia";
+"badge.empty" = "Aún no hay vistas previas";
+"badge.empty.body" = "Importa metadatos desde un QR, un archivo o un texto. Solo se guardarán como vista previa no verificada.";
+"badge.grouping" = "Agrupar vistas previas";
+"badge.imported" = "Fecha de importación";
+"badge.map" = "Mapa de insignias";
+"badge.map.empty" = "No hay ubicaciones verificadas";
+"badge.map.empty.body" = "Los metadatos importados no acreditan dónde estuviste. Este prototipo no genera un mapa de asistencia a partir de ellos.";
+"badge.metadata" = "Metadatos no verificados";
+"badge.noProof" = "El nombre y la altura de bloque son datos no verificados. No se han validado firmas, titularidad ni pruebas de asistencia.";
+"badge.previewCount %lld" = "Vistas previas: %lld";
+"badge.previewOnly" = "Solo vistas previas";
+"badge.previewOnly.body" = "Estas entradas muestran ejemplos ficticios o metadatos importados no verificados. No acreditan asistencia, identidad ni reputación.";
+"badge.search" = "Buscar vistas previas";
+"badge.storage.body" = "Las vistas previas se guardan localmente en este prototipo. No se publican en Nostr ni se convierten en credenciales verificadas.";
+"badge.unverified" = "Metadatos no verificados";
+"badge.verification" = "Verificación";
+
+/* bitcoin */
+"bitcoin.block" = "Altura de bloque";
+"bitcoin.fast" = "Lo antes posible";
+"bitcoin.fees" = "Comisiones recomendadas";
+"bitcoin.feesNote" = "Estimaciones del servidor en sat/vB. El tiempo de confirmación real puede variar.";
+"bitcoin.halfHour" = "Unos 30 minutos";
+"bitcoin.hour" = "Una hora aproximadamente";
+"bitcoin.liveSource" = "Datos del servidor mempool configurado";
+"bitcoin.noData" = "No hay datos de Bitcoin disponibles";
+"bitcoin.noData.body" = "Actualiza los datos o revisa el servidor mempool en los ajustes.";
+"bitcoin.price" = "Precio de Bitcoin";
+"bitcoin.scope" = "Consulta de altura de bloque, precios y comisiones. Este prototipo no incluye cartera ni permite enviar pagos.";
+
+/* calendar */
+"calendar.add" = "Añadir al calendario";
+"calendar.add.accessibility" = "Revisar y añadir el evento al calendario";
+"calendar.confirm_save" = "Guardar en el calendario";
+"calendar.confirm_save.accessibility" = "Confirmar y guardar el evento en el calendario predeterminado";
+"calendar.end.proposed.explanation" = "La fuente no indica una hora de fin válida. Se propone una duración de una hora; puedes cambiarla antes de guardar.";
+"calendar.error.access_denied" = "No hay permiso para añadir eventos al calendario. Revisa los permisos en los ajustes del sistema o exporta un archivo .ics.";
+"calendar.error.configuration" = "Esta versión de la app no está configurada para solicitar acceso al calendario. Puedes exportar el evento como archivo .ics.";
+"calendar.error.invalid_date" = "La fecha del evento no es válida y no se puede usar en el calendario.";
+"calendar.error.title" = "No se pudo completar la operación de calendario";
+"calendar.error.unavailable" = "No hay un calendario disponible para guardar el evento. Puedes exportarlo como archivo .ics.";
+"calendar.event.end" = "Fin";
+"calendar.event.end.accessibility" = "Fecha y hora de fin del evento";
+"calendar.event.location" = "Lugar";
+"calendar.event.start" = "Inicio";
+"calendar.event.title" = "Título";
+"calendar.export" = "Exportar .ics";
+"calendar.export.accessibility" = "Exportar el evento como archivo de calendario .ics";
+"calendar.export.fallback_hint" = "También puedes cancelar y usar «Exportar .ics» para abrir el archivo en otra app de calendario.";
+"calendar.result.cancelled" = "Operación cancelada.";
+"calendar.result.deleted" = "Evento eliminado desde el editor de calendario.";
+"calendar.result.exported" = "Archivo .ics exportado. Esto no confirma que se haya añadido al calendario.";
+"calendar.result.not_saved" = "No se ha confirmado que el evento se haya guardado en el calendario.";
+"calendar.result.saved" = "Evento guardado en el calendario.";
+"calendar.review.title" = "Revisar evento";
+"calendar.write_only.explanation" = "Guardar requiere permiso para añadir el evento al calendario predeterminado. La app no lee tus eventos del calendario.";
+
+/* common */
+"common.cancel" = "Cancelar";
+"common.ok" = "Aceptar";
+
+/* community */
+"community.culture" = "Cultura Bitcoin";
+"community.external" = "Los enlaces externos se abren en el navegador o en la app correspondiente.";
+"community.network" = "Red de la comunidad";
+"community.portal" = "Portal de Einundzwanzig";
+"community.subtitle" = "Meetups, noticias y proyectos de la comunidad Bitcoin.";
+"community.title" = "Tu comunidad Bitcoin";
+
+/* converter */
+"converter.amount" = "Cantidad";
+"converter.estimate" = "El valor en moneda es una estimación basada en el precio mostrado y puede cambiar.";
+"converter.input" = "Cantidad de origen";
+"converter.invalid" = "Introduce una cantidad no negativa y dentro del límite admitido: sats enteros o BTC con un máximo de ocho decimales.";
+"converter.loadPrice" = "Consultar precio";
+"converter.noPrice" = "La conversión entre BTC y sats funciona sin conexión. Para mostrar el valor en moneda hace falta consultar un precio.";
+"converter.precision" = "1 BTC = 100.000.000 sats. Admite hasta ocho decimales en BTC, con coma o punto y sin separadores de miles.";
+"converter.result" = "Resultado";
+"converter.unit" = "Unidad";
+
+/* diagnostics */
+"diagnostics.articles" = "Artículos en caché";
+"diagnostics.body" = "Registro local de actualizaciones del portal y RSS y recuento de datos en caché. No se envía automáticamente.";
+"diagnostics.events" = "Eventos en caché";
+"diagnostics.meetups" = "Meetups en caché";
+
+/* error */
+"error.cacheSave" = "Se recibieron datos públicos, pero no se pudieron guardar en la caché local. Pueden no estar disponibles al volver a abrir la app sin conexión.";
+"error.duplicate" = "Ya hay una vista previa con el mismo nombre y altura de bloque.";
+"error.import" = "No se pueden importar estos metadatos. Usa un objeto JSON compatible con un nombre de meetup no vacío de hasta 200 caracteres y, si incluyes una altura de bloque, un entero entre 0 y 100.000.000. No se admiten campos desconocidos.";
+"error.persistence" = "No se pudieron actualizar los datos locales. La operación no se completó. Comprueba que el almacenamiento esté disponible.";
+"error.profile" = "Introduce un apodo de entre 1 y 40 caracteres. La npub es opcional: debe empezar por npub1, tener 63 caracteres y usar el alfabeto permitido. No se comprueban su suma de verificación ni la titularidad.";
+"error.profileRead" = "No se pudo leer el perfil local y no se sobrescribirá. En macOS se guarda en un archivo de perfil público; en iOS, en el llavero del dispositivo.";
+"error.profileSave" = "No se pudo guardar el perfil local. En macOS se utiliza un archivo de perfil público; en iOS, el llavero del dispositivo.";
+"error.stateRead" = "No se pudieron leer los ajustes locales y no se sobrescribirán. Puedes volver a abrir la app o restablecer sus datos locales desde los ajustes.";
+"error.title" = "Se ha producido un error";
+"error.tooLarge" = "Se ha superado un límite de importación: 64 KiB por archivo o texto y un máximo de 500 vistas previas guardadas.";
+
+/* event */
+"event.actions" = "Acciones";
+"event.chooseDay" = "Filtrar por día";
+"event.day" = "Día";
+"event.detail" = "Detalles del evento";
+"event.detailPending" = "La fecha procede del directorio del portal. Los detalles del evento aún no están disponibles.";
+"event.empty" = "No hay eventos que mostrar";
+"event.empty.body" = "Prueba con otra búsqueda, cambia los filtros o actualiza los datos del portal.";
+"event.ends" = "Finaliza";
+"event.filter" = "Filtros";
+"event.none" = "No hay próximos eventos disponibles.";
+"event.openPortal" = "Abrir en el portal";
+"event.rsvpUnavailable" = "Confirmación pública de asistencia no disponible";
+"event.search" = "Buscar eventos";
+"event.sources.body" = "Se muestran los eventos del portal de Einundzwanzig o ejemplos ficticios en el modo de vista previa. La publicación y consulta de eventos Nostr no están disponibles en este prototipo.";
+"event.upcoming" = "Próximos eventos";
+
+/* favorite */
+"favorite.add" = "Añadir a favoritos";
+"favorite.remove" = "Quitar de favoritos";
+
+/* glossary reference */
+"glBackupBody" = "Guarda claves, insignias y ajustes en un archivo cifrado. Sin ella, si pierdes el dispositivo lo pierdes todo. Créala pronto, no cuando la necesites, y guarda el archivo separado de la contraseña.";
+"glBackupTitle" = "La copia de seguridad";
+"glBadgeProofBody" = "Que estuviste en un lugar concreto en un momento concreto, confirmado por alguien que también estaba allí. La confirmación es una firma Schnorr según BIP-340. Nadie puede falsificarla, ni los desarrolladores, porque haría falta la clave privada del organizador.";
+"glBadgeProofTitle" = "Qué demuestra una insignia";
+"glBadgeShareBody" = "Abre una insignia y toca compartir arriba a la derecha. La app genera una imagen con lugar, fecha, altura de bloque y suma de verificación. Quien la vea puede comprobar los datos; tu clave privada no está incluida.";
+"glBadgeShareTitle" = "Compartir una insignia";
+"glBlockHeightBody" = "Cada insignia lleva el número del bloque de Bitcoin vigente en el momento del escaneo. Funciona como una marca de tiempo que nadie puede mover después, al contrario que el reloj de un móvil.";
+"glBlockHeightTitle" = "La altura de bloque";
+"glCalendarSourcesBody" = "El calendario reúne dos fuentes: eventos del portal de Einundzwanzig y otros introducidos vía Nostr. El color los distingue: meetups del portal en naranja, eventos Nostr en turquesa.";
+"glCalendarSourcesTitle" = "De dónde vienen los eventos";
+"glChecksumBody" = "Una huella corta de todo el contenido de la insignia. Dos personas pueden comparar sus insignias del mismo meetup: si coinciden las sumas, ambos recibieron los mismos datos.";
+"glChecksumTitle" = "La suma de verificación";
+"glCollectBody" = "Ve al meetup y pide al organizador que muestre el código QR. Toca el botón redondo de escaneo en la barra inferior, captura el código y listo. La insignia queda en tu cartera.";
+"glCollectTitle" = "Cómo conseguir una insignia";
+"glCommunityBody" = "Un punto de reunión para todo lo de Einundzwanzig que no trata de insignias: pódcast, shoutouts, PlebRap, SatoshiDuell y el mapa de meetups. Gran parte se abre en el navegador.";
+"glCommunityTitle" = "Sección de comunidad";
+"glConverterBody" = "Convierte euros a sats y viceversa. El precio y la altura de bloque vienen de una instancia de mempool; puedes cambiarla en los ajustes, por ejemplo a tu propio nodo.";
+"glConverterTitle" = "Conversor y precio";
+"glCreateEventBody" = "Cualquiera puede añadir un evento: se publica firmado en Nostr y aparece en el calendario de todos. Sin embargo, solo organizadores y líderes pueden asociarle una insignia.";
+"glCreateEventTitle" = "Crear un evento";
+"glDegreesBody" = "Primer grado significa que estuvisteis con el mismo organizador. Segundo grado: alguien a quien conociste ha conocido a esa persona. Si un meetup tuvo dos organizadores, el hecho de que se escaneen mutuamente une ambos grupos.";
+"glDegreesTitle" = "Grados";
+"glDistrustBody" = "Los organizadores pueden denunciar abusos. Si se acumulan denuncias contra alguien, queda marcado como suspendido: sus insignias no desaparecen, pero llevan esa advertencia. La denuncia también va firmada.";
+"glDistrustTitle" = "Denuncias y suspensión";
+"glDuplicateBody" = "Hay exactamente una insignia por meetup y día. Escanear el mismo código dos veces no da una segunda: una insignia representa una visita, no un escaneo.";
+"glDuplicateTitle" = "Insignias duplicadas";
+"glEncounterBody" = "Quien escaneó con el mismo organizador el mismo día cuenta como encuentro. Así surge una red de personas que realmente compartieron una sala, no de gente que se sigue en internet.";
+"glEncounterTitle" = "Encuentros";
+"glEventHelperBody" = "Quien crea un evento con insignia puede añadir cualquier npub como emisor. Esos ayudantes no necesitan rol de organizador: el permiso está en el evento y solo vale para ese.";
+"glEventHelperTitle" = "Ayudantes en un evento";
+"glEventNetBody" = "Los eventos especiales se cuentan aparte. En un meetup de quince personas conoces a todos; en un evento de quinientas, no. Mezclarlos devaluaría lo que dice la red, por eso tienen su propia categoría.";
+"glEventNetTitle" = "Red de eventos";
+"glEventWindowBody" = "Una insignia de evento solo se puede emitir el día del evento y cerca de la ubicación registrada. Ambas condiciones impiden repartir insignias desde casa.";
+"glEventWindowTitle" = "Ubicación y ventana temporal";
+"glFindKeysBody" = "Ajustes → Perfil, al final. Allí copias el npub con un toque y muestras el nsec, esto último solo tras una advertencia: quien ve el nsec tiene tu identidad. Si usas Amber, una extensión o un bunker, aquí no hay nsec: está allí, no en esta app.";
+"glFindKeysTitle" = "¿Dónde están mis claves?";
+"glFindMeetupBody" = "La búsqueda de meetups lista todos los grupos registrados. «Cerca» muestra lo que hay alrededor de tu ubicación actual: útil al viajar o si buscas un segundo grupo en la región.";
+"glFindMeetupTitle" = "Encontrar meetups";
+"glHomeMeetupBody" = "El meetup al que vas con regularidad. Determina qué eventos ves primero y qué escudo aparece en tus insignias. Puedes elegir varios favoritos; el primero cuenta como principal. Se puede cambiar en cualquier momento en el perfil.";
+"glHomeMeetupTitle" = "Tu meetup principal";
+"glHumanityBody" = "Un único zap de Lightning demuestra que detrás del perfil hay una persona con una cartera real. Es la defensa más eficaz contra cuentas creadas automáticamente en la red de confianza. Es opcional: la app funciona sin ello.";
+"glHumanityTitle" = "Prueba de humanidad";
+"glImportBody" = "Si ya tienes una identidad Nostr puedes usarla aquí: como nsec, como ncryptsec o mediante un bunker. Tus contactos y tu perfil se mantienen; la app solo añade insignias y reputación.";
+"glImportTitle" = "Traer tu propia clave";
+"glKeysBody" = "Tu npub es tu dirección pública: compártela sin problema. El nsec es la clave privada y no pertenece a nadie más: quien la tenga, ES tú. No hay restablecimiento: si el nsec desaparece, la identidad y su reputación se pierden.";
+"glKeysTitle" = "nsec y npub";
+"glLanguageBody" = "La app está en alemán, inglés y español. Sin elección propia sigue el idioma del sistema. Puedes cambiarlo en los ajustes; el cambio surte efecto de inmediato, sin reiniciar.";
+"glLanguageTitle" = "Idioma";
+"glLevelsBody" = "A medida que sube tu trust score alcanzas niveles superiores. A partir de cierto nivel puedes iniciar sesiones y emitir insignias: no es un premio sino una responsabilidad, porque tu firma queda bajo las insignias de otros.";
+"glLevelsTitle" = "Los niveles";
+"glLogBody" = "Un registro de lo que la app hace en segundo plano: qué relés respondieron, por qué se rechazó un escaneo. Cuando algo falla, es el primer sitio donde mirar. Se queda en el dispositivo y nunca se sube.";
+"glLogTitle" = "Registro de diagnóstico";
+"glNcryptsecBody" = "Un nsec cifrado con una contraseña (NIP-49). La cadena empieza por ncryptsec1 y no sirve de nada sin la contraseña, así que se transporta con menos riesgo que un nsec desnudo.";
+"glNcryptsecTitle" = "ncryptsec";
+"glNewsBody" = "Los artículos vienen de la revista Einundzwanzig y existen como textos largos de Nostr. Puedes leerlos en la app, darles un me gusta, compartirlos y enviar sats a los autores.";
+"glNewsTitle" = "La sección de noticias";
+"glNicknameBody" = "El nombre con el que apareces en la red. Es libre, no tiene que ser el real y puedes cambiarlo cuando quieras: tu identidad depende de la clave, no del nombre.";
+"glNicknameTitle" = "Tu nombre visible";
+"glNip05Body" = "Una dirección legible del tipo nombre@dominio que apunta a tu clave, como una etiqueta para la red. Demuestra que alguien con acceso a ese dominio responde por ti, pero no sustituye a las demás comprobaciones.";
+"glNip05Title" = "Dirección NIP-05";
+"glNostrBasicsBody" = "Un protocolo abierto para mensajes firmados por su propio autor. No hay empresa detrás ni cuenta que puedan bloquear: solo claves y relés. Por eso tu identidad de esta app también funciona en otras aplicaciones Nostr.";
+"glNostrBasicsTitle" = "Qué es Nostr";
+"glOfflineBody" = "Escanear y recibir una insignia funciona sin conexión: tu dispositivo verifica la firma. Sin red solo faltan los datos externos: altura de bloque, precio, eventos y la comprobación de si el organizador está registrado.";
+"glOfflineTitle" = "Qué funciona sin conexión";
+"glOnSiteBody" = "Además del código rotativo, la app comprueba la distancia: quien esté demasiado lejos no recibe insignia. En los meetups los límites son amplios porque algunos grupos abarcan regiones enteras; en eventos especiales la ubicación es exacta y el límite estrecho.";
+"glOnSiteTitle" = "Por qué solo en el lugar";
+"glOrganizerBody" = "A partir de cierto trust score puedes iniciar sesiones. Además suelen hacer falta avales de organizadores existentes: el rol no se concede, crece desde la red.";
+"glOrganizerTitle" = "Convertirse en organizador";
+"glPasskeyBody" = "Protección adicional por huella o reconocimiento facial. El passkey no sustituye a tu contraseña, se antepone a ella. Es opcional y solo en este dispositivo.";
+"glPasskeyTitle" = "Passkey";
+"glPasswordBody" = "Durante la configuración estableces una contraseña que envuelve tu clave en el dispositivo. Para la copia de seguridad defines otra que cifra el archivo. Pueden coincidir, pero son independientes, y ninguna se puede restablecer.";
+"glPasswordTitle" = "Las dos contraseñas";
+"glPlatformsBody" = "Puedes vincular cuentas como Telegram o X con tu identidad Nostr. Cada plataforma confirmada suma al trust score y muestra a los demás que detrás del perfil hay una persona con historia. También es opcional.";
+"glPlatformsTitle" = "Pruebas de plataforma";
+"glPortalBody" = "Puedes iniciar sesión en el portal de Einundzwanzig con tu clave Nostr. Verás los eventos y cursos que allí se gestionan y, como líder, podrás crear los tuyos. Sin conexión, todo lo demás sigue funcionando.";
+"glPortalTitle" = "La conexión con el portal";
+"glPublicBody" = "Las insignias, los registros de asistencia y los avales están abiertos en los relés: cualquiera puede leerlos y verificarlos. No son públicos tu clave privada, tu contraseña de copia ni tu ubicación exacta.";
+"glPublicTitle" = "Qué es público";
+"glPublishBody" = "Para que otros comprueben tu reputación, esta debe estar en los relés. La app la publica firmada; sin ese paso, tu interlocutor solo ve lo que le enseñas directamente.";
+"glPublishTitle" = "Publicar tu reputación";
+"glRelaysBody" = "Los relés son los servidores por los que viajan los mensajes de Nostr. La app escribe en varios a la vez. Puedes añadir los tuyos en los ajustes: se comprueba su accesibilidad antes de guardarlos.";
+"glRelaysTitle" = "Relés";
+"glRepCardBody" = "Un resumen compartible de tu reputación como imagen: nivel, número de meetups, periodo. No contiene ninguna clave privada y se puede publicar sin problema.";
+"glRepCardTitle" = "La tarjeta de reputación";
+"glResetBody" = "Borra el perfil, las claves y todas las insignias del dispositivo, de forma definitiva. Sin copia de seguridad pierdes tu identidad, aunque las insignias sigan en los relés: sin la clave no podrás reclamarlas. Haz una copia antes.";
+"glResetTitle" = "Restablecer la app";
+"glRestoreBody" = "Durante la configuración puedes cargar una copia en lugar de crear una clave nueva. Necesitas el archivo Y la contraseña con la que se cifró: uno solo no basta.";
+"glRestoreTitle" = "Restaurar una copia";
+"glRollingQrBody" = "El código del organizador cambia cada pocos segundos. Una foto no sirve minutos después: solo quien está realmente delante puede capturarlo. Por eso una insignia no se puede pasar por chat.";
+"glRollingQrTitle" = "El QR rotativo";
+"glSignerBody" = "En lugar de guardar la clave en esta app, puedes confiarla a una aplicación de firma como Amber o conectarla mediante un bunker. Esta app pedirá allí cada firma y nunca verá la clave.";
+"glSignerTitle" = "Aplicaciones de firma";
+"glSpecialEventBody" = "Además de los meetups habituales hay eventos únicos con insignias propias. Cuentan como insignia y para la variedad de emisores, pero no como meetup visitado.";
+"glSpecialEventTitle" = "Eventos especiales";
+"glTilesBody" = "Mantén pulsado un panel para moverlo u ocultarlo. El trust score y el meetup principal siempre permanecen; el resto se puede desanclar. Los ocultos van al gestor y se pueden recuperar.";
+"glTilesTitle" = "Personalizar el panel";
+"glTitle" = "Referencia";
+"glTrustPathBody" = "Muestra la cadena que te conecta con otra persona: quién conoció a quién y dónde. Un número abstracto se convierte en algo comprensible: no solo que estáis conectados, sino a través de qué.";
+"glTrustPathTitle" = "Ruta de confianza";
+"glTrustScoreBody" = "Un número que resume la solidez de tu historial de asistencia. No decide solo la cantidad: meetups distintos, organizadores distintos y la regularidad pesan más que veinte visitas al mismo sitio en una semana.";
+"glTrustScoreTitle" = "El trust score";
+"glVerifyPersonBody" = "Pide a la otra persona su QR de reputación y escanéalo. La app comprueba si los datos coinciden con las insignias firmadas y muestra cómo estáis conectados. Útil antes de comerciar con desconocidos.";
+"glVerifyPersonTitle" = "Verificar a alguien";
+"glVouchBody" = "Los organizadores pueden avalarse entre sí. Un aval es un voto público y firmado: tras publicarlo, toda la red ve por quién respondes. Se puede retirar en cualquier momento, pero la retirada es igual de visible.";
+"glVouchTitle" = "Avales";
+"glWhatIsAppBody" = "Demuestra que estuviste realmente en un meetup de Bitcoin. Con el tiempo, esas pruebas forman una reputación que te pertenece y que nadie puede retirarte: no está en un servidor de Einundzwanzig, sino firmada en la red Nostr.";
+"glWhatIsAppTitle" = "Qué hace esta app";
+"glWorldMapBody" = "Muestra tus insignias donde las conseguiste. Una lista de nombres se convierte en un mapa de tus visitas: útil para ver dónde quedan huecos.";
+"glWorldMapTitle" = "El mapa mundial de insignias";
+"glZapBody" = "Un zap es un pequeño pago Lightning con un recibo de Nostr. En las noticias puedes enviar algo directamente a los autores. Un zap único también sirve como prueba de humanidad.";
+"glZapTitle" = "Zaps";
+
+/* glossary */
+"glossary.prototype" = "Este glosario describe las funciones de la app de referencia. En este prototipo Apple no están disponibles las firmas, la verificación de insignias ni la reputación. Importar metadatos solo crea vistas previas no verificadas; las funciones descritas aquí no implican que estén disponibles en este prototipo.";
+"glossary.search" = "Buscar en el glosario";
+
+/* home */
+"home.chooseMeetups" = "Elige tus meetups favoritos";
+"home.discover" = "Descubrir meetups";
+"home.favorites" = "Tus meetups favoritos";
+"home.favorites.body" = "Marca grupos con la estrella para verlos aquí y encontrar sus próximos eventos.";
+"home.greeting %@" = "Hola, %@";
+"home.organizer" = "Funciones para organizadores";
+"home.tagline" = "Encuentra a tu comunidad y prepara tu próximo meetup.";
+
+/* integration */
+"integration.backup" = "Copia de seguridad y restauración";
+"integration.backup.body" = "La copia de seguridad y la restauración cifradas no están disponibles en este prototipo. No se importan ni migran claves, insignias o copias de la app de referencia.";
+"integration.chat" = "Chat Nostr";
+"integration.chat.body" = "El chat Nostr no está disponible. Este prototipo no conecta con relés para enviar o recibir mensajes. Puedes usar los enlaces públicos del meetup cuando estén disponibles.";
+"integration.courses" = "Cursos";
+"integration.courses.body" = "La integración de cursos no está disponible en este prototipo. Abre el portal de Einundzwanzig para consultar su oferta y las opciones disponibles allí.";
+"integration.donations" = "Donaciones";
+"integration.donations.body" = "Los pagos, zaps y donaciones dentro de la app no están disponibles. Puedes abrir la página externa de V4V para consultar sus opciones.";
+"integration.eventPublishing" = "Publicar eventos";
+"integration.eventPublishing.body" = "La publicación de eventos no está disponible. Este prototipo consulta eventos públicos del portal, pero no firma ni publica eventos Nostr. Puedes abrir el portal para consultar sus funciones.";
+"integration.humanity" = "Prueba de humanidad";
+"integration.humanity.body" = "La prueba de humanidad no está disponible. Este prototipo no realiza pagos Lightning ni valida recibos de zaps; tampoco concede un estado de humanidad verificada.";
+"integration.organizer" = "Herramientas para organizadores";
+"integration.organizer.body" = "Las herramientas para organizadores no están disponibles: no se crean sesiones, códigos QR rotativos, firmas ni insignias de asistencia. Puedes abrir el portal de Einundzwanzig para consultar sus funciones.";
+"integration.plebrap" = "PlebRap";
+"integration.plebrap.body" = "La integración de PlebRap dentro de la app no está disponible. Puedes abrir su sitio web para consultar el contenido y las opciones que ofrece.";
+"integration.proofs" = "Pruebas de identidad y plataforma";
+"integration.proofs.body" = "La vinculación y verificación de identidades o cuentas de otras plataformas no están disponibles. Introducir una npub pública no demuestra que la clave te pertenezca.";
+"integration.remaining" = "Integraciones aún no disponibles";
+"integration.signing" = "Claves y firma Nostr";
+"integration.signing.body" = "Este prototipo no dispone de un proveedor de criptografía Schnorr/Nostr auditado. No genera ni importa claves privadas, no conecta con aplicaciones de firma y no firma ni publica eventos. La npub del perfil es solo una referencia pública sin validación de suma de verificación ni de titularidad.";
+"integration.socialGraph" = "Red de confianza";
+"integration.socialGraph.body" = "La red de confianza, los encuentros, los avales y las rutas de confianza no están disponibles. No se deducen relaciones verificadas a partir de metadatos importados ni de una npub introducida manualmente.";
+"integration.unavailable" = "Función no disponible en este prototipo";
+"integration.verification" = "Verificación de insignias";
+"integration.verification.body" = "La verificación criptográfica no está disponible. No se validan firmas del organizador, declaraciones del coleccionista, registros ni hashes de prueba. Los metadatos importados siguen sin verificar y no acreditan asistencia ni generan reputación.";
+
+/* keychain */
+"keychain.error.delete" = "No se pudo eliminar el perfil local del llavero.";
+"keychain.error.read" = "No se pudo leer el perfil local del llavero.";
+"keychain.error.write" = "No se pudo guardar el perfil local en el llavero.";
+
+/* language */
+"language.system" = "Idioma del sistema";
+
+/* map */
+"map.open" = "Abrir en Mapas";
+
+/* meetup */
+"meetup.coordinateNote" = "Las coordenadas proceden del directorio del portal y pueden indicar una zona de encuentro, no el lugar exacto del próximo evento.";
+"meetup.descriptionPortal" = "Consulta el portal para ver más información sobre este meetup.";
+"meetup.location" = "Ubicación";
+
+/* meetups */
+"meetups.empty" = "No se encontraron meetups";
+"meetups.empty.body" = "Prueba con otra búsqueda, desactiva el filtro de favoritos o actualiza el directorio.";
+"meetups.favoritesOnly" = "Solo favoritos";
+"meetups.list" = "Lista";
+"meetups.map" = "Mapa";
+"meetups.search" = "Buscar por nombre, ciudad o país";
+"meetups.view" = "Vista del directorio";
+
+/* mempool */
+"mempool.address" = "Dirección del servidor mempool";
+"mempool.default" = "Usar mempool.space";
+"mempool.https" = "Usa una dirección HTTPS de un servidor compatible con la API de mempool. No incluyas credenciales, parámetros de consulta ni fragmentos.";
+"mempool.invalid" = "Introduce una dirección HTTPS válida con un servidor, sin credenciales, parámetros de consulta ni fragmentos.";
+"mempool.noTor" = "Este prototipo no incluye una conexión Tor. El servidor configurado se consulta directamente; las direcciones .onion requieren una conexión que la app no proporciona.";
+
+/* menu */
+"menu.navigate" = "Navegación";
+
+/* nav */
+"nav.badges" = "Insignias";
+"nav.bitcoin" = "Bitcoin";
+"nav.chat" = "Chat";
+"nav.community" = "Comunidad";
+"nav.converter" = "Conversor";
+"nav.events" = "Eventos";
+"nav.glossary" = "Glosario";
+"nav.home" = "Inicio";
+"nav.meetups" = "Meetups";
+"nav.news" = "Noticias";
+"nav.plans" = "Mis planes";
+"nav.reputation" = "Reputación";
+"nav.resources" = "Recursos";
+
+/* news */
+"news.article" = "Artículo";
+"news.empty" = "No hay noticias que mostrar";
+"news.empty.body" = "Prueba con otra búsqueda o actualiza el canal de noticias.";
+"news.readOriginal" = "Leer el artículo original";
+"news.search" = "Buscar noticias";
+"news.source" = "Noticias del canal RSS de Einundzwanzig. En el modo de vista previa se muestra un artículo ficticio.";
+"news.summaryOnly" = "Aquí se muestra el resumen del canal RSS. Abre el artículo original para leer el texto completo.";
+"news.unread" = "Sin leer";
+
+/* onboarding */
+"onboarding.body" = "Descubre grupos y eventos de Einundzwanzig, guarda favoritos y organiza tus planes en este dispositivo.";
+"onboarding.continue" = "Continuar con el perfil local";
+"onboarding.eyebrow" = "TU COMUNIDAD BITCOIN";
+"onboarding.preview" = "Explorar con datos de ejemplo";
+"onboarding.preview.body" = "Prueba la navegación con meetups, eventos, noticias e insignias ficticios. No se verifica asistencia ni se genera reputación. Puedes desactivar la vista previa en los ajustes.";
+"onboarding.title" = "Encuentra tu próximo meetup";
+
+/* plan */
+"plan.empty" = "Aún no tienes planes guardados";
+"plan.empty.body" = "Abre un evento y elige «Tengo previsto ir» o «Quizá vaya». Se guardará solo en este dispositivo.";
+"plan.going" = "Tengo previsto ir";
+"plan.localOnly" = "Este plan y sus notas se guardan solo en este dispositivo. No confirman tu asistencia ante el organizador, no reservan plaza ni publican una respuesta en Nostr.";
+"plan.maybe" = "Quizá vaya";
+"plan.note" = "Nota personal";
+"plan.remove" = "Eliminar plan local";
+"plan.saveNote" = "Guardar nota";
+"plan.saved" = "Plan guardado";
+"plan.savedDevice" = "Guardado en este dispositivo.";
+"plan.title" = "Tu plan para este evento";
+
+/* profile */
+"profile.local" = "Perfil local";
+"profile.nickname" = "Apodo";
+"profile.npub.optional" = "Referencia pública npub (opcional)";
+"profile.public.body" = "El apodo y la npub se guardan localmente. La npub es una referencia pública indicada por ti: no se comprueban su suma de verificación ni la titularidad y no inicia sesión en Nostr. No introduzcas un nsec ni otra clave privada.";
+"profile.title" = "Perfil";
+
+/* relay */
+"relay.add" = "Añadir relé";
+"relay.address" = "Dirección wss:// del relé";
+"relay.configured" = "Relés guardados";
+"relay.defaults" = "Restaurar relés predeterminados";
+"relay.invalid" = "Usa una dirección wss:// válida, sin credenciales, rutas adicionales, parámetros ni fragmentos. No puede estar repetida y se admiten hasta 12 relés.";
+"relay.localOnly" = "Esta lista se guarda solo en el dispositivo. Este prototipo no conecta con los relés ni comprueba si están disponibles; tampoco envía ni recibe eventos Nostr.";
+"relay.remove" = "Eliminar relé";
+
+/* reputation */
+"reputation.body" = "La reputación verificable no está disponible. Los ejemplos ficticios, los metadatos importados y la npub del perfil no se aceptan como pruebas de identidad o asistencia.";
+"reputation.notZero" = "La raya indica que no hay una puntuación verificable disponible; no es una puntuación de cero. Este prototipo no ha validado ninguna insignia.";
+"reputation.score" = "Puntuación de confianza";
+"reputation.trustedBadges" = "Insignias verificadas por este prototipo";
+"reputation.unavailable" = "Reputación no disponible";
+
+/* resource */
+"resource.links" = "Enlaces de la comunidad";
+"resource.membership" = "Asociación Einundzwanzig";
+"resource.news" = "Noticias de Einundzwanzig";
+"resource.plebrap" = "PlebRap";
+"resource.podcast" = "Pódcast de Einundzwanzig";
+"resource.portal" = "Portal de Einundzwanzig";
+"resource.repository" = "Código fuente en GitHub";
+"resource.satoshiduell" = "SatoshiDuell";
+"resource.shoutout" = "Shoutout";
+"resource.telegram" = "Telegram";
+"resource.tools" = "Herramientas";
+"resource.v4v" = "V4V";
+
+/* scan */
+"scan.boundary" = "Solo se importan el nombre y, si existe, la altura de bloque como metadatos no verificados. Escanear un QR no valida una firma ni acredita asistencia.";
+"scan.camera" = "Escanear con la cámara";
+"scan.demoDisabled" = "Desactiva el modo de vista previa en los ajustes para guardar metadatos importados.";
+"scan.example" = "Acepta JSON con meetupName o m y, opcionalmente, blockHeight o b. Tamaño máximo: 64 KiB.";
+"scan.file" = "Importar archivo";
+"scan.input" = "Contenido JSON";
+"scan.inspect" = "Guardar como vista previa no verificada";
+"scan.noPrivateKeys" = "No pegues claves privadas, contraseñas ni copias de seguridad. Esta pantalla no importa claves ni verifica credenciales.";
+"scan.savedPreview" = "Metadatos guardados como vista previa no verificada.";
+"scan.short" = "Escanear QR";
+"scan.title" = "Importar vista previa";
+
+/* scanner */
+"scanner.camera.accessibility" = "Cámara para escanear códigos QR";
+"scanner.checking" = "Comprobando la disponibilidad de la cámara…";
+"scanner.instructions" = "Apunta la cámara a un código QR. Su contenido se copiará al campo de entrada para que puedas guardarlo como vista previa no verificada.";
+"scanner.manual_entry_hint" = "También puedes cerrar el escáner y pegar el contenido en el campo JSON o importarlo desde un archivo.";
+"scanner.unavailable.configuration" = "Esta versión de la app no está configurada para solicitar acceso a la cámara. Usa la entrada manual o importa un archivo.";
+"scanner.unavailable.macos" = "El escaneo con cámara no está disponible en este prototipo para macOS. Pega el contenido del QR o importa un archivo.";
+"scanner.unavailable.payload_too_long" = "El contenido del QR supera el límite de 4 KiB del escáner. Usa otro código o importa un archivo compatible.";
+"scanner.unavailable.permission_denied" = "No hay permiso para usar la cámara. Puedes permitir el acceso en los ajustes del sistema o usar la entrada manual.";
+"scanner.unavailable.restricted" = "El acceso a la cámara está restringido en este dispositivo. Usa la entrada manual o importa un archivo.";
+"scanner.unavailable.simulator" = "El escaneo con cámara no está disponible en el simulador. Usa la entrada manual o importa un archivo.";
+"scanner.unavailable.temporary" = "La cámara no está disponible en este momento. Vuelve a intentarlo o usa la entrada manual.";
+"scanner.unavailable.title" = "Escáner no disponible";
+"scanner.unavailable.unsupported" = "Este dispositivo no admite el escáner de códigos QR de la app. Usa la entrada manual o importa un archivo.";
+
+/* security */
+"security.boundary" = "Límites de seguridad del prototipo";
+"security.collectorClaim" = "Declaración firmada del coleccionista";
+"security.noSigning" = "Este prototipo no genera ni importa claves privadas, no firma ni publica eventos Nostr y no verifica insignias, identidad o reputación. Los metadatos importados no son de confianza.";
+"security.organizerSignature" = "Firma del organizador";
+"security.proofHash" = "Comprobación del hash de la prueba";
+"security.readOnly" = "Sin firma ni verificación criptográfica";
+"security.registry" = "Comprobación del registro de organizadores";
+"security.required" = "Comprobaciones necesarias, aún no disponibles";
+
+/* settings */
+"settings.accessibility" = "Puedes ajustar el tamaño del texto, VoiceOver y la reducción de transparencia desde los ajustes del sistema.";
+"settings.account" = "Perfil local";
+"settings.appearance" = "Idioma y apariencia";
+"settings.currency" = "Moneda";
+"settings.dashboard" = "Personalizar inicio";
+"settings.dashboard.body" = "Muestra u oculta los paneles con el interruptor y cambia su orden con las flechas. La selección se guarda en este dispositivo.";
+"settings.data" = "Datos locales";
+"settings.demo" = "Usar datos de ejemplo";
+"settings.demo.body" = "Sustituye los meetups, eventos, noticias e insignias por ejemplos ficticios. Los favoritos y planes de prueba se guardan por separado. Los datos de Bitcoin siguen consultándose al servidor configurado.";
+"settings.diagnostics" = "Diagnóstico";
+"settings.language" = "Idioma";
+"settings.mempool" = "Servidor mempool";
+"settings.moveDown" = "Mover hacia abajo";
+"settings.moveUp" = "Mover hacia arriba";
+"settings.network" = "Red y conexiones";
+"settings.preview" = "Modo de vista previa";
+"settings.relays" = "Relés Nostr";
+"settings.reset" = "Restablecer datos locales";
+"settings.reset.body" = "Se eliminarán el perfil local, los ajustes, la caché, los favoritos, los planes y las vistas previas de este prototipo Apple. También se borrarán los favoritos y planes del modo de vista previa. Los datos de la app de referencia no se modifican.";
+"settings.reset.confirm" = "¿Restablecer todos los datos locales de este prototipo?";
+"settings.storage.body" = "En iOS, el perfil público se guarda en el llavero de este dispositivo; en macOS, en un archivo local de perfil público. Los ajustes, planes, favoritos y metadatos importados se guardan en archivos locales, excluidos de la copia de seguridad del sistema. No se almacenan claves privadas ni se sincronizan estos datos con Nostr.";
+"settings.theme" = "Tema";
+"settings.title" = "Ajustes";
+"settings.version" = "Prototipo nativo para iOS y macOS";
+"settings.visible" = "Mostrar panel";
+
+/* source */
+"source.bitcoin.failed" = "No se pudieron actualizar los datos de Bitcoin del servidor configurado. Si hay datos anteriores, pueden estar desactualizados.";
+"source.demo" = "Vista previa · datos ficticios";
+"source.demo.body" = "Los meetups, eventos, noticias e insignias son ejemplos ficticios. Las consultas de Bitcoin siguen usando el servidor mempool configurado.";
+"source.events.failed" = "No se pudieron actualizar los eventos. Se muestran los datos guardados, si los hay, y pueden estar desactualizados.";
+"source.meetups.failed" = "No se pudo actualizar el directorio de meetups. Se muestran los datos guardados, si los hay, y pueden estar desactualizados.";
+"source.news.failed" = "No se pudieron actualizar las noticias. Se muestran los artículos guardados, si los hay, y pueden estar desactualizados.";
+"source.portal" = "Portal de Einundzwanzig y RSS";
+
+/* state */
+"state.notFound" = "Contenido no encontrado";
+"state.notFound.body" = "Este contenido ya no está disponible entre los datos cargados. Vuelve a la lista y actualízala.";
+"state.unavailable" = "No disponible";
+
+/* tile */
+"tile.bitcoin.body" = "Altura de bloque, precios y comisiones del servidor mempool.";
+"tile.community.body" = "Proyectos, enlaces y puntos de encuentro de Einundzwanzig.";
+"tile.converter.body" = "Convierte BTC y sats y consulta su valor aproximado en moneda.";
+"tile.meetups.body" = "Encuentra grupos en el mapa o en el directorio y guarda favoritos.";
+"tile.news.body" = "Lee los resúmenes del canal RSS de Einundzwanzig.";
+"tile.plans.body" = "Guarda tus planes y notas en este dispositivo, sin confirmar asistencia.";
+"tile.reputation.body" = "Consulta los límites del prototipo: la reputación aún no se puede verificar.";
+"tile.resources.body" = "Glosario, herramientas y enlaces de la comunidad.";
