@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- NIP-46 remote signers talk over relays. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+        NIP-55 (Amber): Android 11+ package visibility. Without these entries the install check,
+        the nostrsigner: intents and the ContentResolver background signing all fail (spec 01 §6.6).
+    -->
+    <queries>
+        <package android:name="com.greenart7c3.nostrsigner" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="nostrsigner" />
+        </intent>
+        <!-- nostrconnect:// pairing URIs are handed to whatever signer app handles them. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="nostrconnect" />
+        </intent>
+    </queries>
+</manifest>

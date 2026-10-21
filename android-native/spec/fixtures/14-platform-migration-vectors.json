@@ -1,0 +1,1687 @@
+{
+  "_comment": "Spec 14 (android platform + data migration). Deterministic vectors generated with Node crypto / JDK 17; IVs are fixed ONLY for testing - production always uses random IVs. Inventories are generated from a full scan of ../lib (every SharedPreferences / flutter_secure_storage call site, constants resolved).",
+  "vectors": {
+    "fss_v10_gcm": {
+      "description": "Value stored in shared_prefs/FlutterSecureStorage.xml by flutter_secure_storage 10.3.4 (StorageCipherImplementationGCM). Stored string = android.util.Base64.encodeToString(iv||ciphertext||tag, DEFAULT) i.e. 76-char lines + trailing newline. XML attribute name = PREFIX + \"_\" + logicalKey.",
+      "aes128KeyHex": "000102030405060708090a0b0c0d0e0f",
+      "prefix": "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIHNlY3VyZSBzdG9yYWdlCg",
+      "entries": [
+        {
+          "logicalKey": "nostr_nsec_key",
+          "xmlName": "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIHNlY3VyZSBzdG9yYWdlCg_nostr_nsec_key",
+          "ivHex": "101112131415161718191a1b",
+          "plaintext": "nsec1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
+          "rawHex": "101112131415161718191a1baa5d66cc3e3ec79e66ac2c84b6569a4f4bcd05f647851acef4ba5860167460dca3a8504ef0d78a6d92d1a4b9aba1206af8c9805a88b2ca991a645cc7f6e137e92f3d1991c9b3b6351e2f265ac0487a325d",
+          "storedValue": "EBESExQVFhcYGRobql1mzD4+x55mrCyEtlaaT0vNBfZHhRrO9LpYYBZ0YNyjqFBO8NeKbZLRpLmr\noSBq+MmAWoiyypkaZFzH9uE36S89GZHJs7Y1Hi8mWsBIejJd\n"
+        },
+        {
+          "logicalKey": "badge_encryption_key",
+          "xmlName": "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIHNlY3VyZSBzdG9yYWdlCg_badge_encryption_key",
+          "ivHex": "202122232425262728292a2b",
+          "plaintext": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+          "rawHex": "202122232425262728292a2bf0c52295b6c2493a8b7cbfe141f9a449f88945a7b6371a865700f7739726dd3d79b403b19016e836c46891a8a6459f31ea086bd2be99abf97139f7ced2aa60f3388ad456a67ba442a284b88a034ae6be",
+          "storedValue": "ICEiIyQlJicoKSor8MUilbbCSTqLfL/hQfmkSfiJRae2NxqGVwD3c5cm3T15tAOxkBboNsRokaim\nRZ8x6ghr0r6Zq/lxOffO0qpg8ziK1Fame6RCooS4igNK5r4=\n"
+        },
+        {
+          "logicalKey": "portal_api_token",
+          "xmlName": "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIHNlY3VyZSBzdG9yYWdlCg_portal_api_token",
+          "ivHex": "303132333435363738393a3b",
+          "plaintext": "42|Zm9vYmFyYmF6",
+          "rawHex": "303132333435363738393a3baf2f35b02f897cb5ddfa92d4bda9f4d39901ae00e2e4af23cbcfe0bfd24556",
+          "storedValue": "MDEyMzQ1Njc4OTo7ry81sC+JfLXd+pLUvan005kBrgDi5K8jy8/gv9JFVg==\n"
+        }
+      ]
+    },
+    "fss_v9_cbc": {
+      "description": "Legacy AES-128-CBC/PKCS7 value (only reachable via a _BACKUP or marker-driven migration state). Stored = Base64.DEFAULT(iv16||ciphertext).",
+      "aes128KeyHex": "0f0e0d0c0b0a09080706050403020100",
+      "ivHex": "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf",
+      "plaintext": "npub1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
+      "logicalKey": "nostr_npub_key",
+      "rawHex": "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf47f5f2828aeba511c8b0fc1f282494bed8abd3fe51827ada241a35e27da957712a5332b996e26b2cb1393362331f221d5cd8e6c1aeaba2ca6c150c4165a72ebae0dc059ad8c586cefa2f917fc189fa90",
+      "storedValue": "oKGio6SlpqeoqaqrrK2ur0f18oKK66URyLD8HygklL7Yq9P+UYJ62iQaNeJ9qVdxKlMyuZbiayyx\nOTNiMx8iHVzY5sGuq6LKbBUMQWWnLrrg3AWa2MWGzvovkX/BifqQ\n"
+    },
+    "badge_blob": {
+      "description": "Value of flutter.badges_encrypted (and preserved/older/incoming/pending, badges_former[].blob, secure copy badges_encrypted). Dart base64 = standard alphabet WITH padding, no line breaks. Badge key = 64 lowercase hex chars stored in secure key badge_encryption_key.",
+      "keyHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "ivHex": "cafebabefacedbaddecaf888",
+      "plaintextJson": "[{\"id\":\"a\",\"meetupName\":\"Aschaffenburg\",\"date\":\"2026-10-11T19:00:00.000Z\",\"iconPath\":\"assets/badge_icon.png\",\"coverUrl\":\"\",\"blockHeight\":0,\"signerNpub\":\"\",\"meetupEventId\":\"a\",\"delivery\":\"nfc\",\"sig\":\"\",\"sigId\":\"\",\"adminPubkey\":\"\",\"sigVersion\":0,\"sigContent\":\"\",\"claimSig\":\"\",\"claimEventId\":\"\",\"claimPubkey\":\"\",\"claimTimestamp\":0,\"isRetroactive\":false,\"presenceVerified\":true,\"isOrganizer\":false,\"isEvent\":false,\"lat\":0.0,\"lng\":0.0}]",
+      "blob": "yv66vvrO263eyviI:0diCT85YdTknKXH/FnjsS3hQjjCyfEhObJ53EtboA5nIPqMzs7NrTgQ/SRxXoRpHa2SbZ467uP0SoyUNh96Hcluyblx/dG2FcvYEd8txnmt5xG5dYAegfNnIAAM7+/2OphKUlO7SxtV6AGkulIpqrqzPbVjoprr/AjBlGF4rjvYGZH58wl5Nn+MAM2/jLu7Y0rlrZ/h2mVPuODWCiHbEDy86hrqv32yXQKb9HWOllfMq03fAzl3/N8J4OaN0VZAnA1h3Y/uLQlFKRtBjYoPxO4weg6BBXS0v14GiS4R6alwKoWhdIJW33Y57IE4ysb2H00HCy0lT8dTveDVTh0cqkql2cZmz+Fa2Qr5+0O/V9jpa6kDkuD2RRFpa76UuYPPQ1pK9vMXHV1no2FVAH2KXspHoYyf1kjhgOE2NhO52CpkY0kV3XWwZ+H8gEdwqr6dmVNhfhRjj2h71K/6oSmzBLoYSaRfwCjmKysZ7MQ9p/LTFP3DpAutJGDEwEt0QmegmBGVH6OnnkgNaEK3YmEvkwEMTvn7XQI3C9zLPUqaub4FLFLKaKehusd5gUoFhECFeph4kRKuYFATWxiEhxper"
+    },
+    "flutter_shared_prefs": {
+      "description": "shared_preferences_android 2.4.20 legacy plugin: file shared_prefs/FlutterSharedPreferences.xml, every key prefixed \"flutter.\". Dart setInt -> <long>, setBool -> <boolean>, setString -> <string>, setDouble -> <string> DOUBLE_PREFIX + Java Double.toString, setStringList -> <string> LIST_PREFIX + \"!\" + Dart jsonEncode(list).",
+      "xml": "<?xml version='1.0' encoding='utf-8' standalone='yes' ?>\n<map>\n    <string name=\"flutter.nickname\">Satoshi</string>\n    <boolean name=\"flutter.haptic_enabled\" value=\"false\" />\n    <long name=\"flutter.nostr_last_seen\" value=\"1786000000\" />\n    <long name=\"flutter.admin_registry_timestamp\" value=\"1786000000123\" />\n    <string name=\"flutter.favorite_meetups\">VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIGxpc3Qu![&quot;Berlin&quot;,&quot;München&quot;]</string>\n    <string name=\"flutter.tile_hidden\">VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIGxpc3Qu![]</string>\n    <string name=\"flutter.rqr_session_lat\">VGhpcyBpcyB0aGUgcHJlZml4IGZvciBEb3VibGUu48.137154</string>\n    <string name=\"flutter.rqr_session_lng\">VGhpcyBpcyB0aGUgcHJlZml4IGZvciBEb3VibGUu0.0</string>\n    <string name=\"flutter.signing_mode\">amber</string>\n    <string name=\"other.not_flutter\">ignored</string>\n</map>",
+      "expectedDecoded": {
+        "nickname": {
+          "type": "String",
+          "value": "Satoshi"
+        },
+        "haptic_enabled": {
+          "type": "Boolean",
+          "value": false
+        },
+        "nostr_last_seen": {
+          "type": "Long",
+          "value": 1786000000
+        },
+        "admin_registry_timestamp": {
+          "type": "Long",
+          "value": 1786000000123
+        },
+        "favorite_meetups": {
+          "type": "StringList",
+          "value": [
+            "Berlin",
+            "München"
+          ]
+        },
+        "tile_hidden": {
+          "type": "StringList",
+          "value": []
+        },
+        "rqr_session_lat": {
+          "type": "Double",
+          "value": 48.137154
+        },
+        "rqr_session_lng": {
+          "type": "Double",
+          "value": 0
+        },
+        "signing_mode": {
+          "type": "String",
+          "value": "amber"
+        }
+      },
+      "notes": "Keys without the \"flutter.\" prefix are not visible to the Dart app and must be ignored. Non-ASCII characters are NOT \\u-escaped by Dart jsonEncode.",
+      "legacyJavaSerializedList": {
+        "description": "Pre-2.3 shared_preferences_android list encoding (no '!'): LIST_PREFIX + android.util.Base64.encodeToString(ObjectOutputStream(ArrayList<String>), DEFAULT). DEFAULT = 76-char lines joined by '\\n' plus a trailing '\\n'. Not written by 2.4.20 but must still decode (plugin decodes it with StringListObjectInputStream allow-list).",
+        "value": [
+          "Berlin",
+          "München"
+        ],
+        "storedString": "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIGxpc3QurO0ABXNyABNqYXZhLnV0aWwuQXJyYXlMaXN0eIHSHZnHYZ0DAAFJAARzaXpleHAAAAACdwQAAAAC\ndAAGQmVybGludAAITcO8bmNoZW54\n",
+        "allowedClasses": [
+          "java.util.ArrayList",
+          "java.util.Arrays$ArrayList",
+          "java.lang.String",
+          "[Ljava.lang.String;"
+        ]
+      },
+      "doubleEncoding": {
+        "description": "setDouble stores DOUBLE_PREFIX + java.lang.Double.toString(value); decode with String.toDouble() after the prefix.",
+        "cases": [
+          [
+            48.137154,
+            "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBEb3VibGUu48.137154"
+          ],
+          [
+            0.0,
+            "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBEb3VibGUu0.0"
+          ],
+          [
+            1e-05,
+            "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBEb3VibGUu1.0E-5"
+          ],
+          [
+            -122.4194,
+            "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBEb3VibGUu-122.4194"
+          ],
+          [
+            10000000.0,
+            "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBEb3VibGUu1.0E7"
+          ]
+        ]
+      },
+      "prefixes": {
+        "keyPrefix": "flutter.",
+        "listPrefix": "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIGxpc3Qu",
+        "jsonListPrefix": "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIGxpc3Qu!",
+        "doublePrefix": "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBEb3VibGUu",
+        "bigIntegerPrefix": "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBCaWdJbnRlZ2Vy",
+        "file": "shared_prefs/FlutterSharedPreferences.xml"
+      }
+    },
+    "home_widget_prefs": {
+      "description": "shared_prefs/HomeWidgetPreferences.xml written by home_widget 0.6.0 (no prefix). Read by MeetupWidgetProvider.",
+      "xml": "<?xml version='1.0' encoding='utf-8' standalone='yes' ?>\n<map>\n    <string name=\"block\">921.345</string>\n    <string name=\"priceFiat\">95.000</string>\n    <string name=\"priceSymbol\">€</string>\n    <string name=\"priceEur\">95.000</string>\n    <string name=\"moscow\">10:52</string>\n    <string name=\"fees\">2·3·5</string>\n    <string name=\"hashrate\">812 EH/s</string>\n    <string name=\"supply\">19.937.512</string>\n    <string name=\"difficulty\">+1.4% / 1033</string>\n    <string name=\"updated\">09:41</string>\n    <string name=\"meetupCity\">Berlin</string>\n    <string name=\"meetupCountdown\">in 3 Tagen</string>\n    <string name=\"newsTitle\">Neuer Artikel</string>\n    <boolean name=\"newsIsNew\" value=\"true\" />\n</map>",
+      "rendered": {
+        "block": "921.345",
+        "price": "95.000 €",
+        "moscow": "10:52",
+        "fees": "2·3·5",
+        "hashrate": "812 EH/s",
+        "supply": "19.937.512",
+        "difficulty": "+1.4% / 1033",
+        "updated": "Stand 09:41",
+        "meetupCity": "Berlin",
+        "meetupCountdown": "in 3 Tagen",
+        "newsTitle": "Neuer Artikel",
+        "newsNewBadgeVisible": true
+      },
+      "renderedWhenEmpty": {
+        "block": "––",
+        "price": "–– €",
+        "moscow": "––:––",
+        "fees": "–·–·–",
+        "hashrate": "––",
+        "supply": "––",
+        "difficulty": "––",
+        "updated": "",
+        "meetupCity": "Kein Home-Meetup",
+        "meetupCountdown": "In der App wählen",
+        "newsTitle": "Aktuelle Artikel",
+        "newsNewBadgeVisible": false
+      }
+    },
+    "widget_formatting": {
+      "fmtInt": [
+        [
+          0,
+          "0"
+        ],
+        [
+          7,
+          "7"
+        ],
+        [
+          999,
+          "999"
+        ],
+        [
+          1000,
+          "1.000"
+        ],
+        [
+          95000,
+          "95.000"
+        ],
+        [
+          921345,
+          "921.345"
+        ],
+        [
+          19937512,
+          "19.937.512"
+        ]
+      ],
+      "moscowTime": [
+        {
+          "priceUsd": 103000,
+          "expected": "09:71",
+          "note": "(100000000/103000).round()=971 -> padLeft(4,\"0\")=\"0971\" -> \"09:71\""
+        },
+        {
+          "priceUsd": 54734,
+          "expected": "18:27"
+        },
+        {
+          "priceUsd": 0,
+          "expected": "--:--"
+        }
+      ],
+      "countdown": [
+        {
+          "days": -1,
+          "expected": "Heute"
+        },
+        {
+          "days": 0,
+          "expected": "Heute"
+        },
+        {
+          "days": 1,
+          "expected": "Morgen"
+        },
+        {
+          "days": 2,
+          "expected": "in 2 Tagen"
+        }
+      ],
+      "difficulty": [
+        {
+          "pct": 1.44,
+          "remaining": 1033,
+          "expected": "+1.4% / 1033"
+        },
+        {
+          "pct": -3.75,
+          "remaining": 12,
+          "expected": "-3.8% / 12",
+          "note": "Dart toStringAsFixed(1) rounds half away from zero on the binary value; -3.75 is exact in binary -> \"-3.8\""
+        },
+        {
+          "pct": 0,
+          "remaining": 5,
+          "expected": "+0.0% / 5"
+        },
+        {
+          "pct": 2,
+          "remaining": 0,
+          "expected": "––"
+        },
+        {
+          "pct": 1.45,
+          "remaining": 7,
+          "expected": "+1.4% / 7",
+          "note": "Dart toStringAsFixed works on the exact binary value (1.4499999999999999556) -> 1.4. Java String.format(\"%.1f\") gives 1.5 (WRONG). Use BigDecimal(abs(pct)).setScale(1, HALF_UP)."
+        },
+        {
+          "pct": -0.04,
+          "remaining": 3,
+          "expected": "-0.0% / 3",
+          "note": "negative values keep the '-' even when they round to 0.0 (Dart/JS toFixed). No '+' because pct < 0."
+        }
+      ],
+      "hashrate": [
+        {
+          "ehs": 812.4,
+          "expected": "812 EH/s"
+        },
+        {
+          "ehs": 0,
+          "expected": "––"
+        },
+        {
+          "ehs": 812.5,
+          "expected": "813 EH/s",
+          "note": "toStringAsFixed(0): exact tie rounds away from zero"
+        }
+      ],
+      "localeNote": "Always format with Locale.ROOT digits; group separator '.' is inserted manually (fmtInt), never via NumberFormat(Locale.GERMANY)."
+    },
+    "nip55": {
+      "getPublicKeyPermissionsExtra": "[{\"type\":\"sign_event\"},{\"type\":\"nip44_encrypt\"},{\"type\":\"nip44_decrypt\"}]",
+      "unsignedEventJsonKeyOrder": [
+        "pubkey",
+        "created_at",
+        "kind",
+        "tags",
+        "content"
+      ],
+      "exampleUnsigned": "{\"pubkey\":\"fa5e3477d2d6b92d667dcab66c8bbb1527014599c5eecddd545e3a39d7870268\",\"created_at\":1786000000,\"kind\":22242,\"tags\":[[\"challenge\",\"00\"]],\"content\":\"\"}",
+      "signIntentUri": "nostrsigner:{\"pubkey\":\"fa5e3477d2d6b92d667dcab66c8bbb1527014599c5eecddd545e3a39d7870268\",\"created_at\":1786000000,\"kind\":22242,\"tags\":[[\"challenge\",\"00\"]],\"content\":\"\"}",
+      "contentResolverSignProjection": [
+        "<eventJson>",
+        "",
+        "<npub>"
+      ],
+      "contentResolverNip44Projection": [
+        "<plaintextOrPayload>",
+        "<peerPubkeyHex>",
+        "<npub>"
+      ]
+    },
+    "fss_constants": {
+      "description": "flutter_secure_storage on-device names (9.2.4 and 10.3.4). <pkg> = space.einundzwanzig.meetup.",
+      "dataFile": "shared_prefs/FlutterSecureStorage.xml",
+      "keyStorageFile": "shared_prefs/FlutterSecureKeyStorage.xml",
+      "configFile": "shared_prefs/FlutterSecureStorageConfiguration:FlutterSecureStorage.xml",
+      "legacyGlobalConfigFile": "shared_prefs/FlutterSecureStorageConfiguration.xml",
+      "entryPrefix": "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIHNlY3VyZSBzdG9yYWdlCg",
+      "entryName": "<entryPrefix>_<logicalKey>",
+      "wrappedKeyPrefs": {
+        "v10GcmKey": "AESVGhpcyBpcyB0aGUga2V5IGZvciBhIHNlY3VyZSBzdG9yYWdlIEFFUyBLZXkK",
+        "v9GcmKeyTypo": "VGhpcyBpcyB0aGUga2V5IGZvcihBIHNlY3XyZZBzdG9yYWdlIEFFUyBLZXkK",
+        "v9CbcKey": "VGhpcyBpcyB0aGUga2V5IGZvciBhIHNlY3VyZSBzdG9yYWdlIEFFUyBLZXkK"
+      },
+      "backupSuffix": "_BACKUP",
+      "migratedSuffix": "_MIGRATED",
+      "markers": {
+        "keyAlgorithm": "FlutterSecureSAlgorithmKey",
+        "storageAlgorithm": "FlutterSecureSAlgorithmStorage",
+        "espMigrated": "ENCRYPTED_PREFERENCES_MIGRATED",
+        "backupStatus": "FlutterSecureStorageBackupStatus"
+      },
+      "markerValues": {
+        "keyAlgorithm": [
+          "RSA_ECB_PKCS1Padding",
+          "RSA_ECB_OAEPwithSHA_256andMGF1Padding",
+          "AES_GCM_NoPadding",
+          "AES_GCM_NoPadding_BIOMETRIC"
+        ],
+        "storageAlgorithm": [
+          "AES_CBC_PKCS7Padding",
+          "AES_GCM_NoPadding",
+          "AES_GCM_NoPadding_BIOMETRIC"
+        ]
+      },
+      "keystoreAliases": {
+        "rsaPkcs1": "<pkg>.FlutterSecureStoragePluginKey",
+        "rsaOaep": "<pkg>.FlutterSecureStoragePluginKeyOAEP",
+        "espMasterKey": "_androidx_security_master_key_"
+      },
+      "espReservedEntries": [
+        "__androidx_security_crypto_encrypted_prefs_key_keyset__",
+        "__androidx_security_crypto_encrypted_prefs_value_keyset__"
+      ],
+      "rsaOaepParams": {
+        "transformation": "RSA/ECB/OAEPPadding",
+        "provider": "AndroidKeyStoreBCWorkaround",
+        "digest": "SHA-256",
+        "mgf": "MGF1",
+        "mgfDigest": "SHA-1",
+        "pSource": "PSpecified.DEFAULT"
+      },
+      "rsaPkcs1Params": {
+        "transformation": "RSA/ECB/PKCS1Padding",
+        "provider": "AndroidKeyStoreBCWorkaround"
+      },
+      "gcm": {
+        "transformation": "AES/GCM/NoPadding",
+        "keyBytes": 16,
+        "ivBytes": 12,
+        "tagBits": 128,
+        "layout": "iv || ciphertext || tag"
+      },
+      "cbc": {
+        "transformation": "AES/CBC/PKCS7Padding (== JCA AES/CBC/PKCS5Padding)",
+        "keyBytes": 16,
+        "ivBytes": 16,
+        "layout": "iv || ciphertext"
+      },
+      "valueEncoding": "android.util.Base64.encodeToString(bytes, 0 /*DEFAULT*/) - 76-char lines + trailing newline; decode with Base64.DEFAULT"
+    },
+    "storage_eras": [
+      {
+        "era": "E0 plaintext",
+        "appVersions": "builds before 2026-02-19 (commit 09a3d10)",
+        "secrets": "FlutterSharedPreferences flutter.nostr_nsec_key / flutter.nostr_npub_key / flutter.nostr_priv_hex; badges as plaintext list flutter.badges",
+        "fss": null
+      },
+      {
+        "era": "E1 FSS 9.2.4 + EncryptedSharedPreferences",
+        "appVersions": "1.0.0+1 .. 1.6.9+28 (2026-02-19 .. 2026-10-10)",
+        "secrets": "FlutterSecureStorage.xml = ESP (names AES256-SIV, values AES256-GCM, Tink keysets in the same file, master key _androidx_security_master_key_). Fallback if ESP init failed: custom AES-CBC + RSA-PKCS1 in the same file.",
+        "fss": "9.2.4"
+      },
+      {
+        "era": "E2 FSS 10.3.4 custom cipher",
+        "appVersions": "1.6.9+28 rolling builds after 212e77b (2026-10-11), 1.7.0+29 .. 1.7.2+31",
+        "secrets": "FlutterSecureStorage.xml entries <prefix>_<key> = Base64(iv12||ct||tag) AES-128-GCM, key wrapped RSA-OAEP. ESP entries from E1 may remain ORPHANED in the same file (see spec 14 F1).",
+        "fss": "10.3.4"
+      }
+    ],
+    "prefs_key_inventory": [
+      {
+        "key": "signing_mode",
+        "type": "String",
+        "files": "services/signing_service.dart",
+        "meaning": "active signer: local|amber|nip07|nip46 (absent/unknown = local)",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "01"
+      },
+      {
+        "key": "amber_pubkey_hex",
+        "type": "String",
+        "files": "services/signing_service.dart",
+        "meaning": "Amber (NIP-55) user pubkey, 64 lowercase hex",
+        "sensitivity": "PRIVATE",
+        "action": "copy",
+        "spec": "01"
+      },
+      {
+        "key": "amber_npub",
+        "type": "String",
+        "files": "services/signing_service.dart",
+        "meaning": "Amber user npub",
+        "sensitivity": "PRIVATE",
+        "action": "copy",
+        "spec": "01"
+      },
+      {
+        "key": "nip07_pubkey_hex",
+        "type": "String",
+        "files": "services/signing_service.dart",
+        "meaning": "NIP-07 pubkey (only from web backups)",
+        "sensitivity": "PRIVATE",
+        "action": "copy",
+        "spec": "01"
+      },
+      {
+        "key": "nip07_npub",
+        "type": "String",
+        "files": "services/signing_service.dart",
+        "meaning": "NIP-07 npub (only from web backups)",
+        "sensitivity": "PRIVATE",
+        "action": "copy",
+        "spec": "01"
+      },
+      {
+        "key": "nip46_pubkey_hex",
+        "type": "String",
+        "files": "services/signing_service.dart",
+        "meaning": "NIP-46 bunker user pubkey hex",
+        "sensitivity": "PRIVATE",
+        "action": "copy",
+        "spec": "01"
+      },
+      {
+        "key": "nip46_npub",
+        "type": "String",
+        "files": "services/signing_service.dart",
+        "meaning": "NIP-46 user npub",
+        "sensitivity": "PRIVATE",
+        "action": "copy",
+        "spec": "01"
+      },
+      {
+        "key": "nip46_bunker_uri",
+        "type": "String",
+        "files": "services/signing_service.dart",
+        "meaning": "bunker://<signer-hex>?relay=... (secret stripped)",
+        "sensitivity": "PRIVATE",
+        "action": "copy",
+        "spec": "01"
+      },
+      {
+        "key": "secure_migration_done",
+        "type": "bool",
+        "files": "services/secure_key_store.dart",
+        "meaning": "plaintext->secure key migration ran (Dart ensureMigrated)",
+        "sensitivity": "STATE",
+        "action": "copy (set true after routing legacy plaintext keys)",
+        "spec": "01"
+      },
+      {
+        "key": "nostr_nsec_key",
+        "type": "String",
+        "files": "services/secure_key_store.dart (legacy read+remove)",
+        "meaning": "LEGACY plaintext nsec from builds before 2026-02-19",
+        "sensitivity": "SECRET",
+        "action": "route -> SecureStore nostr_nsec_key if secure_migration_done != true; then remove from Flutter prefs; never copy to KeyValueStore",
+        "spec": "01"
+      },
+      {
+        "key": "nostr_npub_key",
+        "type": "String",
+        "files": "services/secure_key_store.dart (legacy read+remove)",
+        "meaning": "LEGACY plaintext npub (pre-secure-storage)",
+        "sensitivity": "PRIVATE",
+        "action": "route -> SecureStore nostr_npub_key (same rule as nsec)",
+        "spec": "01"
+      },
+      {
+        "key": "nostr_priv_hex",
+        "type": "String",
+        "files": "services/secure_key_store.dart (legacy read+remove)",
+        "meaning": "LEGACY plaintext private key hex",
+        "sensitivity": "SECRET",
+        "action": "route -> SecureStore nostr_priv_hex (same rule as nsec)",
+        "spec": "01"
+      },
+      {
+        "key": "app_review_demo",
+        "type": "bool",
+        "files": "services/app_review_demo.dart",
+        "meaning": "store-review demo identity was signed in",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "01"
+      },
+      {
+        "key": "nickname",
+        "type": "String",
+        "files": "models/user.dart",
+        "meaning": "display nickname (default \"Anon\")",
+        "sensitivity": "PRIVATE",
+        "action": "copy",
+        "spec": "01/07"
+      },
+      {
+        "key": "full_name",
+        "type": "String",
+        "files": "models/user.dart",
+        "meaning": "optional real name",
+        "sensitivity": "PRIVATE",
+        "action": "copy",
+        "spec": "01/07"
+      },
+      {
+        "key": "telegram",
+        "type": "String",
+        "files": "models/user.dart",
+        "meaning": "Telegram handle",
+        "sensitivity": "PRIVATE",
+        "action": "copy",
+        "spec": "01/07"
+      },
+      {
+        "key": "twitter",
+        "type": "String",
+        "files": "models/user.dart",
+        "meaning": "X/Twitter handle",
+        "sensitivity": "PRIVATE",
+        "action": "copy",
+        "spec": "01/07"
+      },
+      {
+        "key": "nostr",
+        "type": "String",
+        "files": "models/user.dart",
+        "meaning": "cached own npub (overridden by key store / external signer)",
+        "sensitivity": "PRIVATE",
+        "action": "copy",
+        "spec": "01/07"
+      },
+      {
+        "key": "nostr_verified",
+        "type": "bool",
+        "files": "models/user.dart",
+        "meaning": "npub considered verified",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "01/07"
+      },
+      {
+        "key": "admin_verified",
+        "type": "bool",
+        "files": "models/user.dart",
+        "meaning": "admin status crypto-verified cache",
+        "sensitivity": "INTEGRITY",
+        "action": "copy (re-verified at runtime)",
+        "spec": "05"
+      },
+      {
+        "key": "is_admin",
+        "type": "bool",
+        "files": "models/user.dart",
+        "meaning": "organizer/admin cache (re-verified)",
+        "sensitivity": "INTEGRITY",
+        "action": "copy (re-verified at runtime)",
+        "spec": "05"
+      },
+      {
+        "key": "admin_via_portal",
+        "type": "bool",
+        "files": "models/user.dart",
+        "meaning": "admin source flag: portal organizer",
+        "sensitivity": "INTEGRITY",
+        "action": "copy",
+        "spec": "05"
+      },
+      {
+        "key": "admin_via_vouch",
+        "type": "bool",
+        "files": "models/user.dart",
+        "meaning": "admin source flag: trust score/vouch",
+        "sensitivity": "INTEGRITY",
+        "action": "copy",
+        "spec": "05"
+      },
+      {
+        "key": "admin_via_seed",
+        "type": "bool",
+        "files": "models/user.dart",
+        "meaning": "admin source flag: seed admin",
+        "sensitivity": "INTEGRITY",
+        "action": "copy",
+        "spec": "05"
+      },
+      {
+        "key": "promotion_source",
+        "type": "String",
+        "files": "models/user.dart",
+        "meaning": "legacy single admin source (seed_admin|portal_organizer|trust_score|\"\")",
+        "sensitivity": "INTEGRITY",
+        "action": "copy",
+        "spec": "05"
+      },
+      {
+        "key": "review_demo",
+        "type": "bool",
+        "files": "models/user.dart",
+        "meaning": "profile is the review demo profile",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "01"
+      },
+      {
+        "key": "home_meetup",
+        "type": "String",
+        "files": "models/user.dart",
+        "meaning": "legacy single home meetup (= first favorite)",
+        "sensitivity": "SETTING",
+        "action": "copy",
+        "spec": "09/10"
+      },
+      {
+        "key": "favorite_meetups",
+        "type": "List<String>",
+        "files": "models/user.dart",
+        "meaning": "favorite meetup keys (city names); absent -> [home_meetup]",
+        "sensitivity": "SETTING",
+        "action": "copy",
+        "spec": "09/10"
+      },
+      {
+        "key": "badges_encrypted",
+        "type": "String",
+        "files": "models/badge.dart",
+        "meaning": "PRIMARY badge collection: base64(iv12):base64(ct||tag) AES-256-GCM with secure badge_encryption_key",
+        "sensitivity": "PRIVATE",
+        "action": "copy verbatim (never re-encrypt during migration)",
+        "spec": "02/03"
+      },
+      {
+        "key": "badges_encrypted_preserved",
+        "type": "String",
+        "files": "models/badge.dart",
+        "meaning": "first backup generation of the encrypted collection",
+        "sensitivity": "PRIVATE",
+        "action": "copy verbatim",
+        "spec": "02/03"
+      },
+      {
+        "key": "badges_encrypted_preserved_older",
+        "type": "String",
+        "files": "models/badge.dart",
+        "meaning": "second (older) backup generation",
+        "sensitivity": "PRIVATE",
+        "action": "copy verbatim",
+        "spec": "02/03"
+      },
+      {
+        "key": "badges_encrypted_incoming",
+        "type": "String",
+        "files": "models/badge.dart; services/badge_sync_service.dart",
+        "meaning": "staged collection for an identity switch (restore)",
+        "sensitivity": "PRIVATE",
+        "action": "copy verbatim",
+        "spec": "08"
+      },
+      {
+        "key": "badges_pending_encrypted",
+        "type": "String",
+        "files": "models/badge.dart",
+        "meaning": "scans received while the main file was unreadable (own key badge_pending_key)",
+        "sensitivity": "PRIVATE",
+        "action": "copy verbatim",
+        "spec": "02"
+      },
+      {
+        "key": "badges_former",
+        "type": "String",
+        "files": "models/badge.dart",
+        "meaning": "archive: JSON list [{at,reason,npub,blob}] (max 10 / 500 KiB)",
+        "sensitivity": "PRIVATE",
+        "action": "copy verbatim",
+        "spec": "03/08"
+      },
+      {
+        "key": "badges",
+        "type": "List<String>",
+        "files": "models/badge.dart",
+        "meaning": "LEGACY plaintext badge JSON list (pre-encryption builds)",
+        "sensitivity": "PRIVATE",
+        "action": "copy (badge domain encrypts on next save, as Dart)",
+        "spec": "02"
+      },
+      {
+        "key": "badges_pending",
+        "type": "List<String>",
+        "files": "models/badge.dart",
+        "meaning": "LEGACY plaintext pending scans (PR 84 test builds)",
+        "sensitivity": "PRIVATE",
+        "action": "copy (badge domain migrates)",
+        "spec": "02"
+      },
+      {
+        "key": "rqr_session_start",
+        "type": "int",
+        "files": "services/rolling_qr_service.dart",
+        "meaning": "organizer rolling-QR session start (unix s)",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "02"
+      },
+      {
+        "key": "rqr_session_expires",
+        "type": "int",
+        "files": "services/rolling_qr_service.dart; screens/admin_panel.dart",
+        "meaning": "session expiry (unix s)",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "02"
+      },
+      {
+        "key": "rqr_session_meetup_id",
+        "type": "String",
+        "files": "services/rolling_qr_service.dart",
+        "meaning": "session meetup id",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "02"
+      },
+      {
+        "key": "rqr_session_meetup_name",
+        "type": "String",
+        "files": "services/rolling_qr_service.dart",
+        "meaning": "session meetup name",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "02"
+      },
+      {
+        "key": "rqr_session_meetup_country",
+        "type": "String",
+        "files": "services/rolling_qr_service.dart",
+        "meaning": "session meetup country",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "02"
+      },
+      {
+        "key": "rqr_session_block_height",
+        "type": "int",
+        "files": "services/rolling_qr_service.dart",
+        "meaning": "block height at session start",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "02"
+      },
+      {
+        "key": "rqr_session_pubkey",
+        "type": "String",
+        "files": "services/rolling_qr_service.dart",
+        "meaning": "organizer pubkey hex of the session",
+        "sensitivity": "PRIVATE",
+        "action": "copy",
+        "spec": "02"
+      },
+      {
+        "key": "rqr_session_lat",
+        "type": "double",
+        "files": "services/rolling_qr_service.dart",
+        "meaning": "session latitude (DOUBLE_PREFIX string)",
+        "sensitivity": "PRIVATE",
+        "action": "copy",
+        "spec": "02"
+      },
+      {
+        "key": "rqr_session_lng",
+        "type": "double",
+        "files": "services/rolling_qr_service.dart",
+        "meaning": "session longitude (DOUBLE_PREFIX string)",
+        "sensitivity": "PRIVATE",
+        "action": "copy",
+        "spec": "02"
+      },
+      {
+        "key": "rqr_session_seed",
+        "type": "String",
+        "files": "services/rolling_qr_service.dart (legacy read+remove)",
+        "meaning": "LEGACY plaintext HMAC session seed",
+        "sensitivity": "SECRET",
+        "action": "route -> SecureStore rqr_session_seed_secure (overwrites, Dart _migrateSeedIfNeeded); remove; never copy",
+        "spec": "02"
+      },
+      {
+        "key": "rqr_session_base_payload",
+        "type": "String",
+        "files": "services/rolling_qr_service.dart (legacy read+remove)",
+        "meaning": "LEGACY signed session base payload",
+        "sensitivity": "SECRET",
+        "action": "route -> SecureStore rqr_session_base_payload_secure (overwrites); remove; never copy",
+        "spec": "02"
+      },
+      {
+        "key": "badge_sync_dirty",
+        "type": "bool",
+        "files": "services/badge_sync_service.dart",
+        "meaning": "a sync push is pending/retry",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "08"
+      },
+      {
+        "key": "badge_sync_chunk_hashes",
+        "type": "List<String>",
+        "files": "services/badge_sync_service.dart",
+        "meaning": "content hash per pushed chunk (64 hex)",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "08"
+      },
+      {
+        "key": "badge_sync_last_gen",
+        "type": "int",
+        "files": "services/badge_sync_service.dart",
+        "meaning": "last pushed/seen sync generation",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "08"
+      },
+      {
+        "key": "badge_restore_hold",
+        "type": "bool",
+        "files": "services/badge_sync_service.dart",
+        "meaning": "sync suspended during a backup restore",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "08"
+      },
+      {
+        "key": "badge_restore_from",
+        "type": "String",
+        "files": "services/badge_sync_service.dart",
+        "meaning": "npub before the restore",
+        "sensitivity": "PRIVATE",
+        "action": "copy",
+        "spec": "08"
+      },
+      {
+        "key": "badge_restore_expect",
+        "type": "List<String> (legacy: String)",
+        "files": "services/badge_sync_service.dart",
+        "meaning": "npubs the restore may switch to (read with prefs.get: list or string)",
+        "sensitivity": "PRIVATE",
+        "action": "copy preserving the stored type",
+        "spec": "08"
+      },
+      {
+        "key": "badge_restore_proofs",
+        "type": "bool",
+        "files": "services/badge_sync_service.dart",
+        "meaning": "restore carried proofs",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "08"
+      },
+      {
+        "key": "badge_restore_clear",
+        "type": "bool",
+        "files": "services/badge_sync_service.dart",
+        "meaning": "empty-replace pending",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "08"
+      },
+      {
+        "key": "platform_proofs",
+        "type": "String",
+        "files": "services/platform_proof_service.dart; backup_service.dart; badge_sync_service.dart",
+        "meaning": "JSON list of platform proofs {platform,username,proof_sig,created_at}",
+        "sensitivity": "PRIVATE",
+        "action": "copy",
+        "spec": "06"
+      },
+      {
+        "key": "humanity_verified",
+        "type": "bool",
+        "files": "services/humanity_proof_service.dart; backup_service.dart; badge_sync_service.dart",
+        "meaning": "humanity (zap) proof valid",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "06"
+      },
+      {
+        "key": "humanity_needs_reverification",
+        "type": "bool",
+        "files": "services/humanity_proof_service.dart; backup_service.dart; badge_sync_service.dart",
+        "meaning": "proof must be re-checked",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "06"
+      },
+      {
+        "key": "humanity_receipt_id",
+        "type": "String",
+        "files": "services/humanity_proof_service.dart; backup_service.dart; badge_sync_service.dart",
+        "meaning": "zap receipt event id",
+        "sensitivity": "PRIVATE",
+        "action": "copy",
+        "spec": "06"
+      },
+      {
+        "key": "humanity_first_zap_at",
+        "type": "int",
+        "files": "services/humanity_proof_service.dart; backup_service.dart; badge_sync_service.dart",
+        "meaning": "first zap timestamp (unix s)",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "06"
+      },
+      {
+        "key": "humanity_checked_at",
+        "type": "int",
+        "files": "services/humanity_proof_service.dart; backup_service.dart; badge_sync_service.dart",
+        "meaning": "last check (unix s)",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "06"
+      },
+      {
+        "key": "reputation_last_publish",
+        "type": "int",
+        "files": "services/reputation_publisher.dart",
+        "meaning": "last reputation publish (epoch ms)",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "04"
+      },
+      {
+        "key": "reputation_last_hash",
+        "type": "String",
+        "files": "services/reputation_publisher.dart",
+        "meaning": "16-hex hash of last published reputation",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "04"
+      },
+      {
+        "key": "social_my_follows",
+        "type": "String",
+        "files": "services/social_graph_service.dart",
+        "meaning": "JSON array of followed pubkeys (cache, not owner-keyed)",
+        "sensitivity": "CACHE",
+        "action": "copy",
+        "spec": "04/05"
+      },
+      {
+        "key": "social_cache_ts",
+        "type": "int",
+        "files": "services/social_graph_service.dart",
+        "meaning": "follows cache time (epoch ms)",
+        "sensitivity": "CACHE",
+        "action": "copy",
+        "spec": "04/05"
+      },
+      {
+        "key": "coatt_publish_status",
+        "type": "String",
+        "files": "services/coattendance_service.dart",
+        "meaning": "JSON {badgeSigId: relaysAccepted} co-attendance consent/publish status",
+        "sensitivity": "PRIVATE",
+        "action": "copy",
+        "spec": "05"
+      },
+      {
+        "key": "coatt_graph_cache_v1",
+        "type": "String",
+        "files": "services/coattendance_service.dart",
+        "meaning": "co-attendance graph cache (owner-bound JSON)",
+        "sensitivity": "CACHE",
+        "action": "copy",
+        "spec": "05"
+      },
+      {
+        "key": "admin_registry_cache",
+        "type": "String",
+        "files": "services/admin_registry.dart",
+        "meaning": "JSON array of AdminEntry (network cache)",
+        "sensitivity": "INTEGRITY",
+        "action": "copy",
+        "spec": "05"
+      },
+      {
+        "key": "admin_registry_timestamp",
+        "type": "int",
+        "files": "services/admin_registry.dart",
+        "meaning": "admin cache time (epoch ms)",
+        "sensitivity": "CACHE",
+        "action": "copy",
+        "spec": "05"
+      },
+      {
+        "key": "bootstrap_permanently_sunset",
+        "type": "bool",
+        "files": "services/admin_registry.dart",
+        "meaning": "bootstrap phase permanently ended",
+        "sensitivity": "INTEGRITY",
+        "action": "copy",
+        "spec": "05"
+      },
+      {
+        "key": "admin_unique_authors_count",
+        "type": "int",
+        "files": "services/admin_registry.dart",
+        "meaning": "unique admin-list authors seen",
+        "sensitivity": "INTEGRITY",
+        "action": "copy",
+        "spec": "05"
+      },
+      {
+        "key": "sunset_count_reset_v1_done",
+        "type": "bool",
+        "files": "services/admin_registry.dart",
+        "meaning": "one-time K1 reset done",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "05"
+      },
+      {
+        "key": "sunset_authors_set_v1",
+        "type": "List<String>",
+        "files": "services/admin_registry.dart",
+        "meaning": "hex pubkeys of admin-list authors",
+        "sensitivity": "INTEGRITY",
+        "action": "copy",
+        "spec": "05"
+      },
+      {
+        "key": "my_personal_vouches",
+        "type": "String",
+        "files": "services/admin_registry.dart",
+        "meaning": "JSON array of own vouches (legacy, no UI)",
+        "sensitivity": "PRIVATE",
+        "action": "copy",
+        "spec": "05"
+      },
+      {
+        "key": "organic_admin_claims",
+        "type": "String",
+        "files": "services/promotion_claim_service.dart",
+        "meaning": "JSON array of organic admin claims",
+        "sensitivity": "CACHE",
+        "action": "copy",
+        "spec": "05"
+      },
+      {
+        "key": "nostr_display_names_v1",
+        "type": "String",
+        "files": "services/nostr_profile_service.dart",
+        "meaning": "JSON {hex:{n,t}} display-name cache",
+        "sensitivity": "CACHE",
+        "action": "copy",
+        "spec": "07"
+      },
+      {
+        "key": "local_profile_picture",
+        "type": "String",
+        "files": "services/nostr_profile_service.dart",
+        "meaning": "ABSOLUTE PATH of a picked image (image_picker output in cacheDir)",
+        "sensitivity": "PRIVATE",
+        "action": "rewrite: copy the file into filesDir/profile/ if it exists, store the new path; else drop",
+        "spec": "07/12"
+      },
+      {
+        "key": "nostr_profile_metadata_v2_<hex64>",
+        "type": "String",
+        "files": "services/nostr_profile_lookup.dart",
+        "meaning": "JSON {event: kind-0, fetchedAt: ms} per pubkey",
+        "sensitivity": "CACHE",
+        "action": "copy",
+        "spec": "07"
+      },
+      {
+        "key": "nostr_profile_relays_v2_<hex64>",
+        "type": "String",
+        "files": "services/nostr_profile_lookup.dart",
+        "meaning": "JSON kind-10002 event per pubkey",
+        "sensitivity": "CACHE",
+        "action": "copy",
+        "spec": "07"
+      },
+      {
+        "key": "nostr_profile_picture_<hex64>",
+        "type": "String",
+        "files": "services/nostr_profile_lookup.dart (legacy read+remove)",
+        "meaning": "LEGACY picture URL per pubkey",
+        "sensitivity": "CACHE",
+        "action": "copy (lookup still reads it as fallback)",
+        "spec": "07"
+      },
+      {
+        "key": "nostr_profile_picture_time_<hex64>",
+        "type": "int",
+        "files": "services/nostr_profile_lookup.dart (legacy read+remove)",
+        "meaning": "LEGACY picture cache time (epoch ms)",
+        "sensitivity": "CACHE",
+        "action": "copy",
+        "spec": "07"
+      },
+      {
+        "key": "zap_stats_cache_v2_<hex64>",
+        "type": "String",
+        "files": "services/zap_verification_service.dart",
+        "meaning": "ZapStats JSON per pubkey",
+        "sensitivity": "CACHE",
+        "action": "copy",
+        "spec": "04/06"
+      },
+      {
+        "key": "zap_cache_ts_v2_<hex64>",
+        "type": "int",
+        "files": "services/zap_verification_service.dart",
+        "meaning": "zap stats cache time (epoch ms)",
+        "sensitivity": "CACHE",
+        "action": "copy",
+        "spec": "04/06"
+      },
+      {
+        "key": "zap_provider_pubkey_<hex64>",
+        "type": "String",
+        "files": "services/zap_receipt_validator.dart",
+        "meaning": "JSON {pk, ts} LNURL provider pubkey cache (7 d)",
+        "sensitivity": "CACHE",
+        "action": "copy",
+        "spec": "06"
+      },
+      {
+        "key": "portal_leaders_cache",
+        "type": "String",
+        "files": "services/portal_leader_service.dart",
+        "meaning": "raw JSON of /api/meetup-leaders",
+        "sensitivity": "CACHE",
+        "action": "copy",
+        "spec": "09"
+      },
+      {
+        "key": "portal_leaders_cache_ts",
+        "type": "int",
+        "files": "services/portal_leader_service.dart",
+        "meaning": "leaders cache time (epoch ms)",
+        "sensitivity": "CACHE",
+        "action": "copy",
+        "spec": "09"
+      },
+      {
+        "key": "rsvp_cache_<portalEventId>",
+        "type": "String",
+        "files": "services/portal_api_service.dart",
+        "meaning": "RSVP payload cache per portal event",
+        "sensitivity": "CACHE",
+        "action": "copy",
+        "spec": "09/10"
+      },
+      {
+        "key": "rsvp_cache_ts_<portalEventId>",
+        "type": "int",
+        "files": "services/portal_api_service.dart",
+        "meaning": "RSVP cache time (epoch ms)",
+        "sensitivity": "CACHE",
+        "action": "copy",
+        "spec": "09/10"
+      },
+      {
+        "key": "chat_last_read",
+        "type": "List<String>",
+        "files": "services/chat_service.dart",
+        "meaning": "read marks \"<roomKey>|<unix s>\" (parse at LAST '|')",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "11"
+      },
+      {
+        "key": "news_last_read_ts",
+        "type": "int",
+        "files": "services/news_service.dart",
+        "meaning": "newest seen article publishedAt (unix s)",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "11"
+      },
+      {
+        "key": "news_liked_reactions",
+        "type": "List<String>",
+        "files": "services/news_reactions_service.dart",
+        "meaning": "\"<hexPubkey>|<articleAddress>\" (cap 500)",
+        "sensitivity": "PRIVATE",
+        "action": "copy",
+        "spec": "11"
+      },
+      {
+        "key": "widget_last_seen_news_id",
+        "type": "String",
+        "files": "services/widget_service.dart",
+        "meaning": "newest article id the user has seen (widget NEU badge)",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "10/11"
+      },
+      {
+        "key": "widget_latest_news_id",
+        "type": "String",
+        "files": "services/widget_service.dart",
+        "meaning": "newest article id fetched for the widget",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "10/11"
+      },
+      {
+        "key": "widget_latest_news_title",
+        "type": "String",
+        "files": "services/widget_service.dart",
+        "meaning": "its title",
+        "sensitivity": "CACHE",
+        "action": "copy",
+        "spec": "10/11"
+      },
+      {
+        "key": "app_locale",
+        "type": "String",
+        "files": "services/locale_controller.dart",
+        "meaning": "de|en|es; absent = system",
+        "sensitivity": "SETTING",
+        "action": "copy + apply as per-app locale",
+        "spec": "12"
+      },
+      {
+        "key": "haptic_enabled",
+        "type": "bool",
+        "files": "services/haptic_service.dart; screens/app_shell.dart; screens/home_screen.dart",
+        "meaning": "haptics on/off (default true)",
+        "sensitivity": "SETTING",
+        "action": "copy",
+        "spec": "12"
+      },
+      {
+        "key": "fiat_currency",
+        "type": "String",
+        "files": "services/currency_service.dart",
+        "meaning": "display currency code (default EUR)",
+        "sensitivity": "SETTING",
+        "action": "copy",
+        "spec": "12/13"
+      },
+      {
+        "key": "diagnostic_log",
+        "type": "String",
+        "files": "services/app_logger.dart",
+        "meaning": "JSON array of up to 800 LogEntry",
+        "sensitivity": "PRIVATE",
+        "action": "copy (append one 'migrated' entry; never log migrated secrets)",
+        "spec": "12"
+      },
+      {
+        "key": "diagnostic_verbose",
+        "type": "bool",
+        "files": "services/app_logger.dart",
+        "meaning": "verbose logging",
+        "sensitivity": "SETTING",
+        "action": "copy",
+        "spec": "12"
+      },
+      {
+        "key": "guide_completed_<tour>",
+        "type": "bool",
+        "files": "services/guide_service.dart",
+        "meaning": "tour finished; <tour> in onboarding|home|settings|events|portal|wallet|reputation|scan|myMeetups|portalArea",
+        "sensitivity": "SETTING",
+        "action": "copy",
+        "spec": "12"
+      },
+      {
+        "key": "guide_onboarding_asked",
+        "type": "bool",
+        "files": "services/guide_service.dart",
+        "meaning": "onboarding tour offer shown",
+        "sensitivity": "SETTING",
+        "action": "copy",
+        "spec": "12"
+      },
+      {
+        "key": "tile_order",
+        "type": "List<String>",
+        "files": "screens/home_screen.dart",
+        "meaning": "dashboard tile order",
+        "sensitivity": "SETTING",
+        "action": "copy",
+        "spec": "12"
+      },
+      {
+        "key": "tile_hidden",
+        "type": "List<String>",
+        "files": "screens/home_screen.dart",
+        "meaning": "dashboard hidden tiles",
+        "sensitivity": "SETTING",
+        "action": "copy",
+        "spec": "12"
+      },
+      {
+        "key": "mig_hide_events_v1",
+        "type": "bool",
+        "files": "screens/home_screen.dart",
+        "meaning": "one-time tile migration flag",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "12"
+      },
+      {
+        "key": "mig_trust_header_v1",
+        "type": "bool",
+        "files": "screens/home_screen.dart",
+        "meaning": "one-time tile migration flag",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "12"
+      },
+      {
+        "key": "mig_hide_new_tiles_v131",
+        "type": "bool",
+        "files": "screens/home_screen.dart",
+        "meaning": "one-time tile migration flag",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "12"
+      },
+      {
+        "key": "mig_hide_plebrap_v1",
+        "type": "bool",
+        "files": "screens/home_screen.dart",
+        "meaning": "one-time tile migration flag",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "12"
+      },
+      {
+        "key": "nostr_last_seen",
+        "type": "int",
+        "files": "screens/home_screen.dart",
+        "meaning": "last tap on the Nostr tile (unix s)",
+        "sensitivity": "STATE",
+        "action": "copy",
+        "spec": "12"
+      },
+      {
+        "key": "mempool_host",
+        "type": "String",
+        "files": "services/mempool_config.dart",
+        "meaning": "normalized mempool base URL (default https://mempool.space)",
+        "sensitivity": "SETTING",
+        "action": "copy",
+        "spec": "13"
+      },
+      {
+        "key": "mempool_last_height",
+        "type": "int",
+        "files": "services/mempool.dart",
+        "meaning": "highest block height seen (never decreases)",
+        "sensitivity": "CACHE",
+        "action": "copy",
+        "spec": "13"
+      },
+      {
+        "key": "custom_relays",
+        "type": "List<String>",
+        "files": "services/relay_config.dart",
+        "meaning": "user-added relay URLs (wss://)",
+        "sensitivity": "SETTING",
+        "action": "copy",
+        "spec": "07"
+      },
+      {
+        "key": "disabled_default_relays",
+        "type": "List<String>",
+        "files": "services/relay_config.dart",
+        "meaning": "default relays the user switched off",
+        "sensitivity": "SETTING",
+        "action": "copy",
+        "spec": "07"
+      }
+    ],
+    "obsolete_prefs_keys": [
+      {
+        "key": "vouching_consensus_cache",
+        "type": "String",
+        "origin": "services/vouching_service.dart (removed 2026-08-21, WoT removal d410e8d)",
+        "action": "ignore (do not copy); delete with the Flutter file at cleanup"
+      },
+      {
+        "key": "vouching_consensus_ts",
+        "type": "int",
+        "origin": "same",
+        "action": "ignore (do not copy); delete with the Flutter file at cleanup"
+      },
+      {
+        "key": "distrust_reports_cache",
+        "type": "String",
+        "origin": "same",
+        "action": "ignore (do not copy); delete with the Flutter file at cleanup"
+      },
+      {
+        "key": "zap_stats_cache_<hex64>",
+        "type": "String",
+        "origin": "zap_verification_service.dart v1 (replaced by _v2 in cd15c5c, 2026-10-11)",
+        "action": "ignore (do not copy); delete with the Flutter file at cleanup"
+      },
+      {
+        "key": "zap_cache_ts_<hex64>",
+        "type": "int",
+        "origin": "same",
+        "action": "ignore (do not copy); delete with the Flutter file at cleanup"
+      },
+      {
+        "key": "nostr_profile_picture",
+        "type": "String",
+        "origin": "nostr_profile_service.dart global picture cache (before 2026-03-11)",
+        "action": "ignore (do not copy); delete with the Flutter file at cleanup"
+      },
+      {
+        "key": "nostr_profile_picture_time",
+        "type": "int",
+        "origin": "same",
+        "action": "ignore (do not copy); delete with the Flutter file at cleanup"
+      },
+      {
+        "key": "badge_sync_outbox_v1",
+        "type": "String",
+        "origin": "badge_sync_service.dart, only in main builds 42d7ccb..6a1738a (2026-10-16)",
+        "action": "ignore (do not copy); delete with the Flutter file at cleanup"
+      },
+      {
+        "key": "badge_sync_hash_owner",
+        "type": "String",
+        "origin": "same",
+        "action": "ignore (do not copy); delete with the Flutter file at cleanup"
+      },
+      {
+        "key": "badge_sync_collection_hash",
+        "type": "String",
+        "origin": "same",
+        "action": "ignore (do not copy); delete with the Flutter file at cleanup"
+      }
+    ],
+    "secure_key_inventory": [
+      {
+        "key": "nostr_nsec_key",
+        "files": "services/secure_key_store.dart",
+        "meaning": "local Nostr private key, nsec1… (bech32, 63 chars)",
+        "sensitivity": "SECRET",
+        "validator": "^nsec1[02-9ac-hj-np-z]{58}$",
+        "spec": "01"
+      },
+      {
+        "key": "nostr_npub_key",
+        "files": "services/secure_key_store.dart",
+        "meaning": "matching npub1…",
+        "sensitivity": "PRIVATE",
+        "validator": "^npub1[02-9ac-hj-np-z]{58}$",
+        "spec": "01"
+      },
+      {
+        "key": "nostr_priv_hex",
+        "files": "services/secure_key_store.dart",
+        "meaning": "private key, 64 lowercase hex",
+        "sensitivity": "SECRET",
+        "validator": "^[0-9a-f]{64}$",
+        "spec": "01"
+      },
+      {
+        "key": "nip46_client_sk",
+        "files": "services/secure_key_store.dart",
+        "meaning": "NIP-46 app session key (not the user key), 64 hex",
+        "sensitivity": "SECRET",
+        "validator": "^[0-9a-f]{64}$",
+        "spec": "01"
+      },
+      {
+        "key": "easyauth_password_ncryptsec",
+        "files": "services/local_key_vault.dart",
+        "meaning": "NIP-49 password wrap of the nsec (logN 16)",
+        "sensitivity": "SECRET",
+        "validator": "^ncryptsec1[02-9ac-hj-np-z]+$",
+        "spec": "01"
+      },
+      {
+        "key": "easyauth_password_wrap_npub",
+        "files": "services/local_key_vault.dart",
+        "meaning": "npub the password wrap belongs to",
+        "sensitivity": "PRIVATE",
+        "validator": "^npub1[02-9ac-hj-np-z]{58}$",
+        "spec": "01"
+      },
+      {
+        "key": "easyauth_passkey_ncryptsec",
+        "files": "services/local_key_vault.dart",
+        "meaning": "NIP-49 passkey-PRF wrap (logN 8)",
+        "sensitivity": "SECRET",
+        "validator": "^ncryptsec1[02-9ac-hj-np-z]+$",
+        "spec": "01"
+      },
+      {
+        "key": "easyauth_passkey_credential_id",
+        "files": "services/local_key_vault.dart",
+        "meaning": "WebAuthn credential id (base64url)",
+        "sensitivity": "PRIVATE",
+        "validator": "^[A-Za-z0-9_-]+={0,2}$",
+        "spec": "01"
+      },
+      {
+        "key": "portal_api_token",
+        "files": "services/portal_api_service.dart",
+        "meaning": "portal bearer token (Sanctum style \"<id>|<token>\")",
+        "sensitivity": "SECRET",
+        "validator": "non-empty, no control chars",
+        "spec": "09"
+      },
+      {
+        "key": "portal_api_token_npub",
+        "files": "services/portal_api_service.dart",
+        "meaning": "npub the token is bound to",
+        "sensitivity": "PRIVATE",
+        "validator": "^npub1[02-9ac-hj-np-z]{58}$",
+        "spec": "09"
+      },
+      {
+        "key": "rqr_session_seed_secure",
+        "files": "services/rolling_qr_service.dart",
+        "meaning": "rolling-QR HMAC seed (64 hex)",
+        "sensitivity": "SECRET",
+        "validator": "^[0-9a-f]{64}$",
+        "spec": "02"
+      },
+      {
+        "key": "rqr_session_base_payload_secure",
+        "files": "services/rolling_qr_service.dart",
+        "meaning": "signed session base payload",
+        "sensitivity": "SECRET",
+        "validator": "non-empty",
+        "spec": "02"
+      },
+      {
+        "key": "badge_encryption_key",
+        "files": "models/badge.dart",
+        "meaning": "AES-256 badge key, 64 hex (case-insensitive, trimmed)",
+        "sensitivity": "SECRET",
+        "validator": "^\\s*[0-9a-fA-F]{64}\\s*$ (anything else: keep, flag suspect)",
+        "spec": "02"
+      },
+      {
+        "key": "badge_encryption_key_suspect",
+        "files": "models/badge.dart",
+        "meaning": "non-hex value moved aside from badge_encryption_key",
+        "sensitivity": "SECRET",
+        "validator": "any",
+        "spec": "02"
+      },
+      {
+        "key": "badge_pending_key",
+        "files": "models/badge.dart",
+        "meaning": "AES-256 key for badges_pending_encrypted, 64 hex",
+        "sensitivity": "SECRET",
+        "validator": "^[0-9a-fA-F]{64}$",
+        "spec": "02"
+      },
+      {
+        "key": "badge_pending_key_suspect",
+        "files": "models/badge.dart",
+        "meaning": "non-hex value moved aside from badge_pending_key",
+        "sensitivity": "SECRET",
+        "validator": "any",
+        "spec": "02"
+      },
+      {
+        "key": "badges_encrypted",
+        "files": "models/badge.dart",
+        "meaning": "second copy of the primary badge blob (iv:ct)",
+        "sensitivity": "PRIVATE",
+        "validator": "^[A-Za-z0-9+/=]+:[A-Za-z0-9+/=]+$",
+        "spec": "02/03"
+      },
+      {
+        "key": "badges_former",
+        "files": "models/badge.dart",
+        "meaning": "second copy of the archive JSON",
+        "sensitivity": "PRIVATE",
+        "validator": "JSON array",
+        "spec": "03/08"
+      },
+      {
+        "key": "badge_reset_pending",
+        "files": "models/badge.dart",
+        "meaning": "reset marker '1' (secure copies must not come back)",
+        "sensitivity": "STATE",
+        "validator": "^1$",
+        "spec": "03"
+      }
+    ],
+    "migration_routing": [
+      {
+        "from": "prefs nostr_nsec_key/nostr_npub_key/nostr_priv_hex",
+        "when": "secure_migration_done != true and value non-empty",
+        "to": "SecureStore same key (overwrite)",
+        "then": "remove from Flutter prefs after read-back; set KeyValueStore secure_migration_done=true"
+      },
+      {
+        "from": "prefs rqr_session_seed",
+        "when": "non-empty",
+        "to": "SecureStore rqr_session_seed_secure (overwrite)",
+        "then": "remove from Flutter prefs after read-back"
+      },
+      {
+        "from": "prefs rqr_session_base_payload",
+        "when": "non-empty",
+        "to": "SecureStore rqr_session_base_payload_secure (overwrite)",
+        "then": "remove from Flutter prefs after read-back"
+      },
+      {
+        "from": "prefs local_profile_picture",
+        "when": "file exists and is readable",
+        "to": "copy file to filesDir/profile/local_picture.<ext>; KeyValueStore local_profile_picture = new absolute path",
+        "then": "else omit the key"
+      },
+      {
+        "from": "prefs <obsolete keys>",
+        "when": "always",
+        "to": "nothing",
+        "then": "keep in Flutter file until cleanup"
+      },
+      {
+        "from": "prefs everything else with flutter. prefix",
+        "when": "always",
+        "to": "KeyValueStore same key without 'flutter.' and same type",
+        "then": "-"
+      },
+      {
+        "from": "FSS <prefix>_<key> (custom cipher: GCM, or E1-fallback CBC)",
+        "when": "decrypts",
+        "to": "SecureStore <key>",
+        "then": "-"
+      },
+      {
+        "from": "FSS <prefix>_<key>_BACKUP (old cipher)",
+        "when": "main entry missing or undecryptable",
+        "to": "SecureStore <key>",
+        "then": "otherwise import as recovery candidate legacy_backup/<key>"
+      },
+      {
+        "from": "ESP <prefix>_<key>",
+        "when": "no custom-cipher (GCM/CBC main or _BACKUP) value for <key>; identity keys (nostr_*, easyauth_*, nip46_client_sk, portal_api_token*) only if the ESP group's npub (ESP nostr_npub_key, else derived from ESP nostr_nsec_key, else ESP easyauth_password_wrap_npub / portal_api_token_npub) equals Flutter prefs nostr, amber_npub or nip46_npub",
+        "to": "SecureStore <key>",
+        "then": "otherwise SecureStore legacy_esp/<key> (recovery candidate, user decides); a differing custom-cipher value always wins"
+      }
+    ]
+  }
+}

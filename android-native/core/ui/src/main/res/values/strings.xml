@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Native-only strings of :core:ui (German default). Shared strings live in :core:l10n. -->
+<resources>
+    <!-- Placeholder for Markdown images that cannot be shown (HEIC/HEIF, oversized data URI). Two spaces as in the Flutter app. -->
+    <string name="native_markdown_image_placeholder">"🖼  Bild"</string>
+    <string name="native_npub_copy">npub kopieren</string>
+    <string name="native_npub_open_profile">Nostr-Profil öffnen</string>
+    <string name="native_avatar_description">Profilbild</string>
+    <string name="native_snackbar_dismiss">Schließen</string>
+    <string name="native_guide_tip">Hinweis</string>
+</resources>

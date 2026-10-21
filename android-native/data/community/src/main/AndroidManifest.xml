@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- PlebRap: background playback as a media foreground service (API 34+ needs the typed permission). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Media notification (API 33+). Media-session notifications are exempt, but the app declares it anyway. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- ExoPlayer WAKE_MODE_NETWORK keeps CPU + Wi-Fi awake while streaming with the screen off. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <queries>
+        <!-- V4V: Lightning wallets that can pay a bolt11 invoice (resolveActivity check). -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="lightning" />
+        </intent>
+    </queries>
+
+    <application>
+        <!--
+            PlebRap playback. Exported so system media controls (notification, lock screen,
+            Bluetooth, Android Auto/Wear) can bind with a MediaController. The session's onConnect
+            rejects every controller except this app, the notification and trusted system
+            controllers (PlebrapPlaybackService.ConnectionGate).
+        -->
+        <service
+            android:name="space.einundzwanzig.meetup.data.community.plebrap.PlebrapPlaybackService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback"
+            tools:ignore="ExportedService">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>

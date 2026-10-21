@@ -1,0 +1,73 @@
+// Generator for the *.tsv vectors in this directory. Run: dart run generate_double_vectors.dart <outDir>
+import 'dart:io';
+import 'dart:math';
+import 'dart:typed_data';
+
+String hex(double d) {
+  final bd = ByteData(8)..setFloat64(0, d);
+  return bd.getUint32(0).toRadixString(16).padLeft(8, '0') + bd.getUint32(4).toRadixString(16).padLeft(8, '0');
+}
+
+double fromBits(int hi, int lo) {
+  final bd = ByteData(8)..setUint32(0, hi)..setUint32(4, lo);
+  return bd.getFloat64(0);
+}
+
+void main(List<String> args) {
+  final out = args[0];
+  final rnd = Random(42);
+  final tostr = StringBuffer('# bits(hex)\tdart double.toString() — generated with Dart 3.13.5 (Random(42))\n');
+  final values = <double>[];
+  for (var e = -1074; e <= 1023; e++) {
+    values.add(pow(2.0, e).toDouble());
+  }
+  for (var i = 0; i < 1500; i++) {
+    double d;
+    do { d = fromBits(rnd.nextInt(1 << 32), rnd.nextInt(1 << 32)); } while (d.isNaN || d.isInfinite);
+    values.add(d);
+  }
+  for (var i = 0; i < 700; i++) {
+    final digits = rnd.nextInt(1 << 30);
+    final scale = rnd.nextInt(30) - 15;
+    values.add(double.parse('${digits}e$scale') * (rnd.nextBool() ? 1 : -1));
+  }
+  for (final d in values) {
+    tostr.writeln('${hex(d)}\t${d.toString()}');
+  }
+  File('$out/double_tostring.tsv').writeAsStringSync(tostr.toString());
+
+  final fixed = StringBuffer('# bits(hex)\tfractionDigits\tdart toStringAsFixed — generated with Dart 3.13.5 (Random(7))\n');
+  final r2 = Random(7);
+  for (var i = 0; i < 1500; i++) {
+    double d;
+    final kind = r2.nextInt(4);
+    if (kind == 0) {
+      d = (r2.nextInt(200000) - 100000) / 1000.0 + 0.0005 * (r2.nextBool() ? 1 : -1);
+    } else if (kind == 1) {
+      d = (r2.nextInt(2000) - 1000) / 8.0; // exact binary ties
+    } else if (kind == 2) {
+      d = r2.nextDouble() * pow(10, r2.nextInt(25) - 5);
+    } else {
+      d = (r2.nextInt(1000000) - 500000) / 100.0 + 0.005;
+    }
+    final n = r2.nextInt(21);
+    fixed.writeln('${hex(d)}\t$n\t${d.toStringAsFixed(n)}');
+  }
+  File('$out/double_tostringasfixed.tsv').writeAsStringSync(fixed.toString());
+
+  final round = StringBuffer('# bits(hex)\tdart round()\n');
+  final r3 = Random(9);
+  for (var i = 0; i < 600; i++) {
+    double d;
+    final kind = r3.nextInt(3);
+    if (kind == 0) {
+      d = (r3.nextInt(20000) - 10000) + 0.5;
+    } else if (kind == 1) {
+      d = (r3.nextDouble() - 0.5) * pow(10, r3.nextInt(19));
+    } else {
+      d = (r3.nextInt(2000) - 1000) / 4.0;
+    }
+    round.writeln('${hex(d)}\t${d.round()}');
+  }
+  File('$out/double_round.tsv').writeAsStringSync(round.toString());
+}

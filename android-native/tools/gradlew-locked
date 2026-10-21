@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Serializes Gradle invocations across concurrent agents (one warm daemon, bounded memory).
+# Usage: tools/gradlew-locked <gradle args...>   (run from android-native/ or anywhere)
+set -euo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export JAVA_HOME="${JAVA_HOME:-$HOME/development/jdk17}"
+export ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}"
+LOCK="${TMPDIR:-/tmp}/einundzwanzig-native-gradle.lock"
+cd "$DIR"
+exec flock "$LOCK" ./gradlew --console=plain "$@"
