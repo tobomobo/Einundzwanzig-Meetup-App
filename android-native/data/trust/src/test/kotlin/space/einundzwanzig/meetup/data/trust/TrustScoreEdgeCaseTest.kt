@@ -51,18 +51,21 @@ class TrustScoreEdgeCaseTest {
         // firstBadgeDate = 2600 → maturity hugely negative → Infinity × negative.
         assertEquals(Double.NEGATIVE_INFINITY, score.totalScore, 0.0)
         assertEquals("NEU", score.level)
-        assertEquals(Int.MIN_VALUE, score.progress.getValue("score").current)
+        assertEquals(0, score.progress.getValue("score").current)
+        assertFalse(score.progress.getValue("score").met)
         assertFalse(score.meetsPromotionThreshold)
     }
 
     @Test
-    fun farFutureBadge_withPastAccountStart_isVeteran() = withDefaultZone(ZoneOffset.UTC) {
+    fun farFutureBadge_withPastAccountStart_isVeteranButNeverPromotes() = withDefaultZone(ZoneOffset.UTC) {
         val calc = TrustScoreCalculator.create(time, UTC_ZONE)
         val score = calc.calculate(listOf(badge("f", date = DartDateTime.utc(2600))), daysAgo(365), null)
         assertEquals(Double.POSITIVE_INFINITY, score.totalScore, 0.0)
         assertEquals("VETERAN", score.level)
-        assertEquals(Int.MAX_VALUE, score.progress.getValue("score").current)
-        assertTrue(score.progress.getValue("score").met)
+        // Dart's round() throws on Infinity, so Flutter never promotes: fail closed.
+        assertEquals(0, score.progress.getValue("score").current)
+        assertFalse(score.progress.getValue("score").met)
+        assertFalse(score.meetsPromotionThreshold)
     }
 
     @Test
@@ -80,8 +83,8 @@ class TrustScoreEdgeCaseTest {
     @Test
     fun roundForProgress() {
         assertEquals(0, DefaultTrustScoreCalculator.roundForProgress(Double.NaN))
-        assertEquals(Int.MAX_VALUE, DefaultTrustScoreCalculator.roundForProgress(Double.POSITIVE_INFINITY))
-        assertEquals(Int.MIN_VALUE, DefaultTrustScoreCalculator.roundForProgress(Double.NEGATIVE_INFINITY))
+        assertEquals(0, DefaultTrustScoreCalculator.roundForProgress(Double.POSITIVE_INFINITY))
+        assertEquals(0, DefaultTrustScoreCalculator.roundForProgress(Double.NEGATIVE_INFINITY))
         assertEquals(Int.MAX_VALUE, DefaultTrustScoreCalculator.roundForProgress(3e9))
         assertEquals(Int.MIN_VALUE, DefaultTrustScoreCalculator.roundForProgress(-3e9))
         assertEquals(3, DefaultTrustScoreCalculator.roundForProgress(2.5))
@@ -111,6 +114,40 @@ class TrustScoreEdgeCaseTest {
         // UTC anchor 2024-01-01T00:00Z: b1 falls in week 0 → nothing capped.
         assertEquals(emptySet<String>(), zeroedIds(ZoneOffset.UTC))
         assertEquals(TrustConfig.MAX_BADGES_PER_WEEK, 2)
+    }
+
+    /**
+     * Summer (CEST) Sunday/Monday boundary: the anchor `DateTime(2024)` is CET (+1), so in summer
+     * the Berlin bucket starts at local Monday 01:00, i.e. Sunday 23:00Z, one hour before UTC's.
+     */
+    private fun zeroedIdsSummer(zone: ZoneId): Set<String> = withDefaultZone(zone) {
+        val t = FakeTime(DartDateTime.parse("2026-10-21T12:00:00.000Z").microsecondsSinceEpoch)
+        val calc = TrustScoreCalculator.create(t, ZoneIdProvider { zone })
+        val badges = listOf(
+            badge("thu", meetupName = "Berlin", date = DartDateTime.parse("2026-10-15T12:00:00.000Z")),
+            badge("fri", meetupName = "Potsdam", date = DartDateTime.parse("2026-10-16T12:00:00.000Z")),
+            // Monday 01:30 CEST = Sunday 23:30Z: new week in Berlin, previous week in UTC.
+            badge("mon", meetupName = "Leipzig", date = DartDateTime.parse("2026-10-18T23:30:00.000Z")),
+            // Monday 00:30 CEST = Sunday 22:30Z: previous week in both zones.
+            badge("sun", meetupName = "Dresden", date = DartDateTime.parse("2026-10-18T22:30:00.000Z")),
+        )
+        val score = calc.calculate(badges, DartDateTime.parse("2025-01-01T00:00:00.000Z"), null)
+        assertEquals(4, score.badgeValues.size)
+        score.badgeValues.filter { it.totalValue == 0.0 }.mapTo(HashSet()) { it.badgeId }
+    }
+
+    @Test
+    fun weekCap_summerBoundary_berlinVsUtc() {
+        // UTC: thu, fri, sun, mon share one week → newest two kept, thu and fri capped.
+        assertEquals(setOf("thu", "fri"), zeroedIdsSummer(ZoneOffset.UTC))
+        // Berlin: mon starts the next week; thu, fri, sun share one → thu capped only.
+        assertEquals(setOf("thu"), zeroedIdsSummer(berlin))
+        val anchorB = DefaultTrustScoreCalculator.weekAnchor(berlin)
+        val anchorU = DefaultTrustScoreCalculator.weekAnchor(ZoneOffset.UTC)
+        val mon = DartDateTime.parse("2026-10-18T23:30:00.000Z")
+        val sun = DartDateTime.parse("2026-10-18T22:30:00.000Z")
+        assertEquals(DefaultTrustScoreCalculator.weekNumber(mon, anchorU) + 1, DefaultTrustScoreCalculator.weekNumber(mon, anchorB))
+        assertEquals(DefaultTrustScoreCalculator.weekNumber(sun, anchorU), DefaultTrustScoreCalculator.weekNumber(sun, anchorB))
     }
 
     @Test
@@ -154,6 +191,27 @@ class TrustScoreEdgeCaseTest {
         val miss = calc.calculate(listOf(b), b.date, mapOf("Bad Ischl-2026-10-13" to CoAttestorData("x", 3, 2, emptyList())))
         assertEquals(1.0, miss.badgeValues.single().coAttestorBonus, 1e-12)
         assertEquals(1.2, miss.qualityScore, 1e-12)
+    }
+
+    @Test
+    fun coAttestors_maxIntAttendees_noOverflow() = withDefaultZone(ZoneOffset.UTC) {
+        val calc = TrustScoreCalculator.create(time, UTC_ZONE)
+        val b = badge("c", meetupName = "Bad Ischl", date = DartDateTime.parse("2026-10-13T12:00:00.000Z"))
+        val co = mapOf("bad-ischl-2026-10-13" to CoAttestorData("x", Int.MAX_VALUE, 0, emptyList()))
+        val score = calc.calculate(listOf(b), b.date, co)
+        // Dart: log(2^31) / ln2 in int64 arithmetic; an Int sum would wrap to NaN.
+        assertEquals(31.0, score.badgeValues.single().coAttestorBonus, 1e-9)
+        assertTrue(score.totalScore.isFinite())
+    }
+
+    @Test
+    fun progressInOrder_followsProgressKeysForAnyMapOrder() = withDefaultZone(ZoneOffset.UTC) {
+        val calc = TrustScoreCalculator.create(time, UTC_ZONE)
+        val score = calc.calculate(listOf(badge("a", date = daysAgo(7))))
+        assertEquals(TrustScoreCalculator.PROGRESS_KEYS, score.progressInOrder.map { it.first })
+        val shuffled = score.copy(progress = HashMap(score.progress.entries.reversed().associate { it.key to it.value } + ("x" to score.progress.getValue("age"))))
+        assertEquals(TrustScoreCalculator.PROGRESS_KEYS, shuffled.progressInOrder.map { it.first })
+        assertEquals(score.progressInOrder, shuffled.progressInOrder)
     }
 
     @Test

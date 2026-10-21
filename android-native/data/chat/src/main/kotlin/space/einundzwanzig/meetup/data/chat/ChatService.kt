@@ -37,7 +37,9 @@ interface ChatService {
 
     /**
      * Room bound to the portal meetup [portalId] (`{"kinds":[39000],"#i":["meetup:<id>"],"limit":5}`,
-     * newest wins, ties → later). `null` if none or [portalId] is empty.
+     * newest wins, ties → later). `null` if none or [portalId] is empty. A found room is cached
+     * for 5 min per id (dropped by `loadMeetupRooms(force = true)`); `null` and failures are never
+     * cached. Concurrent lookups of the same id run one after another.
      * @throws ChatRelayUnavailable no answer from the relay (do NOT fall back to the city then).
      */
     suspend fun findRoomForMeetupId(portalId: String): ChatRoom?

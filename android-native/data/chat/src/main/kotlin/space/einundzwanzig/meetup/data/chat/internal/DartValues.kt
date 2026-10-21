@@ -30,6 +30,27 @@ internal fun JsonElement?.dartToStringOrNull(): String? = when (this) {
     else -> toString()
 }
 
+/**
+ * Dart `String.toLowerCase()` (binding resolution #12): strictly one code point to one code point
+ * via the simple case mapping, so no final-sigma rule (`ΟΔΟΣ` → `οδοσ`) and `İ` (U+0130) → `i`
+ * without the U+0307 Kotlin's `lowercase()` appends. Lone surrogates stay unchanged.
+ *
+ * Module-local copy (like `:data:community` and `:data:calendar`) so `:data:chat` keeps to its
+ * module map (identity, profile); the canonical table-based `DartString` lives in `:data:badges`.
+ * Only used for slugs and slug comparison, where the JDK/Dart Unicode-version differences of the
+ * simple mapping cannot reach `[a-z0-9]`. Switch to `:core:common` once it ships the helper.
+ */
+internal fun String.dartLower(): String {
+    val sb = StringBuilder(length)
+    var i = 0
+    while (i < length) {
+        val cp = codePointAt(i)
+        sb.appendCodePoint(Character.toLowerCase(cp))
+        i += Character.charCount(cp)
+    }
+    return sb.toString()
+}
+
 /** Dart `x is int ? x : null`. */
 internal fun JsonElement?.dartIntOrNullOf(): Long? = dartIntOrNull()
 

@@ -82,13 +82,17 @@ fun json(body: String, code: Int = 200): MockResponse =
 class FakeSigner(var keyPair: KeyPair? = KeyPair.generate(), var npubOverride: String? = null) {
     var signCount = 0
     var failSigning: Exception? = null
+    var failNpub: Exception? = null
 
     val service: SigningService = Proxy.newProxyInstance(
         SigningService::class.java.classLoader,
         arrayOf(SigningService::class.java),
     ) { _, method, args ->
         when (method.name) {
-            "npub" -> npubOverride ?: keyPair?.npub
+            "npub" -> {
+                failNpub?.let { throw it }
+                npubOverride ?: keyPair?.npub
+            }
             "pubkeyHex" -> keyPair?.publicKeyHex
             "signEvent" -> {
                 failSigning?.let { throw it }

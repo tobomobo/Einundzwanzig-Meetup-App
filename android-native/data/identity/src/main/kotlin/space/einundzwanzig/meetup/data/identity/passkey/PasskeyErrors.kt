@@ -73,12 +73,13 @@ internal object PasskeyErrors {
     }
 
     private fun dom(error: DomError, text: String?, named: Boolean): String = when {
-        // Missing / wrong assetlinks.json for the RP id.
+        // Missing / wrong assetlinks.json for the RP id; checked before NotAllowedError, which
+        // Credential Manager also uses for "RP ID cannot be validated" (must not read as a silent cancel).
         error is SecurityError -> PasskeyPrfException.DOMAIN_NOT_ASSOCIATED
+        isDomainHint(text) -> PasskeyPrfException.DOMAIN_NOT_ASSOCIATED
         error is NotSupportedError -> PasskeyPrfException.UNSUPPORTED
         error is NotAllowedError -> PasskeyPrfException.CANCELLED
         named -> PasskeyPrfException.FAILED
-        isDomainHint(text) -> PasskeyPrfException.DOMAIN_NOT_ASSOCIATED
         else -> PasskeyPrfException.UNHANDLED
     }
 

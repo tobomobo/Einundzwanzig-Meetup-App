@@ -32,12 +32,25 @@ internal interface LegacyKeystore {
     /**
      * The EncryptedSharedPreferences master key (`_androidx_security_master_key_`) as a
      * decrypt-only Tink [Aead] in the `AndroidKeystoreAesGcm` format (`iv12 ‖ ct ‖ tag`).
-     * `null` if the alias does not exist.
+     * [EspMasterKey.Missing] if the alias does not exist (permanent: nothing it wrapped can ever
+     * be read again), [EspMasterKey.Unavailable] if the Keystore failed (may be transient).
      */
-    fun espMasterAead(): Aead?
+    fun espMasterKey(): EspMasterKey
 
     /** Deletes the three Flutter aliases (cleanup / app reset). `false` if a delete failed. */
     fun deleteLegacyAliases(): Boolean
+}
+
+/** Result of [LegacyKeystore.espMasterKey]. */
+internal sealed interface EspMasterKey {
+    /** The master key exists; [aead] decrypts with it. */
+    class Available(val aead: Aead) : EspMasterKey
+
+    /** The alias does not exist (OS upgrade, Keystore loss): permanent. */
+    data object Missing : EspMasterKey
+
+    /** The Keystore failed while loading the alias: possibly transient. */
+    data object Unavailable : EspMasterKey
 }
 
 /** Production [LegacyKeystore] on `AndroidKeyStore`. */
@@ -73,11 +86,16 @@ internal class AndroidLegacyKeystore(private val packageName: String) : LegacyKe
         null
     }
 
-    override fun espMasterAead(): Aead? = try {
+    override fun espMasterKey(): EspMasterKey = try {
         val ks = keyStore()
-        if (!ks.containsAlias(Fss.ESP_MASTER_ALIAS)) null else (ks.getKey(Fss.ESP_MASTER_ALIAS, null) as? SecretKey)?.let(::DecryptOnlyGcmAead)
+        if (!ks.containsAlias(Fss.ESP_MASTER_ALIAS)) {
+            EspMasterKey.Missing
+        } else {
+            (ks.getKey(Fss.ESP_MASTER_ALIAS, null) as? SecretKey)?.let { EspMasterKey.Available(DecryptOnlyGcmAead(it)) }
+                ?: EspMasterKey.Unavailable
+        }
     } catch (e: Exception) {
-        null
+        EspMasterKey.Unavailable
     }
 
     override fun deleteLegacyAliases(): Boolean = try {

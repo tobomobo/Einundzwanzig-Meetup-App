@@ -22,7 +22,8 @@ import java.time.temporal.ChronoUnit
  * slug-derived portal link of group 107 and the public events endpoint (queried for three dates)
  * yields exactly one event with its own link. The `MeetupDate` conversion and
  * `MeetupEventMatcher.resolve(e, groups).id == "107"` are asserted in `:data:calendar`, which owns
- * both. The live variant (`LIVE_PORTAL_TEST`) belongs there as well.
+ * both. The data-layer half of the live variant (`LIVE_PORTAL_TEST`) is [LivePortalTest]; its
+ * matcher half belongs to `:data:calendar`.
  */
 class MeetupPortalIdentityTest {
 

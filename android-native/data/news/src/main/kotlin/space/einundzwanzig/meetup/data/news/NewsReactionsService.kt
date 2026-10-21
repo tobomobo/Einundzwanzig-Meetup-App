@@ -1,6 +1,7 @@
 package space.einundzwanzig.meetup.data.news
 
 import space.einundzwanzig.meetup.core.common.dart.dartTrim
+import space.einundzwanzig.meetup.core.crypto.Hex
 import space.einundzwanzig.meetup.data.profile.LightningAddressLookup
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -59,8 +60,13 @@ interface NewsReactionsService {
      * cancelled (screen closed) after signing, the publish still finishes and an accepted like is
      * still written to `news_liked_reactions` (Dart Futures are not cancelled either).
      *
-     * [authorPubkey] goes into the `p` tag when it is non-empty; pass
-     * [NewsArticles.zapAuthorPubkey] so malformed ids produce no bogus `p` tag.
+     * [authorPubkey] goes into the `p` tag only when it is 64 hex characters (see [likeTags]), so
+     * passing either [NewsArticles.authorPubkey] or [NewsArticles.zapAuthorPubkey] is safe: a
+     * link-only article gets no bogus `p` tag (spec 11 §14 risk 12).
+     *
+     * Overlapping calls for the same identity and address (double tap, screen recreated while a
+     * publish still runs) share one in-flight like: only one event is signed and published, all
+     * callers get its result (spec 11 §14 risk 6).
      */
     suspend fun like(articleAddress: String, authorPubkey: String): Boolean
 
@@ -101,10 +107,14 @@ interface NewsReactionsService {
         /** Local-list entry `"<pubkey>|<address>"`. */
         fun likedEntry(pubkey: String, articleAddress: String): String = "$pubkey|$articleAddress"
 
-        /** Tags of a like: `[["a", address], ["p", author] (if non-empty), ["k", "30023"]]`. */
+        /**
+         * Tags of a like: `[["a", address], ["p", author], ["k", "30023"]]`. The `p` tag is left
+         * out unless [authorPubkey] is 64 hex characters (spec 11 §14 risk 12); for valid
+         * articles the tags are identical to Dart.
+         */
         fun likeTags(articleAddress: String, authorPubkey: String): List<List<String>> = buildList {
             add(listOf("a", articleAddress))
-            if (authorPubkey.isNotEmpty()) add(listOf("p", authorPubkey))
+            if (Hex.isHexOfLength(authorPubkey, 64)) add(listOf("p", authorPubkey))
             add(listOf("k", "30023"))
         }
 

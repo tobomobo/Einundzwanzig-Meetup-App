@@ -26,8 +26,14 @@ internal class LocationPermissionBridgeImpl @Inject constructor() : LocationPerm
     private var waiting: Pair<Long, CompletableDeferred<LocationPermission>>? = null
 
     /**
-     * `true` after the user denied with "don't ask again"; reset by a grant. Android cannot tell
-     * this without an Activity, so it is remembered from the last prompt (process lifetime).
+     * `true` after the user denied with "don't ask again"; reset by a grant or by any later prompt
+     * answer. Android cannot tell this without an Activity, so it is remembered from the last
+     * prompt (process lifetime). It is never trusted on its own: `getCurrentLocation` still posts
+     * one request while it is set (the system answers instantly if the permission really is denied
+     * forever, and shows the dialog if the user reset it to "Ask every time" in the settings), so a
+     * stale flag cannot lock the user out. It only decides the answer when no Activity can prompt
+     * (no collector, unanswered request): then [LocationPermission.DENIED_FOREVER] instead of
+     * [LocationPermission.DENIED].
      */
     @Volatile
     var deniedForever: Boolean = false
@@ -45,10 +51,12 @@ internal class LocationPermissionBridgeImpl @Inject constructor() : LocationPerm
 
     /**
      * Asks the Activity for the permission and suspends until it answers, at most
-     * [answerTimeout] (then [LocationPermission.DENIED]).
+     * [answerTimeout]. Without an answer (no collector, timeout) the result is
+     * [LocationPermission.DENIED], or [LocationPermission.DENIED_FOREVER] while [deniedForever]
+     * is set.
      */
     suspend fun request(): LocationPermission = requestMutex.withLock {
-        if (state.subscriptionCount.value == 0) return LocationPermission.DENIED
+        if (state.subscriptionCount.value == 0) return unanswered()
         val id = ids.incrementAndGet()
         val deferred = CompletableDeferred<LocationPermission>()
         synchronized(lock) {
@@ -56,7 +64,7 @@ internal class LocationPermissionBridgeImpl @Inject constructor() : LocationPerm
             state.value = LocationPermissionBridge.Request(id)
         }
         try {
-            withTimeoutOrNull(answerTimeout) { deferred.await() } ?: LocationPermission.DENIED
+            withTimeoutOrNull(answerTimeout) { deferred.await() } ?: unanswered()
         } finally {
             synchronized(lock) {
                 if (waiting?.first == id) waiting = null
@@ -64,6 +72,9 @@ internal class LocationPermissionBridgeImpl @Inject constructor() : LocationPerm
             }
         }
     }
+
+    private fun unanswered(): LocationPermission =
+        if (deniedForever) LocationPermission.DENIED_FOREVER else LocationPermission.DENIED
 
     /** Clears [deniedForever] once the permission is granted (e.g. via the app settings). */
     fun noteGranted() {

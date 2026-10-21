@@ -47,8 +47,10 @@ data class CoAttestorData(
  * The locally computed Trust Score (Dart `TrustScore`, spec 04 §3.4). In memory only, never
  * serialized.
  *
- * @property progress criteria in the insertion order [TrustScoreCalculator.PROGRESS_KEYS]
- *   (`badges, meetups, signers, age, score`); [promotionReason] names the first unmet one.
+ * @property progress criteria keyed by [TrustScoreCalculator.PROGRESS_KEYS]. The calculator
+ *   inserts them in that order (`badges, meetups, signers, age, score`) and [promotionReason]
+ *   names the first unmet one. The `Map` type does not enforce the order (a hand-built score
+ *   in a test or preview may pass any map), so UIs should iterate [progressInOrder].
  */
 data class TrustScore(
     val totalScore: Double,
@@ -68,6 +70,14 @@ data class TrustScore(
     val activeThresholds: PhaseThresholds,
     val progress: Map<String, PromotionProgress>,
 ) {
+    /**
+     * The known criteria in the significant order [TrustScoreCalculator.PROGRESS_KEYS],
+     * independent of the iteration order of [progress]; missing and unknown keys are skipped.
+     * The first entry that is not [PromotionProgress.met] is the one [promotionReason] names.
+     */
+    val progressInOrder: List<Pair<String, PromotionProgress>>
+        get() = TrustScoreCalculator.PROGRESS_KEYS.mapNotNull { k -> progress[k]?.let { k to it } }
+
     /** Compact 0..10 display value: `totalScore / 5`, clamped. */
     val displayScore: Double get() = (totalScore / 5.0).coerceIn(0.0, 10.0)
 

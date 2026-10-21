@@ -16,6 +16,7 @@ internal class DefaultIdentityRepository @Inject constructor(
     private val keyStore: SecureKeyStore,
     private val vault: LocalKeyVault,
     private val recovery: IdentityRecovery,
+    private val profiles: DefaultUserProfileRepository,
 ) : IdentityRepository {
 
     override suspend fun wipeAll(): Boolean {
@@ -36,6 +37,7 @@ internal class DefaultIdentityRepository @Inject constructor(
         step("Tresor leeren") { vault.clearAll() }
         // Recovery copies from the Flutter migration (spec 14 §4.8) are full key copies too.
         step("Gesicherte Alt-Identitäten löschen") { recovery.discardAll() }
+        profiles.resetAdminCryptoVerification()
         return ok
     }
 }

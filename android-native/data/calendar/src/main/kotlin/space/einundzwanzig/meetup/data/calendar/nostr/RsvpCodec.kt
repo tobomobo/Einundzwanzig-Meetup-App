@@ -2,7 +2,7 @@ package space.einundzwanzig.meetup.data.calendar.nostr
 
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
-import space.einundzwanzig.meetup.data.calendar.internal.dartLongValue
+import space.einundzwanzig.meetup.core.common.json.dartIntOrNull
 import space.einundzwanzig.meetup.data.calendar.internal.dartLower
 import space.einundzwanzig.meetup.data.calendar.internal.dartToString
 import space.einundzwanzig.meetup.data.calendar.model.RsvpStatus
@@ -42,7 +42,7 @@ object RsvpCodec {
      * tag (each with ≥ 2 elements) win; empty address or unknown status → `null`.
      */
     fun parse(event: JsonObject): Entry? {
-        val ts = event["created_at"].dartLongValue() ?: return null
+        val ts = event["created_at"].dartIntOrNull() ?: return null
         val tags = event["tags"] as? JsonArray ?: return null
         var address = ""
         var status = ""

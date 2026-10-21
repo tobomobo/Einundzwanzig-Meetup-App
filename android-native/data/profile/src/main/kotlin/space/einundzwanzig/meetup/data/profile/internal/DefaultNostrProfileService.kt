@@ -6,7 +6,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
@@ -69,9 +71,19 @@ internal class DefaultNostrProfileService @Inject constructor(
 
     // ---------------------------------------------------------------- single name
 
+    /**
+     * One in-flight [fetchDisplayName] lookup. [awaiters] counts the callers currently waiting for
+     * it; [started] turns true once the lookup holds a [nameLimiter] permit. Both guarded by [namesLock].
+     */
+    private class PendingName {
+        lateinit var job: Deferred<String?>
+        var awaiters = 0
+        var started = false
+    }
+
     /** In-flight [fetchDisplayName] lookups by pubkey, guarded by [namesLock]. */
     private val namesLock = Any()
-    private val pendingNames = HashMap<String, Deferred<String?>>()
+    private val pendingNames = HashMap<String, PendingName>()
 
     /** Bounds concurrent single-name lookups (each fans out to every relay) across all chips. */
     private val nameLimiter = Semaphore(MAX_PARALLEL_NAME_LOOKUPS)
@@ -81,20 +93,45 @@ internal class DefaultNostrProfileService @Inject constructor(
         nameCache[pubkeyHex]?.let { return it.value }
         // Several chips with the same npub share one lookup. The body runs in the application
         // scope so a cancelled caller does not cancel the lookup of the others.
-        val deferred = synchronized(namesLock) {
+        val pending = synchronized(namesLock) {
             nameCache[pubkeyHex]?.let { return it.value }
-            pendingNames[pubkeyHex] ?: scope.async { lookupDisplayName(pubkeyHex) }.also { job ->
-                pendingNames[pubkeyHex] = job
-                job.invokeOnCompletion {
-                    synchronized(namesLock) { if (pendingNames[pubkeyHex] === job) pendingNames.remove(pubkeyHex) }
+            (pendingNames[pubkeyHex] ?: newPendingName(pubkeyHex)).also { it.awaiters++ }
+        }
+        try {
+            return pending.job.await()
+        } finally {
+            synchronized(namesLock) {
+                pending.awaiters--
+                // Nobody waits any more (e.g. the chip scrolled away) and the lookup is still
+                // queued for a permit: drop it so chips on screen are not stuck behind it.
+                // A cancelled lookup writes no nameCache entry; the next caller starts afresh.
+                if (pending.awaiters == 0 && !pending.started) {
+                    if (pendingNames[pubkeyHex] === pending) pendingNames.remove(pubkeyHex)
+                    pending.job.cancel()
                 }
             }
         }
-        return deferred.await()
     }
 
-    /** Dart `fetchDisplayName` body; writes [nameCache] before the pending entry is removed. */
-    private suspend fun lookupDisplayName(pubkeyHex: String): String? = nameLimiter.withPermit {
+    /** Creates and registers the lookup for [pubkeyHex]; caller holds [namesLock]. */
+    private fun newPendingName(pubkeyHex: String): PendingName {
+        val pending = PendingName()
+        pendingNames[pubkeyHex] = pending
+        pending.job = scope.async {
+            lookupDisplayName(pubkeyHex) { synchronized(namesLock) { pending.started = true } }
+        }
+        pending.job.invokeOnCompletion {
+            synchronized(namesLock) { if (pendingNames[pubkeyHex] === pending) pendingNames.remove(pubkeyHex) }
+        }
+        return pending
+    }
+
+    /**
+     * Dart `fetchDisplayName` body; writes [nameCache] before the pending entry is removed.
+     * [onStart] runs once the [nameLimiter] permit is held.
+     */
+    private suspend fun lookupDisplayName(pubkeyHex: String, onStart: () -> Unit): String? = nameLimiter.withPermit {
+        onStart()
         nameCache[pubkeyHex]?.let { return@withPermit it.value }
         var found: String? = null
         try {
@@ -205,17 +242,7 @@ internal class DefaultNostrProfileService @Inject constructor(
         val result = LinkedHashMap<String, String>()
         if (wanted.isEmpty()) return result
 
-        val stored = LinkedHashMap<String, JsonObject>()
-        try {
-            store.getString(ProfileCacheKeys.DISPLAY_NAMES)?.let { raw ->
-                for ((k, v) in DartJson.decode(raw) as JsonObject) {
-                    if (v is JsonObject) stored[k] = v
-                }
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-        }
+        val stored = readStoredNames()
 
         val now = time.nowMillis()
         val missing = ArrayList<String>()
@@ -264,25 +291,60 @@ internal class DefaultNostrProfileService @Inject constructor(
             mergeNewest(batchAll(relays, part, listOf(REPUTATION_KIND), REPUTATION_D_TAG, ::usableNickname), fresh)
         }
 
+        // Only this call's changes; they are applied to a fresh read of the stored map below.
+        val updates = LinkedHashMap<String, JsonObject>()
+        val removals = HashSet<String>()
         for (hex in missing) {
             val name = fresh[hex]
             if (!name.isNullOrEmpty()) {
                 result[hex] = name
                 nameCache[hex] = Name(name)
-                stored[hex] = jsonObjectOf("n" to name, "t" to now)
+                updates[hex] = jsonObjectOf("n" to name, "t" to now)
             } else if (profiles[hex]?.isEmpty() == true) {
                 // The newest profile removed the name: the stored old one must go.
                 result.remove(hex)
                 nameCache[hex] = Name(null)
-                stored.remove(hex)
+                removals += hex
             } else {
                 // Nothing found: a stored name stays (a silent relay deletes nothing).
                 nameCache.putIfAbsent(hex, Name(null))
             }
         }
-        store.setString(ProfileCacheKeys.DISPLAY_NAMES, DartJson.encode(JsonObject(stored)))
+        // Read-merge-write under a lock so overlapping calls do not drop each other's names.
+        // A write failure is swallowed like Dart's `try { prefs.setString } catch (_) {}`.
+        try {
+            namesStoreLock.withLock {
+                val current = readStoredNames()
+                current.putAll(updates)
+                for (hex in removals) current.remove(hex)
+                store.setString(ProfileCacheKeys.DISPLAY_NAMES, DartJson.encode(JsonObject(current)))
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+        }
         log.diag(TAG, "Namen: ${missing.size} abgefragt, ${fresh.size} gefunden.")
         return result
+    }
+
+    /** Serializes the read-merge-write of [ProfileCacheKeys.DISPLAY_NAMES] in [fetchDisplayNames]. */
+    private val namesStoreLock = Mutex()
+
+    /** The stored `nostr_display_names_v1` map (non-object entries dropped); empty if absent or unreadable. */
+    private suspend fun readStoredNames(): LinkedHashMap<String, JsonObject> {
+        val stored = LinkedHashMap<String, JsonObject>()
+        try {
+            store.getString(ProfileCacheKeys.DISPLAY_NAMES)?.let { raw ->
+                for ((k, v) in DartJson.decode(raw) as JsonObject) {
+                    if (v is JsonObject) stored[k] = v
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            stored.clear()
+        }
+        return stored
     }
 
     /** `_batchNames` on every relay in parallel; answers in relay order. */
@@ -368,8 +430,12 @@ internal class DefaultNostrProfileService @Inject constructor(
     companion object {
         const val TAG: String = "NostrProfile"
 
-        /** At most this many single-name lookups query the relays at the same time. */
-        internal const val MAX_PARALLEL_NAME_LOOKUPS = 4
+        /**
+         * At most this many single-name lookups query the relays at the same time. High enough
+         * that a typical screen of chips resolves in one or two lookup rounds (Dart ran every
+         * chip at once); list screens should still prefetch via `fetchDisplayNames`.
+         */
+        internal const val MAX_PARALLEL_NAME_LOOKUPS = 10
 
         /** Dart `profile['x'] as String?`: absent/null → null, string → value, else throws. */
         private fun optString(o: JsonObject, key: String): String? {

@@ -85,6 +85,9 @@ internal class FakeSigner {
     var answerFromAllRelays = false
     var acknowledge = true
 
+    /** Relays that answer the subscription (REQ) with an immediate `CLOSED`. */
+    var closedOnReq = setOf<String>()
+
     val pubkey: String get() = keys.publicKeyHex
 
     val opener = Nip46RelayOpener { url ->
@@ -94,6 +97,10 @@ internal class FakeSigner {
 
     private fun handleFrame(link: FakeLink, frame: String) {
         val decoded = DartJson.decode(frame).jsonArray
+        if (decoded[0].jsonPrimitive.content == "REQ" && link.url in closedOnReq) {
+            link.pushRaw(DartJson.encode(listOf("CLOSED", decoded[1].jsonPrimitive.content, "auth-required: login")))
+            return
+        }
         if (decoded[0].jsonPrimitive.content != "EVENT") return
         val event = decoded[1].jsonObject
         val eventId = event["id"]!!.jsonPrimitive.content

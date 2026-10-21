@@ -91,8 +91,12 @@ fun interface HomeWidgetRenderer {
  */
 interface WidgetLaunchTargetStore {
 
-    /** Reads AND removes the pending target (commit). Only `bitcoin`, `meetup`, `news` are returned. */
-    fun consume(): WidgetTarget?
+    /**
+     * Reads AND removes the pending target (commit) on the IO dispatcher, so `MainActivity` can
+     * call it from `ON_RESUME` without disk I/O on the main thread. Only `bitcoin`, `meetup`,
+     * `news` are returned.
+     */
+    suspend fun consume(): WidgetTarget?
 
     /**
      * Router side: stores [target] with `commit()` unless it is empty or `home`.

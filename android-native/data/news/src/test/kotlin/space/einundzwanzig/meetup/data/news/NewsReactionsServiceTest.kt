@@ -1,6 +1,7 @@
 package space.einundzwanzig.meetup.data.news
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -13,9 +14,11 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import space.einundzwanzig.meetup.core.common.json.DartJson
+import space.einundzwanzig.meetup.core.nostr.NostrEvent
 import space.einundzwanzig.meetup.core.data.testing.InMemoryKeyValueStore
 import space.einundzwanzig.meetup.core.nostr.relay.RelayClient
 import space.einundzwanzig.meetup.data.identity.SigningCancelledException
+import space.einundzwanzig.meetup.data.identity.SigningService
 import space.einundzwanzig.meetup.data.news.NewsReactionsService.Companion.KEY_LIKED_REACTIONS
 import space.einundzwanzig.meetup.data.news.internal.DefaultNewsReactionsService
 
@@ -37,10 +40,10 @@ class NewsReactionsServiceTest {
     private val author = pubOf(SECRET5)
     private val addr = "30023:$author:artikel"
 
-    private fun TestScope.service() = DefaultNewsReactionsService(
+    private fun TestScope.service(signing: SigningService = signer.service) = DefaultNewsReactionsService(
         lookup,
         RelayClient(relays.connector, UnconfinedTestDispatcher(testScheduler)),
-        signer.service,
+        signing,
         store,
         testLog(),
         backgroundScope,
@@ -56,6 +59,74 @@ class NewsReactionsServiceTest {
             NewsReactionsService.likeTags(addr, author),
         )
         assertEquals(listOf(listOf("a", addr), listOf("k", "30023")), NewsReactionsService.likeTags(addr, ""))
+    }
+
+    @Test
+    fun `non-hex author gives no p tag`() = runTest {
+        // Link-only article: Dart `authorPubkey` returns "//host/..." (spec §14 risk 12).
+        val linkAddr = "https://einundzwanzig.space/artikel"
+        val linkAuthor = NewsArticles.authorPubkey(
+            NewsArticle(linkAddr, "", "t", "", "", "", 0, linkAddr),
+        )
+        assertEquals("//einundzwanzig.space/artikel", linkAuthor)
+        assertEquals(listOf(listOf("a", linkAddr), listOf("k", "30023")), NewsReactionsService.likeTags(linkAddr, linkAuthor))
+        assertEquals(listOf(listOf("a", addr), listOf("k", "30023")), NewsReactionsService.likeTags(addr, author.dropLast(1)))
+        assertEquals(listOf(listOf("a", addr), listOf("k", "30023")), NewsReactionsService.likeTags(addr, author + "0"))
+
+        relays.okReplies["wss://nos.lol"] = true to ""
+        assertTrue(service().like(linkAddr, linkAuthor))
+        assertEquals(listOf(listOf("a", linkAddr), listOf("k", "30023")), signer.signedEvents.single().tags)
+    }
+
+    @Test
+    fun `overlapping likes sign and publish once`() = runTest {
+        relays.okReplies["wss://nos.lol"] = true to ""
+        relays.reachable += "wss://relay.damus.io" // never answers, keeps the first publish open
+        val s = service()
+        val first = async { s.like(addr, author) }
+        val second = async { s.like(addr, author) }
+        testScheduler.advanceTimeBy(1_000)
+        testScheduler.runCurrent()
+        assertEquals(1, signer.signCount)
+        testScheduler.advanceTimeBy(NewsReactionsService.TIMEOUT.inWholeMilliseconds)
+        testScheduler.runCurrent()
+        assertTrue(first.await())
+        assertTrue(second.await())
+        assertEquals(1, signer.signCount)
+        assertEquals(1, relays.published.count { it.first == "wss://nos.lol" })
+        assertEquals(listOf("$me|$addr"), store.getStringList(KEY_LIKED_REACTIONS))
+        // Afterwards the local list answers; still nothing new is signed.
+        assertTrue(s.like(addr, author))
+        assertEquals(1, signer.signCount)
+    }
+
+    @Test
+    fun `a slow signer for one article does not block likes of another`() = runTest {
+        relays.okReplies["wss://nos.lol"] = true to ""
+        val addrB = "30023:$author:anderer-artikel"
+        // Article A's signing hangs (bunker waiting / Amber approval pending) until released.
+        val releaseA = CompletableDeferred<Unit>()
+        val slowForA = object : SigningService by signer.service {
+            override suspend fun signEvent(kind: Int, tags: List<List<String>>, content: String): NostrEvent {
+                if (tags.first() == listOf("a", addr)) releaseA.await()
+                return signer.service.signEvent(kind, tags, content)
+            }
+        }
+        val s = service(slowForA)
+        val likeA = async { s.like(addr, author) }
+        testScheduler.runCurrent()
+        assertFalse(likeA.isCompleted)
+
+        // B signs, publishes and is remembered while A is still suspended in the signer.
+        assertTrue(s.like(addrB, author))
+        assertEquals(1, signer.signCount)
+        assertEquals(listOf("$me|$addrB"), store.getStringList(KEY_LIKED_REACTIONS))
+        assertFalse(likeA.isCompleted)
+
+        releaseA.complete(Unit)
+        assertTrue(likeA.await())
+        assertEquals(2, signer.signCount)
+        assertEquals(listOf("$me|$addrB", "$me|$addr"), store.getStringList(KEY_LIKED_REACTIONS))
     }
 
     @Test

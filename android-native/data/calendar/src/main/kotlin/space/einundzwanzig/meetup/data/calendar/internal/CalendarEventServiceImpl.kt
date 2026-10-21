@@ -41,7 +41,7 @@ internal class CalendarEventServiceImpl @Inject constructor(
     private val zone: ZoneId get() = ZoneId.systemDefault()
 
     override suspend fun fetchEvents(limit: Int, worldwide: Boolean): List<NostrCalendarEvent> {
-        val relays = if (worldwide) relayConfig.getActiveRelays() else listOf(CalendarRelays.COMMUNITY)
+        val relays = if (worldwide) activeRelays() else listOf(CalendarRelays.COMMUNITY)
         val filter = NostrFilter(
             kinds = listOf(NostrCalendarEvent.KIND_TIME, NostrCalendarEvent.KIND_DATE),
             limit = limit,
@@ -91,7 +91,7 @@ internal class CalendarEventServiceImpl @Inject constructor(
             tags = mapOf("d" to listOf(parsed.dTag)),
             limit = 1,
         )
-        val relays = CalendarRelays.readByAddress(relayConfig.getActiveRelays())
+        val relays = CalendarRelays.readByAddress(activeRelays())
         val results = relayClient.queryAll(
             relays,
             filter,
@@ -204,11 +204,24 @@ internal class CalendarEventServiceImpl @Inject constructor(
      * counted without waiting for `OK` (parity, spec 10 §14 item 8).
      */
     private suspend fun publish(event: NostrEvent): Int {
-        val relays = CalendarRelays.publish(relayConfig.getActiveRelays())
+        val relays = CalendarRelays.publish(activeRelays())
         if (relays.isEmpty()) return 0
         val results = relayClient.publishAll(relays, event, RelayPublishOptions(awaitOk = false), RelayFanOut.SEQUENTIAL)
         results.filterNot { it.succeeded }.forEach { log.debug(TAG, "${it.relay} Publish fehlgeschlagen: ${it.status} ${it.error ?: ""}") }
         return results.count { it.succeeded }
+    }
+
+    /**
+     * The user's active relays; a store read error yields `[]` (the community relay is still
+     * used by [fetchByAddress] and [publish]), so relay problems never reach the caller.
+     */
+    private suspend fun activeRelays(): List<String> = try {
+        relayConfig.getActiveRelays()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log.debug(TAG, "Relay-Liste nicht lesbar: $e")
+        emptyList()
     }
 
     private companion object {

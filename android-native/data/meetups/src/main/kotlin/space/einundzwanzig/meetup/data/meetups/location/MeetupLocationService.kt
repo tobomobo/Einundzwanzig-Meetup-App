@@ -18,8 +18,10 @@ interface MeetupLocationService {
 
     /**
      * Three-stage acquisition (spec 09 §8.5): service off → [LocationStatus.SERVICE_DISABLED];
-     * permission denied → one request via [LocationPermissionBridge] (no request when denied
-     * forever); then a balanced fix (25 s), a high-accuracy `LocationManager` fix (20 s), and finally
+     * permission not granted → one request via [LocationPermissionBridge], also when it was denied
+     * forever (the flag is only remembered from the last prompt: Android answers instantly if it
+     * still holds, and shows the dialog if the user reset the permission in the settings; Dart
+     * skipped the request); then a balanced fix (25 s), a high-accuracy `LocationManager` fix (20 s), and finally
      * the last known fix if it is younger than 11 minutes (`age.inMinutes <= 10`), else
      * [LocationStatus.NO_FIX]. Unexpected failures give [LocationStatus.ERROR].
      */

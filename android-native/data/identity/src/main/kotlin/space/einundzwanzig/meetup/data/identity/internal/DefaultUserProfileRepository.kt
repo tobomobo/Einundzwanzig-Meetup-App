@@ -30,6 +30,20 @@ internal class DefaultUserProfileRepository @Inject constructor(
 
     private val updateMutex = Mutex()
 
+    /**
+     * The npub whose admin status was crypto-verified in this process (Dart
+     * `_adminCryptoVerified`, in memory only). Bound to the npub so that an identity switch never
+     * inherits the verification of the previous identity.
+     */
+    @Volatile
+    private var cryptoVerifiedNpub: String? = null
+
+    /** Forgets the in-memory admin crypto verification (identity reset). */
+    internal fun resetAdminCryptoVerification() {
+        cryptoVerifiedNpub = null
+        changes.notifyChanged()
+    }
+
     override suspend fun load(): UserProfile {
         val hasKey = keyStore.hasKey()
         var npub = prefs.getString(K_NOSTR) ?: ""
@@ -67,7 +81,10 @@ internal class DefaultUserProfileRepository @Inject constructor(
                 adminViaSeed = prefs.getBool(K_VIA_SEED) ?: false,
             )
         }
-        return profile.copy(isReviewDemo = prefs.getBool(K_REVIEW_DEMO) ?: false)
+        return profile.copy(
+            isReviewDemo = prefs.getBool(K_REVIEW_DEMO) ?: false,
+            adminCryptoVerified = npub.isNotEmpty() && cryptoVerifiedNpub == npub,
+        )
     }
 
     override suspend fun save(profile: UserProfile) {
@@ -89,6 +106,8 @@ internal class DefaultUserProfileRepository @Inject constructor(
             setString(K_PROMOTION_SOURCE, profile.promotionSource)
         }
         if (!ok) throw IdentityStorageException("Profil konnte nicht gespeichert werden.")
+        // Only ever set here: a profile loaded before the verification must not revoke it on save.
+        if (profile.adminCryptoVerified && profile.nostrNpub.isNotEmpty()) cryptoVerifiedNpub = profile.nostrNpub
         changes.notifyChanged()
     }
 

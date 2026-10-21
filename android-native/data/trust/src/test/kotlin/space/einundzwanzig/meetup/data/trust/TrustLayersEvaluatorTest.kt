@@ -156,6 +156,30 @@ class TrustLayersEvaluatorTest {
     }
 
     @Test
+    fun hugeRemoteCounts_doNotWrap() {
+        // Dart adds in int64: n / (n + 5) stays ~1 for counts at and beyond the Int limit.
+        val big = Int.MAX_VALUE.toLong()
+        val p = TrustLayersEvaluator.physicalScore(big, big, big, null)!!
+        assertTrue("physicalScore $p", p > 6.99 && p <= 7.0)
+        val pLong = TrustLayersEvaluator.physicalScore(Long.MAX_VALUE / 2, null, null, null)!!
+        assertTrue("physicalScore $pLong", pLong > 2.99 && pLong <= 3.0)
+        val e = TrustLayersEvaluator.evaluate(LayersInput(badgeCount = big, meetupCount = big, signerCount = big))
+        assertTrue(e.hasMeetupData)
+        assertEquals(MeetupMeaning.GOOD_DIVERSITY, e.meetupMeaning)
+
+        val zaps = ZapLayerInput(Int.MAX_VALUE, Int.MAX_VALUE, 0, 0, 0, false)
+        assertEquals(2L * Int.MAX_VALUE, zaps.totalCount)
+        assertEquals("Sehr aktiv", zaps.activityLabel)
+        assertEquals(1.5, zaps.lightningScore, 1e-6)
+        val ez = TrustLayersEvaluator.evaluate(LayersInput(zaps = zaps))
+        assertTrue(ez.hasLightningData)
+        assertEquals(LightningMeaning.ACTIVE_ONLY, ez.lightningMeaning)
+
+        val social = SocialLayerInput(false, false, false, Int.MAX_VALUE, 0)
+        assertEquals(1.0, social.socialScore, 1e-6)
+    }
+
+    @Test
     fun activityLabel() {
         fun z(sent: Int, received: Int) = ZapLayerInput(sent, received, 0, 0, 0, false)
         assertEquals("Keine Zap-Aktivität", z(0, 0).activityLabel)

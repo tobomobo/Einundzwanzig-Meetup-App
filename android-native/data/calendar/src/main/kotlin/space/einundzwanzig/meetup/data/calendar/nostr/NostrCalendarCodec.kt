@@ -3,9 +3,10 @@ package space.einundzwanzig.meetup.data.calendar.nostr
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import space.einundzwanzig.meetup.core.common.dart.DartDateTime
+import space.einundzwanzig.meetup.core.common.dart.dartTrim
 import space.einundzwanzig.meetup.core.common.dart.toStringAsFixed
 import space.einundzwanzig.meetup.core.crypto.CryptoRandom
-import space.einundzwanzig.meetup.data.calendar.internal.dartLongValue
+import space.einundzwanzig.meetup.core.common.json.dartIntOrNull
 import space.einundzwanzig.meetup.data.calendar.internal.dartLower
 import space.einundzwanzig.meetup.data.calendar.internal.dartToString
 import space.einundzwanzig.meetup.data.calendar.internal.dartTryParseDouble
@@ -43,7 +44,7 @@ object NostrCalendarCodec {
 
     private fun parseOrThrow(e: JsonObject, zone: ZoneId): NostrCalendarEvent? {
         val kindEl = e["kind"]
-        val kind: Long = if (kindEl.isDartNull) 0 else kindEl.dartLongValue() ?: return null // `as int?` TypeError
+        val kind: Long = if (kindEl.isDartNull) 0 else kindEl.dartIntOrNull() ?: return null // `as int?` TypeError
         if (kind != NostrCalendarEvent.KIND_TIME.toLong() && kind != NostrCalendarEvent.KIND_DATE.toLong()) return null
         val allDay = kind == NostrCalendarEvent.KIND_DATE.toLong()
 
@@ -125,7 +126,7 @@ object NostrCalendarCodec {
             lng = lng,
             issuers = issuers,
             formerIssuers = former,
-            createdAt = e["created_at"].dartLongValue() ?: 0,
+            createdAt = e["created_at"].dartIntOrNull() ?: 0,
         )
     }
 
@@ -146,7 +147,7 @@ object NostrCalendarCodec {
         val badgeTags = buildList {
             if (draft.badgeEnabled) {
                 add(listOf("badge", "true"))
-                val image = draft.badgeImageUrl.trim()
+                val image = draft.badgeImageUrl.dartTrim()
                 if (image.isNotEmpty()) add(listOf("badge_image", image))
                 if (draft.lat != 0.0 || draft.lng != 0.0) {
                     add(listOf("g", draft.lat.toStringAsFixed(6), draft.lng.toStringAsFixed(6)))
@@ -157,7 +158,7 @@ object NostrCalendarCodec {
                 }
             }
         }
-        val location = draft.location.trim()
+        val location = draft.location.dartTrim()
         val kind: Int
         val startValue: String
         val endValue: String?

@@ -22,7 +22,13 @@ import space.einundzwanzig.meetup.data.badges.text.DartString
  * Only the storage/identity assertions live here (entry counts, union per event, organizer
  * markers kept apart). The `TrustScoreService` comparisons (`sameReputation`) and the
  * `BadgeSyncFormat.merge` case belong to `:data:trust` / `:data:badgesync`, which depend on this
- * module and port them there.
+ * module and port them there. In particular these Dart cases are ported with identical inputs in
+ * `:data:trust` `TrustScoreRegressionTest`, not here:
+ * - 'Organisator-Marker anderer Städte erhöhen die Reputation nicht' (visits at 42/14/21 days,
+ *   Berlin marker),
+ * - 'Mehrfachscans belegen keine zusätzlichen Plätze im Wochenlimit' (20 rescans `rescan-$i`,
+ *   weekly cap = 2 slots),
+ * - the `score([signedMarker]).totalScore == 0` assertion of 'auch Marker mit Signatur…'.
  */
 class BadgeReputationRegressionTest {
 

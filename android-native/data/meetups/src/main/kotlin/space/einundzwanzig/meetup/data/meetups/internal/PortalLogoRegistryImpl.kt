@@ -13,12 +13,19 @@ import space.einundzwanzig.meetup.data.meetups.portal.PortalLogoRegistry
 import space.einundzwanzig.meetup.data.meetups.portal.PortalUrls
 import java.util.Optional
 import javax.inject.Inject
+import javax.inject.Provider
 import javax.inject.Singleton
 
-/** Process-wide crest registry with a single shared in-flight load. */
+/**
+ * Process-wide crest registry with a single shared in-flight load.
+ *
+ * The loader is injected as `Optional<Provider<…>>` and resolved only inside [ensureLoaded]: the
+ * calendar's loader depends (indirectly) back on this registry, so an eager injection would be a
+ * Hilt dependency cycle for any loader implementation that does not itself wrap its dependency.
+ */
 @Singleton
 internal class PortalLogoRegistryImpl @Inject constructor(
-    private val loader: Optional<PortalLogoLoader>,
+    private val loader: Optional<Provider<PortalLogoLoader>>,
     private val log: DiagnosticLog,
 ) : PortalLogoRegistry {
 
@@ -66,7 +73,7 @@ internal class PortalLogoRegistryImpl @Inject constructor(
     override suspend fun ensureLoaded() {
         // Seeded entries do not count: the calendar load still runs (Dart has no seeding).
         if (synchronized(lock) { calendar.isNotEmpty() }) return
-        val l = loader.orElse(null) ?: return
+        val provider = loader.orElse(null) ?: return
         var owner = false
         val deferred = synchronized(lock) {
             inFlight ?: CompletableDeferred<Unit>().also {
@@ -76,7 +83,7 @@ internal class PortalLogoRegistryImpl @Inject constructor(
         }
         if (!owner) return deferred.await()
         try {
-            runSuspendCatching { l.loadLogos() }.onFailure { log.warn(TAG, "Wappen nicht ladbar: $it") }
+            runSuspendCatching { provider.get().loadLogos() }.onFailure { log.warn(TAG, "Wappen nicht ladbar: $it") }
         } finally {
             synchronized(lock) { inFlight = null }
             deferred.complete(Unit)

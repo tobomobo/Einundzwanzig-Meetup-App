@@ -24,10 +24,22 @@ interface SigningService {
     /**
      * `auth_url`s of a remote signer that demands browser approval (Dart `onNip46AuthUrl`). The
      * app root shows the orange 60 s snackbar for them. While an [interceptAuthUrls] handler is
-     * installed the URLs go there instead. Without any collector the host is logged (never the URL).
-     * Emitted from the relay transport thread; collectors run in their own context.
+     * installed the URLs go there instead. Emitted from the relay transport thread; collectors run
+     * in their own context.
+     *
+     * The most recent URL is replayed until it is acknowledged with [acknowledgeAuthUrl], so an
+     * approval that arrives while no collector is subscribed (e.g. the root collects with
+     * `repeatOnLifecycle(STARTED)` and the user is in the signer app) is shown once the UI is back.
+     * The root must call [acknowledgeAuthUrl] after showing a URL, otherwise every new collector
+     * shows it again.
      */
     val authUrlEvents: SharedFlow<String>
+
+    /**
+     * Marks [url] (from [authUrlEvents]) as shown: it is no longer replayed to new collectors. A
+     * newer URL that arrived meanwhile stays pending.
+     */
+    fun acknowledgeAuthUrl(url: String)
 
     /**
      * Routes `auth_url`s to [handler] until the returned handle is closed (the bunker sheet shows

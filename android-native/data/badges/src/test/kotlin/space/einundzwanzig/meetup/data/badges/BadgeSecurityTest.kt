@@ -454,6 +454,14 @@ class BadgeSecurityTest {
     }
 
     @Test
+    fun `parseQrV3 throws IllegalArgumentException for bad base64 or bad UTF-8`() {
+        // Valid base64 of 0xFF: invalid UTF-8 (Dart utf8.decode throws FormatException).
+        assertThrows(IllegalArgumentException::class.java) { BadgeSecurity.parseQrV3("21v3:/w==.a.b.1760000000.c") }
+        // Length not a multiple of four.
+        assertThrows(IllegalArgumentException::class.java) { BadgeSecurity.parseQrV3("21v3:abc.a.b.1.c") }
+    }
+
+    @Test
     fun `parseQrV3 reads created_at like Dart int tryParse, including hex`() {
         val o = Fixtures["reputationQrV3"].jsonObject
         val code = o["qr_string"]!!.jsonPrimitive.content

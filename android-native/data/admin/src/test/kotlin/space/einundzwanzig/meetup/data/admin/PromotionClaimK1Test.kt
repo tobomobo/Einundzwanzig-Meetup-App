@@ -8,16 +8,19 @@ import org.junit.Test
 import space.einundzwanzig.meetup.core.common.json.DartJson
 import space.einundzwanzig.meetup.core.crypto.EventIds
 import space.einundzwanzig.meetup.core.crypto.KeyPair
-import space.einundzwanzig.meetup.core.crypto.Sha256
+import space.einundzwanzig.meetup.data.admin.ClaimFixtures.day
+import space.einundzwanzig.meetup.data.admin.ClaimFixtures.nowSeconds
+import space.einundzwanzig.meetup.data.admin.ClaimFixtures.organizerBadge
+import space.einundzwanzig.meetup.data.admin.ClaimFixtures.proofFor
 import space.einundzwanzig.meetup.data.admin.claims.PromotionClaims
 import space.einundzwanzig.meetup.data.admin.model.RawClaim
-import space.einundzwanzig.meetup.data.badges.claim.BadgeClaims
 import space.einundzwanzig.meetup.data.badges.security.BadgeSecurity
 
 /**
  * Port of `test/promotion_claim_k1_test.dart`: the self-promotion attacks of the security audit
  * (copied proof, unbound proofs, foreign binding, mislabelled signer, one session) and the
- * positive case (three sessions bound by the claimer).
+ * positive case (three sessions bound by the claimer). The fixtures ([ClaimFixtures]) build the
+ * kind-21002 binding by hand, exactly as the Dart helper, not with the production builders.
  */
 class PromotionClaimK1Test {
 
@@ -32,56 +35,11 @@ class PromotionClaimK1Test {
         stranger = KeyPair.generate()
     }
 
-    private fun nowSeconds() = System.currentTimeMillis() / 1000
-
-    /** Compact organizer badge signed by [org]; [createdAt] determines the session. */
-    private fun organizerBadge(
-        org: KeyPair,
-        createdAt: Long,
-        meetupId: String = "aschaffenburg-de",
-        block: Long = 875000,
-    ): Map<String, Any?> {
-        val content = linkedMapOf<String, Any?>("v" to 2, "t" to "B", "m" to meetupId, "b" to block, "x" to createdAt + 4 * 3600)
-        val contentJson = BadgeSecurity.canonicalJsonEncode(content)
-        val tags = listOf(listOf("t", "badge"), listOf("m", meetupId))
-        val event = EventIds.sign(org, createdAt, 21000, tags, contentJson)
-        return content + linkedMapOf("c" to event.createdAt, "p" to event.pubkey, "s" to event.sig)
-    }
-
-    /** Participant binding (kind 21002) as `BadgeClaimService.createClaim`. */
-    private fun bindBadge(who: KeyPair, badge: Map<String, Any?>, sigId: String, claimedAt: Long): Map<String, Any?> {
-        val orgPubkey = badge["p"] as String
-        val block = (badge["b"] as Number).toLong()
-        val contentJson = BadgeClaims.claimContent(badge["s"] as String, sigId, orgPubkey, block, claimedAt)
-        val ev = EventIds.sign(who, claimedAt, 21002, BadgeClaims.claimTags(orgPubkey, block), contentJson)
-        return linkedMapOf("claim_sig" to ev.sig, "claim_event_id" to ev.id, "claim_timestamp" to claimedAt)
-    }
-
-    private fun proofFor(badge: Map<String, Any?>, boundBy: KeyPair? = null, adminPubkeyLabel: String? = null): Map<String, Any?> {
-        val sigId = Sha256.hexOfUtf8(badge["s"] as String)
-        val proof = linkedMapOf<String, Any?>(
-            "meetup" to badge["m"],
-            "date" to "2026-10-21T12:00:00.000",
-            "block" to badge["b"],
-            "sig" to badge["s"],
-            "sig_id" to sigId,
-            "admin_pubkey" to (adminPubkeyLabel ?: badge["p"]),
-            "sig_version" to 2,
-            "sig_content" to DartJson.encode(badge),
-        )
-        if (boundBy != null) proof += bindBadge(boundBy, badge, sigId, (badge["c"] as Long) + 60)
-        return proof
-    }
-
     private fun claimWith(proofs: List<Map<String, Any?>>): RawClaim = RawClaim(
         pubkey = claimer.publicKeyHex,
         createdAt = nowSeconds(),
-        content = DartJson.encode(
-            linkedMapOf("type" to "admin_claim", "version" to 1, "meetup" to "Aschaffenburg", "proofs" to proofs),
-        ),
+        content = ClaimFixtures.claimContent(proofs),
     )
-
-    private fun day(n: Int): Long = nowSeconds() - n * 86400L
 
     private fun verify(proofs: List<Map<String, Any?>>) =
         PromotionClaims.verifyClaim(claimWith(proofs), setOf(admin.publicKeyHex), nowSeconds())
@@ -189,5 +147,51 @@ class PromotionClaimK1Test {
         val noMeetup = RawClaim(claimer.publicKeyHex, DartJson.encode(mapOf("type" to "admin_claim", "meetup" to "", "proofs" to proofs)), nowSeconds())
         assertNull(PromotionClaims.verifyClaim(noMeetup, setOf(admin.publicKeyHex), nowSeconds()))
         assertNull(PromotionClaims.verifyClaim(RawClaim(claimer.publicKeyHex, "not json", nowSeconds()), setOf(admin.publicKeyHex), nowSeconds()))
+    }
+
+    /**
+     * Legacy full-format organizer badge (`verifyNostr`) signed at [createdAt] (10 digits, as
+     * `isValid` demands), with an extra organizer-signed `c` field: the session day key reads
+     * `c` before `created_at`, so only this field can carry a time outside Dart's range.
+     */
+    private fun legacyProof(org: KeyPair, createdAt: Long, c: Long, block: Long): Map<String, Any?> {
+        val content = linkedMapOf<String, Any?>(
+            "v" to 2, "type" to "Badge", "meetup_id" to "aschaffenburg-de", "block_height" to block, "c" to c,
+        )
+        val tags = listOf(listOf("t", "badge"), listOf("meetup", "aschaffenburg-de"), listOf("block", block.toString()))
+        val event = EventIds.sign(org, createdAt, BadgeSecurity.KIND_BADGE, tags, BadgeSecurity.canonicalJsonEncode(content))
+        val data = content + linkedMapOf("sig" to event.sig, "sig_id" to event.id, "admin_pubkey" to event.pubkey, "created_at" to createdAt)
+        val binding = ClaimFixtures.bindBadge(
+            claimer,
+            mapOf("s" to event.sig, "p" to event.pubkey, "b" to block),
+            event.id,
+            day(5),
+        )
+        return linkedMapOf<String, Any?>(
+            "meetup" to "aschaffenburg-de",
+            "date" to "2026-10-21T12:00:00.000",
+            "block" to block,
+            "sig" to event.sig,
+            "sig_id" to event.id,
+            "admin_pubkey" to event.pubkey,
+            "sig_version" to 2,
+            "sig_content" to DartJson.encode(data),
+        ) + binding
+    }
+
+    @Test
+    fun `Signierzeit ausserhalb des Dart-DateTime-Bereichs - Beweis wird uebersprungen`() {
+        val compact = listOf(
+            proofFor(organizerBadge(admin, day(30)), boundBy = claimer),
+            proofFor(organizerBadge(admin, day(20)), boundBy = claimer),
+        )
+        // Control: the legacy proof counts with an in-range `c` (its own session).
+        assertNotNull(verify(compact + legacyProof(admin, day(10), c = day(10), block = 876_000)))
+        // Dart: DateTime.fromMillisecondsSinceEpoch(c * 1000, isUtc: true) throws for
+        // |ms| > 8.64e15 inside the per-proof try → proof skipped → only two sessions.
+        assertNull(verify(compact + legacyProof(admin, day(10), c = 8_640_000_000_001L, block = 876_001)))
+        assertNull(verify(compact + legacyProof(admin, day(10), c = -8_640_000_000_001L, block = 876_002)))
+        // The boundary itself is still valid in Dart.
+        assertNotNull(verify(compact + legacyProof(admin, day(10), c = 8_640_000_000_000L, block = 876_003)))
     }
 }

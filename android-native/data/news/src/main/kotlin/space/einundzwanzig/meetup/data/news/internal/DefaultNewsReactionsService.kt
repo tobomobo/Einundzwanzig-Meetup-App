@@ -2,9 +2,13 @@ package space.einundzwanzig.meetup.data.news.internal
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -50,6 +54,21 @@ internal class DefaultNewsReactionsService @Inject constructor(
     private val log: DiagnosticLog,
     @ApplicationScope private val appScope: CoroutineScope,
 ) : NewsReactionsService {
+
+    /**
+     * Publishes still running, keyed by [likedEntry] (`"<me>|<address>"`). A second [like] for the
+     * same key awaits the running one instead of signing again; the entry is removed when the
+     * publish ends (by then an accepted like is already in the local list).
+     */
+    private val inFlight = ConcurrentHashMap<String, Deferred<Boolean>>()
+
+    /**
+     * One lock per [likedEntry] key: makes "in flight? / already liked? / sign / register" one
+     * atomic step for the same article, while a slow signer (bunker, Amber approval) for one
+     * article does not hold up likes of other articles. Entries are tiny and bounded by the
+     * number of distinct articles liked in this process.
+     */
+    private val keyLocks = ConcurrentHashMap<String, Mutex>()
 
     override suspend fun readTargets(): List<String> = lookup.readTargets()
 
@@ -116,27 +135,44 @@ internal class DefaultNewsReactionsService @Inject constructor(
     }
 
     override suspend fun like(articleAddress: String, authorPubkey: String): Boolean {
-        // Sending twice would count twice on the website (it counts events, not people).
+        // Sending twice would count twice on the website (it counts events, not people). The
+        // check, the signing and the registration of the publish happen under a per-article
+        // lock, so two overlapping calls (double tap, recreated screen) cannot both sign and
+        // publish, while likes of other articles proceed independently.
         val me = myPubkey()
-        if (me != null && likedEntries().contains(likedEntry(me, articleAddress))) {
-            log.debug(TAG, "Herz bereits vergeben — nichts gesendet.")
-            return true
-        }
+        val key = likedEntry(me.orEmpty(), articleAddress)
+        val publish: Deferred<Boolean> = keyLocks.getOrPut(key) { Mutex() }.withLock {
+            inFlight[key]?.let {
+                log.debug(TAG, "Herz wird bereits gesendet — warte auf das Ergebnis.")
+                return@withLock it
+            }
+            if (me != null && likedEntries().contains(key)) {
+                log.debug(TAG, "Herz bereits vergeben — nichts gesendet.")
+                return true
+            }
 
-        val signed: NostrEvent = try {
-            signing.signEvent(KIND_REACTION, likeTags(articleAddress, authorPubkey), LIKE_CONTENT)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            log.warn(TAG, "Signieren fehlgeschlagen", e)
-            return false
-        }
+            val signed: NostrEvent = try {
+                signing.signEvent(KIND_REACTION, likeTags(articleAddress, authorPubkey), LIKE_CONTENT)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log.warn(TAG, "Signieren fehlgeschlagen", e)
+                return false
+            }
 
-        // Publishing and remembering run in the application scope, like the un-cancellable Dart
-        // Future: if the caller (e.g. the article screen) goes away after a relay already said
-        // OK, the like must still land in the local list, or a second visit could send it again
-        // and the website would count it twice.
-        return appScope.async { publishAndRemember(signed, articleAddress) }.await()
+            // Publishing and remembering run in the application scope, like the un-cancellable
+            // Dart Future: if the caller (e.g. the article screen) goes away after a relay
+            // already said OK, the like must still land in the local list, or a second visit
+            // could send it again and the website would count it twice. LAZY start: the entry
+            // is registered before the publish can finish and remove it.
+            appScope.async(start = CoroutineStart.LAZY) { publishAndRemember(signed, articleAddress) }
+                .also { deferred ->
+                    inFlight[key] = deferred
+                    deferred.invokeOnCompletion { inFlight.remove(key, deferred) }
+                    deferred.start()
+                }
+        }
+        return publish.await()
     }
 
     private suspend fun publishAndRemember(signed: NostrEvent, articleAddress: String): Boolean {

@@ -1,5 +1,6 @@
 package space.einundzwanzig.meetup.data.identity
 
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -137,5 +138,34 @@ class UserProfileTest {
         assertFalse(UserProfile(nickname = "  Anon ").hasCustomNickname)
         assertTrue(UserProfile(nickname = "anon").hasCustomNickname)
         assertFalse(UserProfile(nickname = "   ").hasCustomNickname)
+    }
+
+    @Test
+    fun adminCryptoVerificationIsSharedInMemoryForTheVerifiedIdentity() = runBlocking {
+        val id = TestIdentity()
+        val keys = id.keys.generateKeyPair()
+        assertFalse(id.profiles.load().adminCryptoVerified)
+
+        val verified = id.profiles.update { it.withAdminVerification(isAdmin = true, source = "trust_score") }
+        assertTrue(verified.adminCryptoVerified)
+        // Every later load and the reactive flow see it, not only the returned instance.
+        assertTrue(id.profiles.load().adminCryptoVerified)
+        assertTrue(id.profiles.profile.first().adminCryptoVerified)
+        // It is never persisted.
+        assertFalse(id.prefs.entries.value.keys.any { it.contains("crypto", ignoreCase = true) })
+        // A stale profile saved later does not revoke it.
+        id.profiles.save(verified.copy(adminCryptoVerified = false, nickname = "Satoshi"))
+        assertTrue(id.profiles.load().adminCryptoVerified)
+
+        // Another identity does not inherit it.
+        id.keys.generateKeyPair()
+        assertFalse(id.profiles.load().adminCryptoVerified)
+        id.keys.importNsec(keys.nsec)
+        assertTrue(id.profiles.load().adminCryptoVerified)
+
+        // The full reset forgets it.
+        id.identityRepo.wipeAll()
+        id.keys.importNsec(keys.nsec)
+        assertFalse(id.profiles.load().adminCryptoVerified)
     }
 }

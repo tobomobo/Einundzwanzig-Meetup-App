@@ -32,7 +32,10 @@ enum class LocationPermission {
     /** Not granted; a request may still show the system dialog. */
     DENIED,
 
-    /** Not granted and the system no longer shows the dialog: only the app settings help. */
+    /**
+     * Not granted and the system no longer showed the dialog at the last prompt: only the app
+     * settings help. Remembered from that prompt, so it can be stale after a settings reset.
+     */
     DENIED_FOREVER,
 }
 

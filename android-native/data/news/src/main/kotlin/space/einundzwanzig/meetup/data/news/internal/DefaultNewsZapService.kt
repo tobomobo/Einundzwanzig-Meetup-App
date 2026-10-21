@@ -92,8 +92,10 @@ internal class DefaultNewsZapService(
         try {
             min = meta["minSendable"].numAsIntOrNull() ?: DEFAULT_MIN_SENDABLE_MSAT
             max = meta["maxSendable"].numAsIntOrNull() ?: DEFAULT_MAX_SENDABLE_MSAT
-        } catch (e: IllegalStateException) {
+        } catch (e: RuntimeException) {
             // Dart threw an uncaught cast error here (stuck spinner); treat the server as unusable.
+            // Also covers non-finite limits (`1e400`, 30-digit integers → Infinity), whose
+            // `toInt()` throws UnsupportedOperationException.
             log.warn(TAG, "lnurlp-Grenzen unlesbar", e.message)
             return ZapResult.Failure(ZapError.LnurlUnreachable)
         }

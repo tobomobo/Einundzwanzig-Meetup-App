@@ -4,10 +4,14 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -29,6 +33,7 @@ import space.einundzwanzig.meetup.core.data.secure.SecureRead
 import space.einundzwanzig.meetup.core.data.secure.SecureStore
 import space.einundzwanzig.meetup.core.data.testing.InMemoryKeyValueStore
 import space.einundzwanzig.meetup.core.data.testing.InMemorySecureStore
+import space.einundzwanzig.meetup.data.migration.internal.AppVersionCode
 import space.einundzwanzig.meetup.data.migration.internal.DefaultFlutterMigration
 import space.einundzwanzig.meetup.data.migration.internal.LegacyLogImporter
 import space.einundzwanzig.meetup.data.migration.legacy.FlutterPrefs
@@ -79,7 +84,11 @@ class FlutterMigrationTest {
         timeSource = time,
         log = logger,
         io = Dispatchers.IO,
+        versionCode = AppVersionCode { appVersion },
     )
+
+    /** Installed `versionCode`; cleanup needs a release after the first native one. */
+    private var appVersion = 100L
 
     private fun writeKeys() = device.write(Fss.KEYS, mapOf(Fss.WRAPPED_V10_GCM to FakeLegacyKeystore.wrapB64(aes, RsaMode.OAEP)))
 
@@ -170,7 +179,7 @@ class FlutterMigrationTest {
         assertFalse(device.exists("InternalHomeWidgetPreferences"))
         // Snapshot holds ciphertext files only.
         val snapshot = File(context.noBackupFilesDir, "flutter_migration/snapshot").list()!!.toSet()
-        assertEquals(setOf("FlutterSecureStorage.xml", "FlutterSecureKeyStorage.xml"), snapshot)
+        assertEquals(setOf("FlutterSecureStorage.xml", "FlutterSecureKeyStorage.xml", ".complete"), snapshot)
         // Hook ran once; gate released.
         assertEquals(1, hookReports.size)
         assertTrue(m.gate.isComplete)
@@ -451,10 +460,10 @@ class FlutterMigrationTest {
         val m = migration()
         m.ensureMigrated()
 
-        // Spec 12 reset: native stores cleared, then the migration hook.
+        // Spec 12 reset: the migration hook first, then the native stores are cleared.
+        m.onAppReset()
         kv.clear()
         secure.deleteAll()
-        m.onAppReset()
 
         assertEquals(MigrationState.CLEANED, m.currentReport().state)
         assertFalse(device.exists(FlutterPrefs.FILE))
@@ -495,15 +504,25 @@ class FlutterMigrationTest {
                 "badge_encryption_key" to badgeBlob.str("keyHex"),
             ),
         )
-        migration().ensureMigrated()
-        assertEquals(CleanupOutcome.NotYet("STARTS"), migration().cleanupIfEligible())
+        val first = migration()
+        assertEquals(CleanupOutcome.NotYet("GATE"), first.cleanupIfEligible())
+        first.ensureMigrated()
+        assertEquals(CleanupOutcome.NotYet("STARTS"), first.cleanupIfEligible())
         migration().ensureMigrated()
         val third = migration()
         third.ensureMigrated()
 
-        // An imported secret that vanished blocks the cleanup.
-        secure.delete("nostr_npub_key")
-        assertEquals(CleanupOutcome.NotYet("SECRET_MISSING:nostr_npub_key"), third.cleanupIfEligible())
+        // Never in the first native release (spec 14 §4.7).
+        assertEquals(CleanupOutcome.NotYet("RELEASE"), third.cleanupIfEligible())
+        appVersion = 101L
+        // The durable badge key must still be there.
+        secure.delete("badge_encryption_key")
+        assertEquals(CleanupOutcome.NotYet("SECRET_MISSING:badge_encryption_key"), third.cleanupIfEligible())
+        secure.write("badge_encryption_key", badgeBlob.str("keyHex"))
+        // An imported secret the native store cannot read blocks it.
+        secure.failRead = { it == "nostr_npub_key" }
+        assertEquals(CleanupOutcome.NotYet("SECRET_UNREADABLE:nostr_npub_key"), third.cleanupIfEligible())
+        secure.failRead = { false }
         // A wrong npub blocks it as well.
         secure.write("nostr_npub_key", bob.npub)
         assertEquals(CleanupOutcome.NotYet("IDENTITY"), third.cleanupIfEligible())
@@ -526,10 +545,13 @@ class FlutterMigrationTest {
     fun cleanupRefusesWhileErrorsArePending() = runBlocking {
         writeFixtureE2()
         keystore.oaepPresent = false
-        repeat(3) { migration().ensureMigrated() }
-        assertEquals(CleanupOutcome.NotYet("STATE"), migration().cleanupIfEligible())
+        repeat(2) { migration().ensureMigrated() }
+        val third = migration().also { it.ensureMigrated() }
+        assertEquals(CleanupOutcome.NotYet("STATE"), third.cleanupIfEligible())
         assertTrue(device.exists(Fss.DATA))
-        assertEquals(CleanupOutcome.NothingToDo, run { device.reset(); migration().ensureMigrated(); migration().cleanupIfEligible() })
+        device.reset()
+        val fresh = migration().also { it.ensureMigrated() }
+        assertEquals(CleanupOutcome.NothingToDo, fresh.cleanupIfEligible())
     }
 
     @Test
@@ -672,5 +694,188 @@ class FlutterMigrationTest {
         assertEquals(true, kv.getBool("secure_migration_done"))
         assertFalse(flutterPrefs().containsKey("flutter.nostr_nsec_key"))
         assertTrue(migration().pendingLegacySecrets().isEmpty())
+    }
+
+    // ------------------------------------------------------------------ review fixes 2: cleanup scope, reset order, lock-out, safe mode
+
+    @Test
+    fun secretsDeletedInNormalUseDoNotBlockTheCleanup() = runBlocking {
+        device.write(FlutterPrefs.FILE, mapOf("flutter.rqr_session_seed" to "ab".repeat(32), "flutter.nickname" to "Anon"))
+        writeE2(
+            mapOf(
+                "badge_encryption_key" to badgeBlob.str("keyHex"),
+                "badge_reset_pending" to "1",
+                "portal_api_token" to fixtureToken,
+                "rqr_session_base_payload_secure" to "payload",
+            ),
+        )
+        assertEquals(MigrationState.IMPORTED, migration().ensureMigrated().state)
+        assertEquals("ab".repeat(32), secure.read("rqr_session_seed_secure"))
+        // The rolling-QR session ends, the reset marker is consumed, the portal logs out.
+        for (k in listOf("rqr_session_seed_secure", "rqr_session_base_payload_secure", "badge_reset_pending", "portal_api_token")) {
+            assertTrue(secure.delete(k))
+        }
+        migration().ensureMigrated()
+        val third = migration().also { it.ensureMigrated() }
+        appVersion = 101L
+        assertEquals(CleanupOutcome.Cleaned, third.cleanupIfEligible())
+        assertFalse(device.exists(Fss.DATA) || device.exists(FlutterPrefs.FILE))
+    }
+
+    @Test
+    fun resetWithAnIncompleteDeleteNeverReimports() = runBlocking {
+        writeFixtureE2()
+        device.write(FlutterPrefs.FILE, mapOf("flutter.nickname" to "Anon"))
+        keystore.oaepPresent = false
+        assertEquals(MigrationState.IMPORTED_WITH_ERRORS, migration().ensureMigrated().state)
+
+        // The alias delete fails and the store wipe never happens (process killed right after the reset step).
+        keystore.deleteThrows = IllegalStateException("keystore2 died")
+        val m = migration().also { it.ensureMigrated() }
+        m.onAppReset()
+        val after = m.currentReport()
+        assertEquals(MigrationState.CLEANED, after.state)
+        assertTrue("RESET_ALIAS_DELETE_INCOMPLETE" in after.warnings)
+        // Files a dying delete may have left behind.
+        writeFixtureE2()
+        keystore.deleteThrows = null
+        keystore.oaepPresent = true
+
+        // Next start: IMPORTED_WITH_ERRORS is not retried, nothing is imported again.
+        secure.deleteAll()
+        kv.clear()
+        val next = migration()
+        assertEquals(MigrationState.CLEANED, next.ensureMigrated().state)
+        assertTrue(secure.entries.value.isEmpty())
+        assertTrue(kv.getAll().isEmpty())
+        assertTrue(next.pendingLegacySecrets().isEmpty())
+        // A later cleanup call finishes the delete.
+        assertEquals(CleanupOutcome.NothingToDo, next.cleanupIfEligible())
+        assertFalse(device.exists(Fss.DATA) || device.exists(Fss.KEYS))
+        assertEquals(1, keystore.aliasesDeleted)
+    }
+
+    @Test
+    fun resetIsNotSkippedWhenItsCallerIsCancelled() = runBlocking {
+        writeFixtureE2()
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val slow = object : SecureStore by secure {
+            override suspend fun write(key: String, value: String): Boolean {
+                entered.complete(Unit)
+                release.await()
+                return secure.write(key, value)
+            }
+        }
+        val m = migration(slow)
+        launch(Dispatchers.IO) { m.ensureMigrated() }
+        entered.await()
+        // The reset waits for the mutex; its ViewModel scope is cancelled meanwhile.
+        // UNDISPATCHED: onAppReset() has really been called (and waits for the mutex) before the cancel.
+        val caller = launch(Dispatchers.IO, start = CoroutineStart.UNDISPATCHED) { m.onAppReset() }
+        delay(50)
+        caller.cancelAndJoin()
+        release.complete(Unit)
+        withTimeout(10_000) {
+            while (m.currentReport().state != MigrationState.CLEANED) delay(10)
+        }
+        assertFalse(device.exists(Fss.DATA))
+    }
+
+    @Test
+    fun exceptionOnAnE0OnlyDeviceDoesNotLockEverySecureKey() = runBlocking {
+        device.write(FlutterPrefs.FILE, mapOf("flutter.nostr_nsec_key" to alice.nsec, "flutter.nickname" to "Anon"))
+        val broken = object : SecureStore by secure {
+            override suspend fun readChecked(key: String): SecureRead = throw IllegalStateException("boom")
+        }
+        val r = migration(broken).ensureMigrated()
+        assertEquals(MigrationState.IMPORTED_WITH_ERRORS, r.state)
+        assertFalse("<fss>" in r.failedKeys)
+        assertTrue("<prefs>" in r.failedKeys)
+        val pending = migration().pendingLegacySecrets()
+        assertTrue("nostr_nsec_key" in pending)
+        assertFalse("nip46_client_sk" in pending)
+        assertFalse("badge_pending_key" in pending)
+        assertFalse("badge_encryption_key" in pending)
+    }
+
+    @Test
+    fun missingEspMasterKeyIsReportedAndPendingSecretsCanBeAbandoned() = runBlocking {
+        val master = keystore.espMasterKey
+        device.write(
+            Fss.DATA,
+            FssWriter.espEntries(keystore.masterAeadForWriting(), mapOf("badge_pending_key" to "d".repeat(64))),
+        )
+        device.write(FlutterPrefs.FILE, mapOf("flutter.nickname" to "Anon"))
+        keystore.espMasterKey = null // alias gone for good
+        val r = migration().ensureMigrated()
+        assertEquals(MigrationState.IMPORTED_WITH_ERRORS, r.state)
+        assertTrue("ESP_MASTER_KEY_MISSING" in r.warnings)
+        assertTrue("nip46_client_sk" in migration().pendingLegacySecrets())
+
+        // Settings → Diagnose, confirmed by the user.
+        val abandoned = migration().abandonPendingSecrets()
+        assertEquals(MigrationState.IMPORTED, abandoned.state)
+        assertTrue(abandoned.warnings.any { it.startsWith("ABANDONED:") && "nip46_client_sk" in it })
+        assertTrue(migration().pendingLegacySecrets().isEmpty())
+        // The Flutter data is kept for a manual retry; cleanup waits.
+        migration().ensureMigrated()
+        val third = migration().also { it.ensureMigrated() }
+        assertEquals(CleanupOutcome.NotYet("ABANDONED"), third.cleanupIfEligible())
+        assertTrue(device.exists(Fss.DATA))
+
+        // A failing manual retry never brings the lock back.
+        assertEquals(MigrationState.IMPORTED, migration().retryNow().state)
+        assertTrue(migration().pendingLegacySecrets().isEmpty())
+        // The key came back (e.g. a restored device): the manual retry imports it.
+        keystore.espMasterKey = master
+        val retried = migration().retryNow()
+        assertEquals(MigrationState.IMPORTED, retried.state)
+        assertEquals("d".repeat(64), secure.read("badge_pending_key"))
+    }
+
+    @Test
+    fun repeatedlyDyingAttemptsSwitchToSafeMode() = runBlocking {
+        writeFixtureE2()
+        device.write(FlutterPrefs.FILE, mapOf("flutter.nostr_nsec_key" to alice.nsec, "flutter.nickname" to "Anon"))
+        val hang = CompletableDeferred<Unit>()
+        val dying = object : SecureStore by secure {
+            override suspend fun write(key: String, value: String): Boolean {
+                hang.await() // never completes: the process is killed here
+                return false
+            }
+        }
+        // Two starts that die inside the attempt (no gate, no finishedAt).
+        val killedProcesses = CoroutineScope(Dispatchers.IO)
+        repeat(2) {
+            val m = migration(dying)
+            killedProcesses.launch { m.ensureMigrated() }
+            withTimeout(10_000) {
+                while (m.currentReport().let { r -> r.attempts != it + 1 || r.finishedAt != null }) delay(10)
+            }
+            delay(50)
+        }
+        killedProcesses.cancel()
+        assertEquals(2, migration().currentReport().attempts)
+
+        // Third start: safe mode, no Keystore/Tink call.
+        keystore.uses = 0
+        val safe = migration().ensureMigrated()
+        assertEquals(0, keystore.uses)
+        assertEquals(MigrationState.IMPORTED_WITH_ERRORS, safe.state)
+        assertTrue("SAFE_MODE" in safe.warnings && "ATTEMPT_DIED" in safe.warnings)
+        assertEquals(alice.nsec, secure.read("nostr_nsec_key")) // E0 plaintext imported
+        assertEquals("Anon", kv.getString("nickname"))
+        assertTrue("badge_encryption_key" in migration().pendingLegacySecrets())
+        // Automatic attempts stay safe.
+        keystore.uses = 0
+        assertEquals(MigrationState.IMPORTED_WITH_ERRORS, migration().ensureMigrated().state)
+        assertEquals(0, keystore.uses)
+
+        // Only the manual retry runs the full path.
+        val full = migration().retryNow()
+        assertTrue(keystore.uses > 0)
+        assertEquals(MigrationState.IMPORTED, full.state)
+        assertEquals(fixtureBadgeKey, secure.read("badge_encryption_key"))
     }
 }

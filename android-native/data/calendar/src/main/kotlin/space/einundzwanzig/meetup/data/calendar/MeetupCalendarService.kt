@@ -15,8 +15,13 @@ interface MeetupCalendarService {
     /**
      * `PortalApiService.getAllMeetupEvents()` mapped to [MeetupDate]s from now − 6 h on, sorted
      * by start; logos recorded. Zero dates or an exception → [fetchIcs]. Never throws.
+     *
+     * Single-flight with a short cache: concurrent callers wait for one load and share its
+     * result, and a non-empty result is reused for [CACHE_TTL_MS]. An empty result (portal and
+     * iCal both failed) is not cached. Pass [force] = `true` for an explicit refresh
+     * (pull-to-refresh) to bypass the cache.
      */
-    suspend fun fetchPortalFirst(): List<MeetupDate>
+    suspend fun fetchPortalFirst(force: Boolean = false): List<MeetupDate>
 
     /**
      * `GET https://portal.einundzwanzig.space/stream-calendar` (15 s), parsed and RRULE-expanded,
@@ -27,6 +32,9 @@ interface MeetupCalendarService {
     companion object {
         /** iCal fallback feed. */
         const val CALENDAR_URL: String = "https://portal.einundzwanzig.space/stream-calendar"
+
+        /** How long a non-empty [fetchPortalFirst] result is reused (60 s). */
+        const val CACHE_TTL_MS: Long = 60_000
 
         /** Hours a started portal date stays listed. */
         const val PAST_HOURS: Long = 6

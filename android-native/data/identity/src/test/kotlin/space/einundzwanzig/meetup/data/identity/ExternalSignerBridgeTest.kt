@@ -167,4 +167,54 @@ class ExternalSignerBridgeTest {
         bridge.onLaunchFailed(b.id, android.content.ActivityNotFoundException("kein Amber"))
         assertEquals("launch_failed", (second.await().exceptionOrNull() as Nip55Exception).code)
     }
+
+    @Test
+    fun publishedRequestIsReleasedWhenTheHostLeavesBeforeLaunching() = runTest {
+        val bridge = DefaultExternalSignerBridge()
+        val host = bridge.attachHost()
+        val waiting = async { runCatching { bridge.launch(intent) } }
+        testScheduler.runCurrent()
+        val stale = bridge.pendingLaunch.value!!
+        // The Activity stops right after the request was published, before it launched it.
+        host.close()
+        testScheduler.advanceTimeBy(DefaultExternalSignerBridge.HOST_WAIT_MS - 1)
+        testScheduler.runCurrent()
+        assertTrue(waiting.isActive)
+        testScheduler.advanceTimeBy(2)
+        testScheduler.runCurrent()
+        assertEquals("cancelled", (waiting.await().exceptionOrNull() as Nip55Exception).code)
+        assertNull(bridge.pendingLaunch.value)
+
+        // The slot is free; the returning Activity never launches the stale request.
+        val again = bridge.attachHost()
+        assertEquals(false, bridge.onLaunched(stale.id))
+        val next = async { bridge.launch(intent) }
+        testScheduler.runCurrent()
+        val pending = bridge.pendingLaunch.value!!
+        assertTrue(pending.id != stale.id)
+        assertTrue(bridge.onLaunched(pending.id))
+        bridge.onResult(pending.id, Activity.RESULT_OK, Intent().putExtra("result", "ok"))
+        assertEquals("ok", next.await().data!!.getStringExtra("result"))
+        again.close()
+    }
+
+    @Test
+    fun briefHostLossBeforeLaunchKeepsTheRequest() = runTest {
+        val bridge = DefaultExternalSignerBridge()
+        val host = bridge.attachHost()
+        val waiting = async { bridge.launch(intent) }
+        testScheduler.runCurrent()
+        val pending = bridge.pendingLaunch.value!!
+        // Configuration change: detach and re-attach within the grace period.
+        host.close()
+        testScheduler.advanceTimeBy(DefaultExternalSignerBridge.HOST_WAIT_MS / 2)
+        testScheduler.runCurrent()
+        bridge.attachHost()
+        testScheduler.advanceTimeBy(DefaultExternalSignerBridge.HOST_WAIT_MS * 2)
+        testScheduler.runCurrent()
+        assertEquals(pending, bridge.pendingLaunch.value)
+        assertTrue(bridge.onLaunched(pending.id))
+        bridge.onResult(pending.id, Activity.RESULT_OK, Intent().putExtra("result", "ok"))
+        assertEquals("ok", waiting.await().data!!.getStringExtra("result"))
+    }
 }

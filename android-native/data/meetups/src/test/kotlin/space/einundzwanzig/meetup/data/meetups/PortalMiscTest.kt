@@ -17,6 +17,7 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.util.Optional
+import javax.inject.Provider
 
 class PortalMiscTest {
 
@@ -75,7 +76,7 @@ class PortalMiscTest {
             yield()
             registry.put("A", "a.png")
         }
-        registry = PortalLogoRegistryImpl(Optional.of(loader), testLog())
+        registry = PortalLogoRegistryImpl(Optional.of(Provider { loader }), testLog())
         val a = async { registry.ensureLoaded() }
         val b = async { registry.ensureLoaded() }
         a.await()
@@ -99,7 +100,7 @@ class PortalMiscTest {
     @Test
     fun `seeded short city names do not beat calendar entries`() = runTest {
         var loads = 0
-        val registry = PortalLogoRegistryImpl(Optional.of(PortalLogoLoader { loads++ }), testLog())
+        val registry = PortalLogoRegistryImpl(Optional.of(Provider { PortalLogoLoader { loads++ } }), testLog())
         registry.seedFrom(
             listOf(
                 Meetup(id = "1", name = "", city = "Ulm", country = "DE", telegramLink = "", lat = 0.0, lng = 0.0, logoUrl = "ulm.png"),

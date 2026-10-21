@@ -107,7 +107,7 @@ internal class TestIdentity(
     }
     val signing = DefaultSigningService(prefs, keyStore, relayConfig, nip55, clientFactory, time, Dispatchers.Default)
     val profiles = DefaultUserProfileRepository(prefs, keyStore, signing, changes)
-    val recovery = DefaultIdentityRecovery(secure, keyStore, keys)
-    val identityRepo = DefaultIdentityRepository(signing, keyStore, vault, recovery)
+    val recovery = DefaultIdentityRecovery(secure, keyStore, keys, Dispatchers.Default)
+    val identityRepo = DefaultIdentityRepository(signing, keyStore, vault, recovery, profiles)
     val easyAuth = DefaultLocalEasyAuth(keyStore, vault, keys, signing, profiles, FakePasskeys(), Dispatchers.Default)
 }

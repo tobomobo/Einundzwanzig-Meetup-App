@@ -185,6 +185,26 @@ class MeetupServiceTest {
     }
 
     @Test
+    fun `fallback constant equals the JSON fixture`() {
+        val text = javaClass.getResourceAsStream("/space/einundzwanzig/meetup/data/meetups/fallback_meetups.json")!!
+            .bufferedReader(Charsets.UTF_8).use { it.readText() }
+        val fixture = space.einundzwanzig.meetup.core.network.AppJson.decodeFromString(
+            kotlinx.serialization.builtins.ListSerializer(Meetup.serializer()),
+            text,
+        )
+        assertEquals(fixture, service.fallbackMeetups)
+    }
+
+    @Test
+    fun `non-object entries are skipped instead of dropping the directory`() = runTest {
+        val list = load("null", "\"x\"", "3", """{"id":1,"city":"A"}""")
+        assertEquals(1, list.size)
+        assertEquals("1", list.single().id)
+        assertEquals("A", list.single().city)
+        assertEquals(list, service.cached)
+    }
+
+    @Test
     fun `serialized model keeps the Dart field names`() {
         val text = space.einundzwanzig.meetup.core.network.AppJson.encodeToString(Meetup.serializer(), service.fallbackMeetups[0])
         val obj = DartJson.decode(text) as JsonObject

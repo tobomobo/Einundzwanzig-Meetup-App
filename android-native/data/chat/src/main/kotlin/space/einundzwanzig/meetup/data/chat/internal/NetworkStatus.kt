@@ -13,11 +13,20 @@ import javax.inject.Inject
  * (spec 11 §8.2, §11: ConnectivityManager complements the exception heuristics).
  */
 internal fun interface NetworkStatus {
-    /** `false` when there is no active network or it has no validated internet access. */
+    /** `false` only when there is no usable network at all (no active network or no `INTERNET`). */
     fun isOnline(): Boolean
 }
 
-/** [NetworkStatus] on [ConnectivityManager]: active network with `INTERNET` + `VALIDATED`. */
+/**
+ * The classification rule: online as soon as an active network offers `INTERNET`. `VALIDATED` is
+ * deliberately ignored: some networks never get it although the internet works (Google's check
+ * blocked, VPN / private DNS, corporate Wi-Fi), and requiring it would turn a real relay outage
+ * into "offline" there, the misdirection Dart dacccf4 fixed. A captive portal then reads as
+ * "relay unavailable" unless the exception itself looks offline ([looksOffline]).
+ */
+internal fun hasUsableNetwork(hasActiveNetwork: Boolean, hasInternet: Boolean): Boolean = hasActiveNetwork && hasInternet
+
+/** [NetworkStatus] on [ConnectivityManager]: an active network with `INTERNET` ([hasUsableNetwork]). */
 internal class ConnectivityNetworkStatus @Inject constructor(
     @ApplicationContext private val context: Context,
 ) : NetworkStatus {
@@ -29,9 +38,10 @@ internal class ConnectivityNetworkStatus @Inject constructor(
         if (cm == null) {
             true
         } else {
-            caps != null &&
-                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+            hasUsableNetwork(
+                hasActiveNetwork = caps != null,
+                hasInternet = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true,
+            )
         }
     } catch (e: SecurityException) {
         // Missing ACCESS_NETWORK_STATE (should not happen, the module manifest declares it).

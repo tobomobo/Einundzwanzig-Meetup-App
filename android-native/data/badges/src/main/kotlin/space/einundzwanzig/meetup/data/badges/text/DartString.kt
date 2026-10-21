@@ -18,8 +18,13 @@ import space.einundzwanzig.meetup.core.common.dart.dartTrim
  */
 object DartString {
 
-    /** Resource name of the shipped Dart case table (next to this class). */
-    const val CASE_TABLE_RESOURCE = "dart_case_table.txt"
+    /**
+     * Absolute classpath path of the shipped Dart case table. Absolute on purpose: a
+     * package-relative lookup would break if R8 repackaged this class
+     * (`-repackageclasses` / `-flattenpackagehierarchy`), and the resulting
+     * `ExceptionInInitializerError` would escape every `catch (e: Exception)`.
+     */
+    const val CASE_TABLE_RESOURCE = "/space/einundzwanzig/meetup/data/badges/text/dart_case_table.txt"
 
     /**
      * Loads the case table (a Java resource read from the APK, tens of milliseconds the first

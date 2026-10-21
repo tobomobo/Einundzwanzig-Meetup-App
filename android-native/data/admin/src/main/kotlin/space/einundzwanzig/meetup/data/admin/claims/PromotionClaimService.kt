@@ -32,6 +32,6 @@ interface PromotionClaimService {
     /** Dart `getOrganicAdmins()`: the stored organic claims, `[]` if missing or unreadable. */
     suspend fun getOrganicAdmins(): List<VerifiedClaim>
 
-    /** [PromotionClaims.verifyClaim] with the injected clock. */
-    fun verifyClaim(claim: RawClaim, knownAdminPubkeys: Set<String>): VerifiedClaim?
+    /** [PromotionClaims.verifyClaim] with the injected clock, on the default (CPU) dispatcher. */
+    suspend fun verifyClaim(claim: RawClaim, knownAdminPubkeys: Set<String>): VerifiedClaim?
 }

@@ -8,6 +8,7 @@ import androidx.credentials.exceptions.GetCredentialProviderConfigurationExcepti
 import androidx.credentials.exceptions.GetCredentialUnknownException
 import androidx.credentials.exceptions.NoCredentialException
 import androidx.credentials.exceptions.domerrors.AbortError
+import androidx.credentials.exceptions.domerrors.NotAllowedError
 import androidx.credentials.exceptions.domerrors.SecurityError
 import androidx.credentials.exceptions.publickeycredential.CreatePublicKeyCredentialDomException
 import androidx.credentials.exceptions.publickeycredential.GetPublicKeyCredentialDomException
@@ -117,6 +118,20 @@ class ReviewFollowupTest {
         assertEquals(
             PasskeyPrfException.DOMAIN_NOT_ASSOCIATED,
             PasskeyErrors.create(CreatePublicKeyCredentialDomException(SecurityError(), "rp mismatch")).code,
+        )
+        // A NotAllowedError carrying an RP validation failure is "unavailable", not a silent cancel.
+        val rpNotAllowed = PasskeyErrors.create(CreatePublicKeyCredentialDomException(NotAllowedError(), "RP ID cannot be validated"))
+        assertEquals(PasskeyPrfException.DOMAIN_NOT_ASSOCIATED, rpNotAllowed.code)
+        assertFalse(rpNotAllowed.isCancelled)
+        assertTrue(
+            PasskeyErrors.get(GetPublicKeyCredentialDomException(NotAllowedError(), "The incoming request cannot be validated"))
+                .isUnavailable,
+        )
+        // A plain NotAllowedError stays a cancellation.
+        assertTrue(
+            PasskeyErrors.create(
+                CreatePublicKeyCredentialDomException(NotAllowedError(), "The operation either timed out or was not allowed."),
+            ).isCancelled,
         )
         // Anything else the Flutter plugin reported as android-unhandled is "unavailable" there too.
         val other = PasskeyErrors.create(CreateCredentialUnknownException("weird"))

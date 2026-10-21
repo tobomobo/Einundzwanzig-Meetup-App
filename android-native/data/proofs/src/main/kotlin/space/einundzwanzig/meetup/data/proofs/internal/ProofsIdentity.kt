@@ -1,5 +1,7 @@
 package space.einundzwanzig.meetup.data.proofs.internal
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import space.einundzwanzig.meetup.core.nostr.NostrEvent
 import space.einundzwanzig.meetup.data.identity.SigningService
 
@@ -8,6 +10,9 @@ import space.einundzwanzig.meetup.data.identity.SigningService
  * full signing stack; Hilt provides it from the real [SigningService] (see `ProofsModule`).
  */
 internal interface ProofsIdentity {
+    /** `SigningService.signerReady`: fires whenever an identity became able to sign. */
+    val signerReady: Flow<Unit> get() = emptyFlow()
+
     /** `SigningService.npub()` (also Dart `NostrService.getNpub()`). */
     suspend fun npub(): String?
 
@@ -19,6 +24,7 @@ internal interface ProofsIdentity {
 
     companion object {
         fun of(signing: SigningService): ProofsIdentity = object : ProofsIdentity {
+            override val signerReady: Flow<Unit> get() = signing.signerReady
             override suspend fun npub(): String? = signing.npub()
             override suspend fun canSign(): Boolean = signing.canSign()
             override suspend fun signEvent(kind: Int, tags: List<List<String>>, content: String): NostrEvent =

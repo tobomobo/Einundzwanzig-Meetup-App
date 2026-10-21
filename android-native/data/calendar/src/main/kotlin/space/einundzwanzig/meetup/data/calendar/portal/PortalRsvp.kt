@@ -4,6 +4,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import space.einundzwanzig.meetup.data.calendar.internal.dartIntValue
+import space.einundzwanzig.meetup.data.calendar.internal.dartToString
 import space.einundzwanzig.meetup.data.calendar.internal.isDartNull
 import space.einundzwanzig.meetup.data.calendar.model.MeetupDate
 
@@ -30,17 +31,12 @@ object PortalRsvp {
     /** `attendees ?? count` if int, else `-1` (My events / Home). */
     fun attendees(r: JsonObject?): Int = r?.firstNonNull("attendees", "count").dartIntValue() ?: -1
 
-    /** The `status` string (`attending|maybe|none`) or `""`. */
-    fun status(r: JsonObject?): String =
-        (r?.get("status") as? JsonPrimitive)?.takeIf { it.isString }?.content ?: ""
-
-    /** `status ∈ {attending, maybe}`, else `(going ?? is_going ?? rsvped) == true`. */
-    fun isGoing(r: JsonObject?): Boolean {
-        if (r == null) return false
-        if (status(r) == ATTENDING || status(r) == MAYBE) return true
-        val flag = r.firstNonNull("going", "is_going", "rsvped") as? JsonPrimitive ?: return false
-        return !flag.isString && flag.content == "true"
-    }
+    /**
+     * Dart `(r['status'] ?? '').toString()`: the status (`attending|maybe|none`), a non-string
+     * value printed the Dart way, or `""`. "Is the user going?" is answered only by
+     * `:data:meetups` `PortalApiService.isGoing` (single implementation).
+     */
+    fun status(r: JsonObject?): String = r?.get("status")?.takeUnless { it.isDartNull }?.dartToString() ?: ""
 
     /** Initial info from the list response: `{count: attendees|0, might: might_attendees|0}`. */
     fun initial(date: MeetupDate): JsonObject = JsonObject(

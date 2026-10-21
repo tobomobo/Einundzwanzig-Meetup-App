@@ -105,6 +105,21 @@ class EventChatServiceTest {
     }
 
     @Test
+    fun `read marks of event threads are stored under the evt key`() = runTest {
+        val svc = service()
+        prefs.setStringList(ChatReadMarkStore.KEY, listOf("$address|5"))
+        assertEquals(0L, svc.lastReadFor(address))
+        svc.markRead(address, Instant.ofEpochSecond(NOW_SECONDS - 60))
+        assertEquals(NOW_SECONDS - 60, svc.lastReadFor(address))
+        // Never decreases; the room-key namespace stays untouched.
+        svc.markRead(address, Instant.ofEpochSecond(NOW_SECONDS - 600))
+        assertEquals(NOW_SECONDS - 60, svc.lastReadFor(address))
+        val marks = DefaultChatReadMarkStore(prefs).all()
+        assertEquals(5L, marks[address])
+        assertEquals(NOW_SECONDS - 60, marks["evt|$address"])
+    }
+
+    @Test
     fun `live thread uses the first reachable relay`() = runTest {
         r1.unreachable = java.io.IOException("Connection refused")
         r2.onReq = { sub, _, s ->

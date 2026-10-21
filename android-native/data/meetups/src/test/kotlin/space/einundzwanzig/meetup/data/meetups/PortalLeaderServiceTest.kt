@@ -1,6 +1,9 @@
 package space.einundzwanzig.meetup.data.meetups
 
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -15,16 +18,29 @@ import space.einundzwanzig.meetup.core.data.prefs.PrefValue
 import space.einundzwanzig.meetup.core.data.testing.InMemoryKeyValueStore
 import space.einundzwanzig.meetup.data.meetups.internal.PortalLeaderServiceImpl
 import space.einundzwanzig.meetup.data.meetups.portal.PortalLeaderService
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class PortalLeaderServiceTest {
 
     private val server = FakeServer()
     private val prefs = InMemoryKeyValueStore()
     private val time = FakeTime()
-    private fun service(store: InMemoryKeyValueStore = prefs) = PortalLeaderServiceImpl(server.client, store, time, testLog())
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private fun service(store: InMemoryKeyValueStore = prefs) = PortalLeaderServiceImpl(server.client, store, time, testLog(), scope)
 
     @After
-    fun tearDown() = server.close()
+    fun tearDown() {
+        scope.cancel()
+        server.close()
+    }
+
+    private fun cached(json: String, ts: Long) = InMemoryKeyValueStore(
+        mapOf(
+            PortalLeaderService.CACHE_KEY to PrefValue.StringValue(json),
+            PortalLeaderService.CACHE_TS_KEY to PrefValue.IntValue(ts),
+        ),
+    )
 
     private val spec = """[{"meetup_id":2,"npubs":[" npub1a ",""]},{"meetup_id":"3","npubs":["x"]}]"""
 
@@ -96,7 +112,8 @@ class PortalLeaderServiceTest {
         server.respond = { _, _ -> status(503, "") }
         val s = service(store)
         assertEquals(true, s.isLeaderOf(4, "npub1c"))
-        assertEquals(1, server.seen.size) // first call always hits the network
+        s.awaitRefresh()
+        assertEquals(1, server.seen.size) // first call always hits the network (in the background)
         assertFalse(s.isLeaderOf(5, "npub1c")!!)
         assertEquals(1, server.seen.size) // then the fresh cache short-circuits
     }
@@ -110,5 +127,45 @@ class PortalLeaderServiceTest {
         s.ensureLoaded()
         assertEquals(2, server.seen.size)
         assertTrue(s.isLeaderOf(2, "npub1a")!!)
+    }
+
+    @Test
+    fun `cached data answers immediately while the refresh runs in the background`() = runTest {
+        val gate = CountDownLatch(1)
+        server.respond = { _, _ ->
+            gate.await(10, TimeUnit.SECONDS)
+            json("""[{"meetup_id":4,"npubs":["npub1d"]}]""")
+        }
+        // Stale cache (older than 24 h): Dart waited for the network before answering.
+        val s = service(cached("""[{"meetup_id":4,"npubs":["npub1c"]}]""", time.now - PortalLeaderService.TTL_MS - 1))
+        assertEquals(true, s.isLeaderOf(4, "npub1c")) // answered while the request is still blocked
+        assertEquals(true, s.isLeaderOf(4, "npub1c")) // no second refresh while one runs
+        gate.countDown()
+        s.awaitRefresh()
+        assertEquals(1, server.seen.size)
+        assertEquals(false, s.isLeaderOf(4, "npub1c"))
+        assertEquals(true, s.isLeaderOf(4, "npub1d"))
+        assertEquals(1, server.seen.size) // fresh now
+    }
+
+    @Test
+    fun `background refresh never adopts an empty answer`() = runTest {
+        server.respond = { _, _ -> json("[]") }
+        val s = service(cached("""[{"meetup_id":4,"npubs":["npub1c"]}]""", time.now - PortalLeaderService.TTL_MS - 1))
+        assertEquals(true, s.isLeaderOf(4, "npub1c"))
+        s.awaitRefresh()
+        assertEquals(true, s.isLeaderOf(4, "npub1c"))
+        assertEquals(false, s.isLeaderOf(5, "npub1c"))
+    }
+
+    @Test
+    fun `direct ensureLoaded after a cache-only answer still asks the network`() = runTest {
+        server.respond = { _, _ -> status(503, "") }
+        val s = service(cached("""[{"meetup_id":4,"npubs":["npub1c"]}]""", time.now - 1000))
+        s.ensureLoaded()
+        assertEquals(1, server.seen.size)
+        assertEquals(true, s.isLeaderOf(4, "npub1c"))
+        s.awaitRefresh()
+        assertEquals(1, server.seen.size)
     }
 }

@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import okhttp3.OkHttpClient
@@ -15,6 +16,7 @@ import space.einundzwanzig.meetup.core.common.log.DiagnosticLog
 import space.einundzwanzig.meetup.core.common.result.runSuspendCatching
 import space.einundzwanzig.meetup.core.crypto.Nip19
 import space.einundzwanzig.meetup.core.network.HttpResult
+import space.einundzwanzig.meetup.data.badges.text.DartString
 import space.einundzwanzig.meetup.data.meetups.MeetupService
 import space.einundzwanzig.meetup.data.meetups.model.Meetup
 import space.einundzwanzig.meetup.data.meetups.portal.PortalUrls
@@ -38,6 +40,8 @@ internal class MeetupServiceImpl @Inject constructor(
     override val fallbackMeetups: List<Meetup> get() = FallbackMeetups.list
 
     override suspend fun fetchMeetups(): List<Meetup> {
+        // Load the Dart case table off the main thread before any lookup needs it.
+        withContext(io) { DartString.warmUp() }
         val result = client.getCappedOn(io, PortalUrls.MEETUPS_URL, maxBytes = MAX_BYTES, timeout = PortalUrls.TIMEOUT)
         if (result !is HttpResult.Response) {
             log.warn(TAG_APP, "Fehler beim Laden der Meetups: ${describe(result)}")
@@ -50,7 +54,12 @@ internal class MeetupServiceImpl @Inject constructor(
         val list = runSuspendCatching {
             val data = DartJson.decode(result.text()) as? JsonArray
                 ?: throw IllegalStateException("Antwort ist keine Liste")
-            data.map { e -> MeetupJson.parse(e as? JsonObject ?: throw IllegalStateException("Eintrag ist kein Objekt")) }
+            // Dart threw on a non-object entry and lost the whole directory; native skips it.
+            val objs = data.filterIsInstance<JsonObject>()
+            if (objs.size != data.size) {
+                log.warn(TAG, "${data.size - objs.size} Eintraege ohne Objektform uebersprungen.")
+            }
+            objs.map(MeetupJson::parse)
         }.getOrElse { e ->
             log.warn(TAG_APP, "Fehler beim Laden der Meetups: $e")
             return emptyList()
@@ -151,13 +160,8 @@ internal class MeetupServiceImpl @Inject constructor(
         private const val MAX_BYTES = 16L * 1024 * 1024
 
         /**
-         * Dart `MeetupKey.slug` (badge domain): trim → lowercase → `' '` to `-`.
-         *
-         * WARNING: must stay equal to `:data:badges` `MeetupKey.slug`, which badge slugs compared
-         * in [bySlug] are built with. It uses the local [dartLower] approximation instead of the
-         * canonical `DartString` table (spec 00 item 12), so code points whose case mapping
-         * differs between the device's ICU data and Dart's table can miss (display only). Replace
-         * with `DartString.lower` once `DartString` moves to `:core:common`.
+         * Dart `MeetupKey.slug` (badge domain): trim → lowercase → `' '` to `-`, with the canonical
+         * `DartString` table, so it equals `:data:badges` `MeetupKey.slug` (pinned by a test).
          */
         fun meetupSlug(city: String): String = city.dartTrim().dartLower().replace(" ", "-")
     }

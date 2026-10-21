@@ -43,16 +43,14 @@ internal fun JsonElement?.dartIntValue(): Int? {
     return n.value.takeIf { it in Int.MIN_VALUE..Int.MAX_VALUE }?.toInt()
 }
 
-/** Dart `json[key] is int ? json[key] : null` as [Long]. */
-internal fun JsonElement?.dartLongValue(): Long? {
-    if (this !is JsonPrimitive || isString) return null
-    return (runCatching { DartJson.numberOf(this) }.getOrNull() as? DartNumber.Int)?.value
-}
-
 /**
  * Dart `String.toLowerCase()` approximated per code point with the simple (1:1, locale-free)
- * Unicode mapping: no final-sigma rule, `İ` → `i` (spec 00 item 12). Used for comparisons only,
- * never for hashed or signed values.
+ * Unicode mapping: no final-sigma rule, `İ` → `i` (spec 00 item 12). Used for comparisons and
+ * for the signed RSVP `d` tag ([space.einundzwanzig.meetup.data.calendar.nostr.RsvpCodec.dTagFor]),
+ * whose input is an `a` address (kind digits, hex pubkey, d tag) and is afterwards reduced to
+ * `[a-z0-9-]`; the JDK and Dart tables agree on every code point that maps into that range.
+ * TODO: switch to the canonical byte-exact `DartString.lower/upper` once it moves from
+ * `:data:badges` to `:core:common` (owned by other modules; not edited here).
  */
 internal fun String.dartLower(): String = mapCodePoints { Character.toLowerCase(it) }
 

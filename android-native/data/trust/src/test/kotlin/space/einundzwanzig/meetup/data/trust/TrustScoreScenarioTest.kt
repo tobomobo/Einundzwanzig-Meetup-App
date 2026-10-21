@@ -21,6 +21,9 @@ import space.einundzwanzig.meetup.data.trust.score.TrustConfig
 import space.einundzwanzig.meetup.data.trust.score.TrustScore
 import space.einundzwanzig.meetup.data.trust.score.TrustScoreCalculator
 import java.time.ZoneId
+import kotlin.math.ln
+import kotlin.math.max
+import kotlin.math.pow
 
 /** `trustScoreScenarios`, `trustScoreEmpty` and `levelThresholdsLocal` of the spec 04 fixture (§10.4). */
 class TrustScoreScenarioTest {
@@ -73,6 +76,10 @@ class TrustScoreScenarioTest {
             assertEquals(name, e.dbl("activity"), score.activityScore, tol)
             assertEquals(name, e.dbl("maturity"), score.maturityScore, tol)
             assertEquals(name, e.dbl("diversity"), score.diversityScore, tol)
+            // effectiveDiversity is internal; invert diversity = log2(eff+1)*log2(max(signers,1)+1)*W.
+            val signerFactor = ln(max(score.uniqueSigners, 1) + 1.0) / ln(2.0)
+            val effDiversity = 2.0.pow(score.diversityScore / (signerFactor * TrustConfig.WEIGHT_DIVERSITY)) - 1.0
+            assertEquals("$name effDiversity", e.dbl("effDiversity"), effDiversity, 1e-9)
             assertEquals(name, e.dbl("quality"), score.qualityScore, tol)
             assertEquals(name, e.dbl("total"), score.totalScore, tol)
             assertEquals(name, e.str("level"), score.level)
@@ -88,6 +95,7 @@ class TrustScoreScenarioTest {
                 val actual = score.progress.getValue(p.str("key"))
                 assertEquals("$name ${p.str("key")}", p.int("current"), actual.current)
                 assertEquals("$name ${p.str("key")}", p.int("required"), actual.required)
+                assertEquals("$name ${p.str("key")}", NON_EMPTY_LABELS.getValue(p.str("key")), actual.label)
             }
 
             val anchor = DefaultTrustScoreCalculator.weekAnchor(zone)
@@ -158,6 +166,17 @@ class TrustScoreScenarioTest {
         activeThresholds = TrustConfig.thresholds(BootstrapPhase.KEIMPHASE),
         progress = emptyMap(),
     )
+
+    private companion object {
+        /** Dart `trust_score_service.dart` progress labels of a non-empty score. */
+        val NON_EMPTY_LABELS = mapOf(
+            "badges" to "Badges (Nostr-verifiziert)",
+            "meetups" to "Verschiedene Meetups",
+            "signers" to "Verschiedene Ersteller",
+            "age" to "Account-Alter (Tage)",
+            "score" to "Trust Score",
+        )
+    }
 
     private fun JsonObject.int(k: String) = getValue(k).jsonPrimitive.int
     private fun JsonObject.dbl(k: String) = (getValue(k) as JsonPrimitive).double

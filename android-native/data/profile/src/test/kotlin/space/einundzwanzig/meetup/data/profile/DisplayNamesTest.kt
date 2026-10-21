@@ -13,6 +13,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import space.einundzwanzig.meetup.core.common.json.DartJson
 import space.einundzwanzig.meetup.core.common.json.jsonObjectOf
+import space.einundzwanzig.meetup.core.data.prefs.KeyValueStore
 import space.einundzwanzig.meetup.core.data.testing.InMemoryKeyValueStore
 import space.einundzwanzig.meetup.core.nostr.relay.ProfileRelayQuery
 import space.einundzwanzig.meetup.core.nostr.relay.RelayClient
@@ -40,7 +41,7 @@ class DisplayNamesTest {
     /** Only r1 and r2 are active (the other two defaults are switched off). */
     private val store = InMemoryKeyValueStore()
 
-    private suspend fun TestScope.service(): DefaultNostrProfileService {
+    private suspend fun TestScope.service(serviceStore: KeyValueStore = store): DefaultNostrProfileService {
         store.setStringList(
             RelayConfig.KEY_DISABLED_DEFAULTS,
             listOf("wss://relay.nostr.band", "wss://nostr.einundzwanzig.space"),
@@ -50,7 +51,7 @@ class DisplayNamesTest {
             lookup = DefaultNostrProfileLookup({ emptyList() }, ProfileRelayQuery { _, _ -> emptyList() }, time, store, backgroundScope),
             relayConfig = RelayConfig(store, FakeRelayConnector.unreachable()),
             relayClient = RelayClient(relays.connector, dispatcher),
-            store = store,
+            store = serviceStore,
             time = time,
             ioDispatcher = dispatcher,
             scope = backgroundScope,
@@ -271,5 +272,55 @@ class DisplayNamesTest {
         assertEquals("alice", second.await())
         assertEquals(1, relays.reqs.count { it.first == r1 })
         assertEquals(1, relays.reqs.count { it.first == r2 })
+    }
+
+    @Test
+    fun `queued single lookups whose callers are gone are dropped before they take a permit`() = runTest {
+        val service = service()
+        relays.silent += r1
+        relays.silent += r2 // every lookup runs until the timeouts
+        val cap = DefaultNostrProfileService.MAX_PARALLEL_NAME_LOOKUPS
+        val keys = (1..cap + 6).map { it.toString(16).padStart(64, '0') }
+        fun queried(hex: String) = relays.reqs.any { DartJson.encode(it.second[2]).contains(hex) }
+
+        // `cap` lookups hold the permits, 6 wait for one.
+        val running = keys.take(cap).map { async { service.fetchDisplayName(it) } }
+        val queuedCallers = keys.drop(cap).map { async { service.fetchDisplayName(it) } }
+        testScheduler.runCurrent()
+        assertEquals(keys.take(cap), keys.filter(::queried))
+
+        // The callers of 4 queued lookups go away; the remaining 2 are next in line.
+        queuedCallers.take(4).forEach { it.cancel() }
+        testScheduler.runCurrent()
+        running.forEach { assertNull(it.await()) }
+        testScheduler.runCurrent()
+        assertTrue(queried(keys[cap + 4]) && queried(keys[cap + 5]))
+        assertTrue(keys.subList(cap, cap + 4).none(::queried))
+        queuedCallers.drop(4).forEach { assertNull(it.await()) }
+
+        // Dropped lookups cached nothing: a later caller queries again.
+        assertNull(service.fetchDisplayName(keys[cap]))
+        assertTrue(queried(keys[cap]))
+    }
+
+    @Test
+    fun `overlapping batch calls keep each other's names and a failed write does not throw`() = runTest {
+        val service = service()
+        relays.add(r1, profile(SECRET1, "{\"name\":\"Alice\"}", age = 10), profile(SECRET2, "{\"name\":\"Bob\"}", age = 10))
+        relays.silent += r2 // both calls stay in their network phase until the timeout
+        val a = async { service.fetchDisplayNames(listOf(alice)) }
+        val b = async { service.fetchDisplayNames(listOf(bob)) }
+        assertEquals(mapOf(alice to "Alice"), a.await())
+        assertEquals(mapOf(bob to "Bob"), b.await())
+        val stored = DartJson.decode(store.getString("nostr_display_names_v1")!!).jsonObject
+        assertEquals(setOf(alice, bob), stored.keys)
+
+        val failing = object : KeyValueStore by store {
+            override suspend fun setString(key: String, value: String): Boolean =
+                if (key == "nostr_display_names_v1") throw java.io.IOException("disk full") else store.setString(key, value)
+        }
+        val carol = pubOf(SECRET3)
+        relays.add(r1, profile(SECRET3, "{\"name\":\"Carol\"}", age = 10))
+        assertEquals(mapOf(carol to "Carol"), service(failing).fetchDisplayNames(listOf(carol)))
     }
 }

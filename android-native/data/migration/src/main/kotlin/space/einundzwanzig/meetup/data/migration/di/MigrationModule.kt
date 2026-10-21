@@ -12,6 +12,7 @@ import space.einundzwanzig.meetup.data.migration.FlutterMigration
 import space.einundzwanzig.meetup.data.migration.MigrationCompletedHook
 import space.einundzwanzig.meetup.data.migration.MigrationGate
 import space.einundzwanzig.meetup.data.migration.internal.AppLoggerLegacyImporter
+import space.einundzwanzig.meetup.data.migration.internal.AppVersionCode
 import space.einundzwanzig.meetup.data.migration.internal.DefaultFlutterMigration
 import space.einundzwanzig.meetup.data.migration.internal.LegacyLogImporter
 import space.einundzwanzig.meetup.data.migration.legacy.AndroidLegacyKeystore
@@ -40,5 +41,8 @@ internal abstract class MigrationModule {
 
         @Provides
         fun legacyLogImporter(): LegacyLogImporter = AppLoggerLegacyImporter
+
+        @Provides
+        fun appVersionCode(@ApplicationContext context: Context): AppVersionCode = AppVersionCode.of(context)
     }
 }

@@ -69,6 +69,21 @@ class SecretResolverTest {
     }
 
     @Test
+    fun plaintextMainAndBackupAllDifferentAreAllKept() {
+        val third = KeyPair.fromPrivateKeyHex("3".repeat(64))
+        val plan = SecretResolver.resolve(
+            SecretSources(
+                main = mapOf("nostr_nsec_key" to gcm(old.nsec)),
+                backup = mapOf("nostr_nsec_key" to LegacySecret(third.nsec, Source.CBC_BACKUP)),
+                plaintext = mapOf("nostr_nsec_key" to new.nsec),
+            ),
+        )
+        assertEquals(new.nsec, plan.primary.getValue("nostr_nsec_key").value)
+        assertEquals(old.nsec, plan.recovery["legacy_backup/nostr_nsec_key"])
+        assertEquals(third.nsec, plan.recovery["legacy_recovered/nostr_nsec_key"])
+    }
+
+    @Test
     fun espIdentityBecomesPrimaryOnlyWhenItsNpubIsStillReferenced() {
         // F1 loss case: the Flutter 1.7.x app shows an empty identity, prefs still reference the old npub.
         val esp = mapOf("nostr_nsec_key" to old.nsec, "nostr_priv_hex" to old.privateKeyHex, "badge_encryption_key" to hexA)
@@ -154,5 +169,39 @@ class SecretResolverTest {
         )
         assertEquals(setOf("legacy_backup/k", "legacy_esp/k"), plan.recovery.keys)
         assertTrue(plan.recovery.keys.all { '/' in it })
+    }
+
+    @Test
+    fun espNeverReplacesAnUndecryptableCustomEntry() {
+        val plan = SecretResolver.resolve(
+            SecretSources(
+                esp = mapOf("badge_encryption_key" to hexA, "nostr_nsec_key" to old.nsec, "badge_pending_key" to hexB),
+                undecryptable = setOf("badge_encryption_key", "nostr_nsec_key"),
+                referencedNpubs = setOf(old.npub),
+            ),
+        )
+        assertNull(plan.primary["badge_encryption_key"])
+        assertNull(plan.primary["nostr_nsec_key"])
+        assertEquals(hexA, plan.recovery["legacy_esp/badge_encryption_key"])
+        assertEquals(old.nsec, plan.recovery["legacy_esp/nostr_nsec_key"])
+        assertTrue("ESP_HELD_BACK:badge_encryption_key" in plan.warnings)
+        // No custom entry at all: ESP stays primary.
+        assertEquals(hexB, plan.primary["badge_pending_key"]?.value)
+    }
+
+    @Test
+    fun undecryptableMainDoesNotBlockADecryptableBackupOrPlaintext() {
+        val plan = SecretResolver.resolve(
+            SecretSources(
+                backup = mapOf("badge_encryption_key" to LegacySecret(hexB, Source.GCM_BACKUP)),
+                plaintext = mapOf("nostr_nsec_key" to new.nsec),
+                esp = mapOf("badge_encryption_key" to hexA, "nostr_nsec_key" to old.nsec),
+                undecryptable = setOf("badge_encryption_key", "nostr_nsec_key"),
+            ),
+        )
+        assertEquals(hexB, plan.primary["badge_encryption_key"]?.value)
+        assertEquals(new.nsec, plan.primary["nostr_nsec_key"]?.value)
+        assertEquals(hexA, plan.recovery["legacy_esp/badge_encryption_key"])
+        assertEquals(old.nsec, plan.recovery["legacy_esp/nostr_nsec_key"])
     }
 }

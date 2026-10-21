@@ -5,24 +5,50 @@ enum class TrustSignalKind(
     val labelKey: String,
     val explanationKey: String,
     val adviceKey: String,
+    /** Semantic colour of the signal; map it to a theme token (see [TrustSignalColor]). */
+    val color: TrustSignalColor,
 ) {
     /** red400, `warning_amber_rounded`. */
-    WEAK("rlWeakLabel", "rlWeakExpl", "rlWeakAdvice"),
+    WEAK("rlWeakLabel", "rlWeakExpl", "rlWeakAdvice", TrustSignalColor.ERROR),
 
     /** orange, `info_outline`. */
-    LIMITED("rlLimitedLabel", "rlLimitedExpl", "rlLimitedAdvice"),
+    LIMITED("rlLimitedLabel", "rlLimitedExpl", "rlLimitedAdvice", TrustSignalColor.WARNING),
 
     /** amber, `shield_outlined`. */
-    BUILDING("rlBuildingLabel", "rlBuildingExpl", "rlBuildingAdvice"),
+    BUILDING("rlBuildingLabel", "rlBuildingExpl", "rlBuildingAdvice", TrustSignalColor.CAUTION),
 
     /** green, `verified_user`. */
-    CONNECTED("rlConnectedLabel", "rlConnectedExpl", "rlConnectedAdvice"),
+    CONNECTED("rlConnectedLabel", "rlConnectedExpl", "rlConnectedAdvice", TrustSignalColor.SUCCESS),
 
     /** green300, `shield`. */
-    SOLID("rlSolidLabel", "rlSolidExpl", "rlSolidAdvice"),
+    SOLID("rlSolidLabel", "rlSolidExpl", "rlSolidAdvice", TrustSignalColor.SUCCESS_SOFT),
 
     /** amber, `shield_outlined`; the label is the BUILDING one. */
-    DEFAULT("rlBuildingLabel", "rlDefaultExpl", "rlDefaultAdvice"),
+    DEFAULT("rlBuildingLabel", "rlDefaultExpl", "rlDefaultAdvice", TrustSignalColor.CAUTION),
+}
+
+/**
+ * Semantic colour of a [TrustSignalKind]. Features map it to theme tokens, never to ARGB:
+ * [ERROR] → `colorScheme.error`, [WARNING] → `extendedColors.bitcoin`, [CAUTION] → the amber
+ * mapping of `TrustLevelColor.AMBER` (`extendedColors.community` until `:core:ui` offers an
+ * amber token), [SUCCESS] → `extendedColors.success`, [SUCCESS_SOFT] → `extendedColors.success`
+ * at reduced emphasis (alpha 0.7).
+ */
+enum class TrustSignalColor {
+    /** Flutter `Colors.red.shade400` (0xFFEF5350). */
+    ERROR,
+
+    /** Flutter `Colors.orange` (0xFFFF9800). */
+    WARNING,
+
+    /** Flutter `Colors.amber` (0xFFFFC107). */
+    CAUTION,
+
+    /** Flutter `Colors.green` (0xFF4CAF50). */
+    SUCCESS,
+
+    /** Flutter `Colors.green.shade300` (0xFF81C784). */
+    SUCCESS_SOFT,
 }
 
 /** Meaning line of the Meetup layer card. */
@@ -146,19 +172,22 @@ object TrustLayersEvaluator {
         else -> platform
     }
 
-    /** Meetup layer score 0..8, `null` without badges. */
-    fun physicalScore(badgeCount: Int?, meetupCount: Int?, signerCount: Int?, boundBadges: Int?): Double? {
-        if (badgeCount == null || badgeCount == 0) return null
+    /**
+     * Meetup layer score 0..8, `null` without badges. Denominators are summed in `Double`
+     * (Dart adds in int64), so remote counts near the integer limit never wrap negative.
+     */
+    fun physicalScore(badgeCount: Long?, meetupCount: Long?, signerCount: Long?, boundBadges: Long?): Double? {
+        if (badgeCount == null || badgeCount == 0L) return null
         var score = 0.0
-        score += (badgeCount.toDouble() / (badgeCount + 5)) * 3.0
-        if (meetupCount != null) score += (meetupCount.toDouble() / (meetupCount + 3)) * 2.0
-        if (signerCount != null) score += (signerCount.toDouble() / (signerCount + 3)) * 2.0
-        if (boundBadges != null && badgeCount > 0) score += (boundBadges.toDouble() / badgeCount) * 1.0
+        score += (badgeCount.toDouble() / (badgeCount.toDouble() + 5)) * 3.0
+        if (meetupCount != null) score += (meetupCount.toDouble() / (meetupCount.toDouble() + 3)) * 2.0
+        if (signerCount != null) score += (signerCount.toDouble() / (signerCount.toDouble() + 3)) * 2.0
+        if (boundBadges != null && badgeCount > 0) score += (boundBadges.toDouble() / badgeCount.toDouble()) * 1.0
         return score.coerceIn(0.0, 8.0)
     }
 
     /** Identity layer score 0..2, `null` when 0. Account age > 30 days counts (PARITY). */
-    fun identityScore(nip05: Nip05LayerInput?, platformProofCount: Int?, accountAgeDays: Int?): Double? {
+    fun identityScore(nip05: Nip05LayerInput?, platformProofCount: Long?, accountAgeDays: Long?): Double? {
         var score = 0.0
         if (nip05 != null && nip05.valid) score += nip05.score
         if (platformProofCount != null && platformProofCount > 0) {
@@ -210,13 +239,13 @@ object TrustLayersEvaluator {
         val combined = combinedScore(input)
 
         val hasMeetup = physical != null && physical > 0
-        val hasDiversity = (input.signerCount ?: 0) >= 2
+        val hasDiversity = (input.signerCount ?: 0L) >= 2
         val allBound = input.boundBadges != null && input.badgeCount != null && input.boundBadges == input.badgeCount
         val meetupMeaning = when {
             !hasMeetup -> MeetupMeaning.NONE
             hasDiversity -> MeetupMeaning.GOOD_DIVERSITY
             // Not implied by hasMeetup: a negative remote badge count can still score > 0.
-            (input.badgeCount ?: 0) > 0 -> MeetupMeaning.SINGLE_ORGANIZER
+            (input.badgeCount ?: 0L) > 0 -> MeetupMeaning.SINGLE_ORGANIZER
             else -> MeetupMeaning.NO_TEXT
         }
 
@@ -242,7 +271,7 @@ object TrustLayersEvaluator {
         }
 
         val hasNip05 = input.nip05 != null && input.nip05.valid
-        val hasPlatforms = (input.platformProofCount ?: 0) > 0 || !input.platformProofs.isNullOrEmpty()
+        val hasPlatforms = (input.platformProofCount ?: 0L) > 0 || !input.platformProofs.isNullOrEmpty()
         val hasIdentity = hasNip05 || hasPlatforms
         val identityMeaning = when {
             !hasIdentity -> IdentityMeaning.NONE

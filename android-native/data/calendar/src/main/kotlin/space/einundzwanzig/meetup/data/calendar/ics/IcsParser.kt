@@ -23,7 +23,7 @@ data class IcsComponent(val type: String, val values: Map<String, Any>) {
     fun date(name: String): IcsDateTime? = values[name] as? IcsDateTime
 }
 
-/** Thrown for a document `icalendar_parser` rejects (envelope, VERSION/PRODID). */
+/** Thrown for a document `icalendar_parser` rejects (envelope, VERSION/PRODID, GEO/STATUS/TRANSP values). */
 class IcsFormatException(message: String) : Exception(message)
 
 /**
@@ -37,6 +37,8 @@ class IcsFormatException(message: String) : Exception(message)
  *   with `\,` → `,`; only the package's known property names are stored;
  * - a line whose name part has no `;` and is not upper case (or has no `:` at all) is appended to
  *   the last stored string property (continuation quirk);
+ * - `GEO` with non-numeric halves, and `STATUS`/`TRANSP` with a value outside the package's
+ *   enums, make the whole parse fail;
  * - nested components are emitted as separate components when they end.
  */
 object IcsParser {
@@ -63,6 +65,13 @@ object IcsParser {
         "STATUS" to "status", "TRANSP" to "transp", "ORGANIZER" to "organizer", "GEO" to "geo",
         "CATEGORIES" to "categories", "ATTENDEE" to "attendee", "EXDATE" to "exdate",
     )
+    /** Keys of the package's `IcsStatus` enum. */
+    private val STATUS_VALUES = setOf(
+        "TENTATIVE", "CONFIRMED", "CANCELLED", "NEEDS-ACTION", "COMPLETED", "IN-PROCESS", "DRAFT", "FINAL",
+    )
+
+    /** Keys of the package's `IcsTransp` enum. */
+    private val TRANSP_VALUES = setOf("OPAQUE", "TRANSPARENT")
     private val DART_NUM = Regex("""[+-]?(NaN|Infinity|(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?|0[xX][0-9a-fA-F]+)""")
 
     /** Dart `RegExp(r'/\\n/g')` of `generateSimpleParamFunction` (matches the literal text `/\n/g`). */
@@ -164,6 +173,14 @@ object IcsParser {
                         val pos = value.split(';')
                         if (pos.size != 2) continue
                         if (pos.any { !DART_NUM.matches(it.dartTrim()) }) throw IcsFormatException("Invalid GEO: $value")
+                    }
+                    // Dart `IcsStatus.fromString` / `IcsTransp.fromString` throw on unknown values,
+                    // which fails the whole parse.
+                    if (name == "STATUS" && value.dartTrim().dartUpper() !in STATUS_VALUES) {
+                        throw IcsFormatException("Unknown IcsStatus: ${value.dartTrim()}")
+                    }
+                    if (name == "TRANSP" && value.dartTrim().dartUpper() !in TRANSP_VALUES) {
+                        throw IcsFormatException("Unknown IcsTransp: ${value.dartTrim()}")
                     }
                     target[STRUCTURED_FIELDS.getValue(name)] = IcsStructured(value, params)
                 }

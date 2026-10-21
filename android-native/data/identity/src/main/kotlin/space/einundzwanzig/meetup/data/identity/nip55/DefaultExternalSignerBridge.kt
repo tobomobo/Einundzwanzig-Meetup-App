@@ -3,6 +3,8 @@ package space.einundzwanzig.meetup.data.identity.nip55
 import android.content.Intent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,8 +32,11 @@ internal data class ExternalSignerResult(val resultCode: Int, val data: Intent?)
  * also only accepted for a request the host actually launched.
  *
  * A request is only published while a host is attached ([attachHost]); without one, [launch]
- * waits at most [HOST_WAIT_MS] (configuration change) and then fails with `cancelled`, so a
- * background caller never holds the single slot indefinitely.
+ * waits at most [HOST_WAIT_MS] (configuration change) and then fails with `cancelled`. The same
+ * applies to a published request that the host has not launched yet: if every host detaches and
+ * none returns within [HOST_WAIT_MS], the request is released and fails with `cancelled`. So a
+ * background caller never holds the single slot indefinitely, and Amber never pops up out of
+ * context when the Activity comes back later.
  */
 @Singleton
 internal class DefaultExternalSignerBridge @Inject constructor() : ExternalSignerBridge {
@@ -62,7 +67,8 @@ internal class DefaultExternalSignerBridge @Inject constructor() : ExternalSigne
      *
      * @throws Nip55Exception `busy` if another request is running (including an abandoned one
      *   whose signer activity has not returned yet), `launch_failed` if the host could not start it,
-     *   `cancelled` if no host attached within [HOST_WAIT_MS].
+     *   `cancelled` if no host attached within [HOST_WAIT_MS] (before publishing, or while the
+     *   published request was not launched yet).
      */
     suspend fun launch(intent: Intent): ExternalSignerResult {
         if (hosts.value <= 0) {
@@ -77,7 +83,7 @@ internal class DefaultExternalSignerBridge @Inject constructor() : ExternalSigne
             }
         }
         try {
-            return request.deferred.await()
+            return awaitResult(request)
         } catch (e: CancellationException) {
             synchronized(lock) {
                 if (current === request) {
@@ -91,6 +97,35 @@ internal class DefaultExternalSignerBridge @Inject constructor() : ExternalSigne
                 }
             }
             throw e
+        }
+    }
+
+    /**
+     * Awaits [request]'s result while a watchdog releases it with `cancelled` if all hosts are
+     * gone for [HOST_WAIT_MS] before the request was launched (a host that detaches right after
+     * publishing, e.g. the Activity stopping, would otherwise strand the request and the slot).
+     */
+    private suspend fun awaitResult(request: Request): ExternalSignerResult = coroutineScope {
+        val watchdog = launch {
+            while (true) {
+                hosts.first { it <= 0 }
+                if (withTimeoutOrNull(HOST_WAIT_MS) { hosts.first { it > 0 } } != null) continue
+                val orphaned = synchronized(lock) {
+                    (current === request && !request.launched).also { if (it) release(request) }
+                }
+                if (orphaned) {
+                    AppLogger.debug("AmberSigner", "Signer-Anfrage ohne Oberfläche verworfen.")
+                    request.deferred.completeExceptionally(
+                        Nip55Exception("cancelled", "Keine Oberfläche für die Signer-Anfrage"),
+                    )
+                }
+                return@launch
+            }
+        }
+        try {
+            request.deferred.await()
+        } finally {
+            watchdog.cancel()
         }
     }
 

@@ -1,6 +1,6 @@
 package space.einundzwanzig.meetup.data.chat
 
-import space.einundzwanzig.meetup.data.badges.text.DartString
+import space.einundzwanzig.meetup.data.chat.internal.dartLower
 import java.time.Instant
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
@@ -16,11 +16,11 @@ object ChatRules {
     const val DUPLICATE_WINDOW_MILLIS: Long = 2 * 60 * 1000L
 
     /**
-     * Dart `ChatService._slugify`: Dart-lowercase (`DartString.lower`, binding resolution #12), `ä→ae ö→oe ü→ue ß→ss`, every run of
+     * Dart `ChatService._slugify`: Dart-lowercase (binding resolution #12, `İ` → `i`), `ä→ae ö→oe ü→ue ß→ss`, every run of
      * characters outside `[a-z0-9]` → `-`, leading/trailing `-` removed. No Unicode
      * normalisation (decomposed umlauts become `-`).
      */
-    fun slugify(input: String): String = DartString.lower(input)
+    fun slugify(input: String): String = input.dartLower()
         .replace("ä", "ae")
         .replace("ö", "oe")
         .replace("ü", "ue")
@@ -37,7 +37,7 @@ object ChatRules {
         val needle = slugify(city)
         if (needle.isEmpty()) return null
         rooms.firstOrNull { r ->
-            val slug = DartString.lower(r.meetupSlug)
+            val slug = r.meetupSlug.dartLower()
             slug == needle || slug.endsWith("-$needle")
         }?.let { return it }
         return rooms.firstOrNull { slugify(it.name) == needle }

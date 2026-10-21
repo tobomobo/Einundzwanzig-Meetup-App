@@ -48,11 +48,32 @@ internal class DefaultZapVerificationService @Inject constructor(
 ) : ZapVerificationService {
 
     override suspend fun analyzeZapActivity(pubkeyHex: String, useCache: Boolean): ZapStats =
-        withContext(dispatcher) { analyze(pubkeyHex, useCache) }
+        withContext(dispatcher) { neverThrowing { analyze(pubkeyHex, useCache) } }
 
+    /** Last line of defence for the "never throws except cancellation" contract. */
+    private suspend fun neverThrowing(block: suspend () -> ZapStats): ZapStats = try {
+        block()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log.warn(TAG, "Zap-Statistik fehlgeschlagen: $e")
+        ZapStats.EMPTY
+    }
+
+    /**
+     * Never throws except for cancellation (Dart let relay-config and cache-write errors escape):
+     * an unreadable relay config gives [ZapStats.EMPTY], a failed cache write keeps the stats.
+     */
     private suspend fun analyze(pubkeyHex: String, useCache: Boolean): ZapStats {
         if (useCache) loadCachedStats(pubkeyHex)?.let { return it }
-        val relays = relayConfig.getActiveRelays()
+        val relays = try {
+            relayConfig.getActiveRelays()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.warn(TAG, "Relay-Liste nicht lesbar, keine Zap-Statistik: $e")
+            return ZapStats.EMPTY
+        }
         val (received, sent) = coroutineScope {
             val r = async { fetchZapReceipts(relays, pubkeyHex, isReceived = true) }
             val s = async { fetchZapReceipts(relays, pubkeyHex, isReceived = false) }
@@ -63,7 +84,7 @@ internal class DefaultZapVerificationService @Inject constructor(
         return stats
     }
 
-    override suspend fun getMyStats(): ZapStats = withContext(dispatcher) { myStats() }
+    override suspend fun getMyStats(): ZapStats = withContext(dispatcher) { neverThrowing { myStats() } }
 
     private suspend fun myStats(): ZapStats {
         val npub = identity.npub()
@@ -143,20 +164,29 @@ internal class DefaultZapVerificationService @Inject constructor(
         return kept
     }
 
-    private suspend fun loadCachedStats(pubkey: String): ZapStats? {
+    private suspend fun loadCachedStats(pubkey: String): ZapStats? = try {
         val ts = store.getInt(CACHE_TS_PREFIX + pubkey) ?: 0L
-        if (time.nowMillis() - ts > CACHE_TTL.inWholeMilliseconds) return null
-        val json = store.getString(CACHE_STATS_PREFIX + pubkey) ?: return null
-        return try {
-            ZapStats.fromJson(DartJson.decode(json) as JsonObject)
-        } catch (e: Exception) {
+        val json = store.getString(CACHE_STATS_PREFIX + pubkey)
+        if (time.nowMillis() - ts > CACHE_TTL.inWholeMilliseconds || json == null) {
             null
+        } else {
+            ZapStats.fromJson(DartJson.decode(json) as JsonObject)
         }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        null
     }
 
     private suspend fun cacheStats(pubkey: String, stats: ZapStats) {
-        store.setString(CACHE_STATS_PREFIX + pubkey, DartJson.encode(stats.toJson()))
-        store.setInt(CACHE_TS_PREFIX + pubkey, time.nowMillis())
+        try {
+            store.setString(CACHE_STATS_PREFIX + pubkey, DartJson.encode(stats.toJson()))
+            store.setInt(CACHE_TS_PREFIX + pubkey, time.nowMillis())
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.warn(TAG, "Zap-Statistik nicht gecacht: $e")
+        }
     }
 
     companion object {

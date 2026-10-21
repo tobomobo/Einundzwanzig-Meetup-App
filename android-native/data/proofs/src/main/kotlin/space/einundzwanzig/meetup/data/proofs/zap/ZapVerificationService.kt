@@ -19,10 +19,16 @@ interface ZapVerificationService {
      * concurrently from the first 3 active relays (each sequential, stopping at ≥ 50), filtered
      * to provider-issued receipts, and the result is written to the cache (always, for any
      * pubkey — Dart parity, spec 06 §14 R18). Other users: pass `useCache = false`.
+     *
+     * Never throws except for cancellation: unreachable relays count as no receipts, an
+     * unreadable relay config gives [ZapStats.EMPTY], a failed cache write is only logged.
      */
     suspend fun analyzeZapActivity(pubkeyHex: String, useCache: Boolean = true): ZapStats
 
-    /** Dart `getMyStats()`: stats of the active identity (cached), [ZapStats.EMPTY] without one. */
+    /**
+     * Dart `getMyStats()`: stats of the active identity (cached), [ZapStats.EMPTY] without one.
+     * Never throws except for cancellation (same rules as [analyzeZapActivity]).
+     */
     suspend fun getMyStats(): ZapStats
 
     companion object {

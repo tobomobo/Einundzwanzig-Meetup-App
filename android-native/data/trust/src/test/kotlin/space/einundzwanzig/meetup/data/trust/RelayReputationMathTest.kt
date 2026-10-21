@@ -34,6 +34,19 @@ class RelayReputationMathTest {
     }
 
     @Test
+    fun basicScore_longAccountAge_matchesIntOverloadAndCaps() {
+        assertEquals(
+            RelayReputationMath.basicScore(4, 2, 2, 2, 90),
+            RelayReputationMath.basicScore(4, 2, 2, 2, 90L),
+            0.0,
+        )
+        // Beyond the Int range: age term caps at 2.0 (Dart int64), negative ages clamp to 0.
+        val huge = RelayReputationMath.basicScore(0, 0, 0, 0, Int.MAX_VALUE.toLong() * 4)
+        assertEquals(2.0, huge, 0.0)
+        assertEquals(0.0, RelayReputationMath.basicScore(0, 0, 0, 0, -5L), 0.0)
+    }
+
+    @Test
     fun levelForBasicBoundaries() {
         assertEquals("NEU", RelayReputationMath.levelForBasic(0.0))
         assertEquals("STARTER", RelayReputationMath.levelForBasic(0.1))
@@ -85,5 +98,70 @@ class RelayReputationMathTest {
         )
         assertEquals("08e47cd91958e564", RelayReputationMath.changeHash(badges))
         assertEquals("7ae0599afb0f4e0d", RelayReputationMath.changeHash(emptyList()))
+    }
+
+    @Test
+    fun meetupListHash12Vectors() {
+        for (row in Fixtures["hashes"].jsonObject.getValue("meetupListHash12").jsonArray.map { it.jsonObject }) {
+            assertEquals(
+                row.getValue("hex12").jsonPrimitive.content,
+                RelayReputationMath.meetupListHash(row.getValue("meetupName").jsonPrimitive.content),
+            )
+        }
+        assertEquals("d4ca521ba896", RelayReputationMath.meetupListHash("Aschaffenburg"))
+    }
+
+    @Test
+    fun meetupListHashes_countedFirstSeenTakeTen() {
+        fun badge(id: String, meetup: String, signed: Boolean = true, organizer: Boolean = false) = MeetupBadge(
+            id = id,
+            meetupName = meetup,
+            date = DartDateTime.utc(2026, 10, 1),
+            iconPath = "",
+            sig = if (signed) "a".repeat(128) else "",
+            sigVersion = if (signed) 2L else 0L,
+            adminPubkey = if (signed) "b".repeat(64) else "",
+            isOrganizer = organizer,
+        )
+        val badges = listOf(
+            badge("u", "Unsigned", signed = false),
+            badge("o", "Organizer", organizer = true),
+            badge("1", "Wien"),
+            badge("2", "Aschaffenburg"),
+            badge("3", "Wien"),
+        ) + (1..12).map { badge("m$it", "M$it") }
+        val hashes = RelayReputationMath.meetupListHashes(badges)
+        assertEquals(10, hashes.size)
+        assertEquals("7ee037922dee", hashes[0])
+        assertEquals("d4ca521ba896", hashes[1])
+        assertEquals(RelayReputationMath.meetupListHash("M8"), hashes[9])
+        assertEquals(emptyList<String>(), RelayReputationMath.meetupListHashes(emptyList()))
+    }
+
+    @Test
+    fun sinceUsesStoredZoneFields() {
+        val berlin = java.time.ZoneId.of("Europe/Berlin")
+        // UTC value: UTC fields regardless of the zone.
+        assertEquals("2025-12", RelayReputationMath.since(DartDateTime.utc(2025, 12, 31, 23, 30), berlin))
+        // Local value: the same instant read in Berlin is already January.
+        val local = DartDateTime.fromMicrosecondsSinceEpoch(DartDateTime.utc(2025, 12, 31, 23, 30).microsecondsSinceEpoch)
+        assertEquals("2026-01", RelayReputationMath.since(local, berlin))
+        assertEquals("2025-12", RelayReputationMath.since(local, java.time.ZoneOffset.UTC))
+        // Year not padded.
+        assertEquals("999-03", RelayReputationMath.since(DartDateTime.utc(999, 3, 1), berlin))
+    }
+
+    @Test
+    fun accountAgeDaysFromEarliestBadge() {
+        fun badge(id: String, date: DartDateTime) = MeetupBadge(id = id, meetupName = "A", date = date, iconPath = "")
+        val now = DartDateTime.utc(2026, 10, 21, 12)
+        val time = FakeTime(now.microsecondsSinceEpoch)
+        val badges = listOf(
+            badge("1", DartDateTime.utc(2026, 10, 1, 12)),
+            badge("2", DartDateTime.utc(2026, 4, 24, 13)),
+        )
+        // 179 days and 23 hours → 179.
+        assertEquals(179L, RelayReputationMath.accountAgeDays(badges, time))
+        assertEquals(0L, RelayReputationMath.accountAgeDays(emptyList(), time))
     }
 }

@@ -8,10 +8,12 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import space.einundzwanzig.meetup.core.common.json.jsonObjectOf
 import space.einundzwanzig.meetup.data.calendar.internal.MyEventsServiceImpl
 import space.einundzwanzig.meetup.data.calendar.model.CalendarEventDraft
+import space.einundzwanzig.meetup.data.calendar.model.FavoriteCards
 import space.einundzwanzig.meetup.data.calendar.model.MeetupDate
 import space.einundzwanzig.meetup.data.calendar.model.NostrCalendarEvent
 import space.einundzwanzig.meetup.data.calendar.model.RsvpStatus
@@ -25,6 +27,7 @@ import space.einundzwanzig.meetup.data.meetups.portal.PortalApiService
 import java.lang.reflect.Proxy
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
 
 /** Home "Meine Termine" / favorite-card logic (spec 10 §2.5, spec 12 §8.3–§8.5). */
 class MyEventsServiceTest {
@@ -106,11 +109,11 @@ class MyEventsServiceTest {
     private fun service(user: UserProfile, widget: Widget = Widget(), dates: List<MeetupDate> = emptyList()) = MyEventsServiceImpl(
         calendar, rsvps,
         object : MeetupCalendarService {
-            override suspend fun fetchPortalFirst() = dates
+            override suspend fun fetchPortalFirst(force: Boolean) = dates
             override suspend fun fetchIcs() = emptyList<MeetupDate>()
         },
         Directory(listOf(berlin, hamburg, munich)), portal, Profiles(user), widget, time, testLog(),
-    )
+    ).also { it.zoneProvider = { ZoneId.of("Europe/Berlin") } }
 
     private fun nostr(address: String, startInDays: Long) = NostrCalendarEvent(
         id = "i", pubkey = address.split(':')[1], dTag = address.split(':')[2], title = address, description = "", location = "",
@@ -164,14 +167,27 @@ class MyEventsServiceTest {
             date("Einundzwanzig Berlin", -1, meetupId = "1"),
         )
         val widget = Widget()
-        val cards = service(UserProfile(favoriteMeetupIds = listOf("1", "3", "2")), widget, dates).loadFavoriteCards()
+        val result = service(UserProfile(favoriteMeetupIds = listOf("1", "3", "2")), widget, dates).loadFavoriteCards()
+        assertEquals(true, (result as FavoriteCards.Loaded).datesAvailable)
+        val cards = result.cards
         assertEquals(listOf("2", "1", "3"), cards.map { it.favKey })
         assertEquals(now.plus(Duration.ofDays(2)), cards[0].next?.start)
         assertNull(cards[1].next)
         assertEquals(listOf("Hamburg" to now.plus(Duration.ofDays(2))), widget.meetups)
 
         val empty = Widget()
-        assertEquals(emptyList<Any>(), service(UserProfile(), empty, dates).loadFavoriteCards())
+        assertEquals(FavoriteCards.NoFavorites, service(UserProfile(), empty, dates).loadFavoriteCards())
         assertEquals(listOf("" to null), empty.meetups)
+    }
+
+    @Test
+    fun `unreachable dates keep the stored widget meetup`() = runTest {
+        val widget = Widget()
+        val result = service(UserProfile(favoriteMeetupIds = listOf("1", "2")), widget, emptyList()).loadFavoriteCards()
+        result as FavoriteCards.Loaded
+        assertEquals(false, result.datesAvailable)
+        assertEquals(listOf("1", "2"), result.cards.map { it.favKey })
+        assertTrue(result.cards.all { it.next == null })
+        assertEquals(emptyList<Any>(), widget.meetups)
     }
 }

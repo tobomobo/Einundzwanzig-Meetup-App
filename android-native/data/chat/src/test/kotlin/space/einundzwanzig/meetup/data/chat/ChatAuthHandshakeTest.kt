@@ -4,6 +4,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -156,6 +157,25 @@ class ChatAuthHandshakeTest {
         assertEquals(warnings, chatWarnings())
         assertEquals(1, calls)
         assertTrue(ws.sent.isEmpty())
+    }
+
+    @Test
+    fun `signer failure at the deadline logs exactly one warning`() = runTest {
+        val ws = FakeRelaySocket(GROUP_RELAY)
+        val before = chatWarnings()
+        // Signer failure and handshake deadline fall on the same instant: only the path that
+        // actually ends the handshake logs.
+        val connection = start(ws) { _, _, _ ->
+            delay(deadline)
+            throw SigningException("user rejected")
+        }
+        ws.push(listOf("AUTH", "challenge"))
+        runCurrent()
+        advanceTimeBy(deadline)
+        runCurrent()
+        assertNull(connection.await())
+        assertEquals(1, chatWarnings() - before)
+        assertTrue(ws.isClosed)
     }
 
     @Test

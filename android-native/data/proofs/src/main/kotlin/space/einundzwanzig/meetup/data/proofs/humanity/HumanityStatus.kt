@@ -100,8 +100,11 @@ enum class HumanityOutcome {
     INVALID_NPUB,
 
     /**
-     * Unexpected failure outside the per-relay loop (e.g. relay config or prefs). Flutter left the
-     * screen spinning forever (spec 06 §14 R23); the native port reports it instead.
+     * The check could not complete: unexpected failure outside the per-relay loop (relay config,
+     * prefs), a found receipt that could not be stored, or a result discarded because the identity
+     * or the `humanity_*` keys changed during the search (spec 06 §14 R20). Flutter left the screen
+     * spinning forever on such errors (R23); the native port reports them. Says nothing about
+     * whether the user ever zapped ("Prüfung fehlgeschlagen — bitte erneut versuchen.").
      */
     ERROR,
 }
@@ -113,14 +116,19 @@ data class HumanityCheckResult(
     val receiptEventId: String? = null,
     val zapTimestamp: Long? = null,
 ) {
-    /** The German service message of the Flutter app. */
+    /**
+     * The German service message of the Flutter app; [HumanityOutcome.ERROR] (no Flutter
+     * counterpart) gets a generic retry text. UI should switch on [outcome] and use its own
+     * localized strings rather than show this raw.
+     */
     val message: String
         get() = when (outcome) {
             HumanityOutcome.FOUND -> "Lightning-Zahlung gefunden — du bist verifiziert!"
             HumanityOutcome.NO_KEY -> "Kein Schlüssel vorhanden"
             HumanityOutcome.INVALID_NPUB -> "Ungültiger npub"
-            HumanityOutcome.NOT_FOUND, HumanityOutcome.ERROR ->
+            HumanityOutcome.NOT_FOUND ->
                 "Kein Zap-Receipt gefunden. Hast du schon einmal jemanden auf Nostr gezappt? " +
                     "Zappe irgendjemanden (egal wieviel Sats) und komm zurück."
+            HumanityOutcome.ERROR -> "Prüfung fehlgeschlagen — bitte erneut versuchen."
         }
 }

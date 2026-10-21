@@ -27,12 +27,16 @@ interface PortalApiService {
 
     /**
      * Stores [token] and binds it to the mode-aware `SigningService.npub()` (if non-empty), both in
-     * one secure-store transaction. A failed write is logged; [loginWithNostr] then fails.
+     * one secure-store transaction. Returns `false` (and logs) if the secure store rejected the
+     * write and nothing was stored (Dart threw); show an error then, never "saved".
      */
-    suspend fun storeToken(token: String)
+    suspend fun storeToken(token: String): Boolean
 
-    /** `storeToken(token.trim())` — personal token created on the portal website. */
-    suspend fun setManualToken(token: String)
+    /**
+     * `storeToken(token.trim())` — personal token created on the portal website. `false` if the
+     * token could not be stored.
+     */
+    suspend fun setManualToken(token: String): Boolean
 
     /** Deletes token and binding; `false` (and a log line) if the secure store failed. */
     suspend fun deleteToken(): Boolean
@@ -45,12 +49,17 @@ interface PortalApiService {
      */
     suspend fun loginWithNostr(deviceName: String = PortalUrls.DEVICE_NAME): PortalResult
 
-    /** Revokes the token server-side (best effort, errors ignored) and always deletes it locally. */
+    /**
+     * Revokes the token server-side (best effort, errors ignored) and always deletes it locally.
+     * Runs non-cancellable: cancelling the caller does not skip the local delete.
+     */
     suspend fun logout()
 
     /**
      * Does the stored token belong to the active identity? `false` = proven foreign or dead
-     * (callers then delete it); `true` when in doubt. Decision table: spec 09 §8.11.
+     * (callers then delete it); `true` when in doubt. Decision table: spec 09 §8.11. If
+     * `SigningService.npub()` throws (signer unreachable) the answer is `true` (Dart propagated the
+     * exception and the token was kept); `null`/empty npub stays `false`.
      */
     suspend fun tokenMatchesCurrentKey(): Boolean
 

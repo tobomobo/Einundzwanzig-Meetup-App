@@ -1,13 +1,16 @@
 package space.einundzwanzig.meetup.data.proofs.platform
 
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import space.einundzwanzig.meetup.core.common.DefaultDispatcher
 import space.einundzwanzig.meetup.core.common.dart.dartTrim
 import space.einundzwanzig.meetup.data.badges.text.DartString
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /** Dart `VerifyLevel` (stage 3 … 0). */
 enum class VerifyLevel { FULL, PARTIAL, SIGNATURE_ONLY, INVALID }
@@ -94,26 +97,31 @@ data class ProofVerifyResult<out R>(
 )
 
 /**
- * Dart `PlatformProofService.verifyProofString` (spec 06 §8.2) without the relay fetch.
+ * Dart `PlatformProofService.verifyProofString` (spec 06 §8.2, `PlatformProofVerifier` of §13)
+ * without the relay fetch. Injectable `@Singleton`.
  *
  * **Seam:** fetching the reputation event (`ReputationPublisher.fetchByNpub`) lives in
- * `:data:reputation`, which depends on this module. That module calls
+ * `:data:reputation`, which depends on this module (the spec's constructor dependency on a
+ * `ReputationFetcher` would be a module cycle). That module injects this class and wraps it once:
  *
  * ```
- * PlatformProofVerification.verify(input, expectedUsername,
+ * verifier.verify(input, expectedUsername,
  *     fetchByNpub = { npub -> reputationFetcher.fetchByNpub(npub) },
  *     facts = { rep -> ReputationFacts(rep.boundBadges, rep.totalBadges, rep.platformProofs) })
  * ```
  *
  * and exposes the result to the verify screen and the QR scanner.
  */
-object PlatformProofVerification {
+@Singleton
+class PlatformProofVerifier @Inject constructor(
+    @DefaultDispatcher private val dispatcher: CoroutineDispatcher,
+) {
 
     /**
      * Verifies a `21rep::` verify string or a bare npub. Never throws except for cancellation:
      * any exception (also from [fetchByNpub]) gives [VerifyLevel.INVALID] with [VerifyMessage.Error]
      * (Dart wording `"Verifikations-Fehler: $e"`). Main-safe: the Dart case-mapping table is
-     * loaded on [Dispatchers.Default]; [fetchByNpub] runs in the caller's context.
+     * loaded on the injected `@DefaultDispatcher`; [fetchByNpub] runs in the caller's context.
      */
     suspend fun <R : Any> verify(
         input: String,
@@ -121,7 +129,7 @@ object PlatformProofVerification {
         fetchByNpub: suspend (npub: String) -> R?,
         facts: (R) -> ReputationFacts,
     ): ProofVerifyResult<R> = try {
-        withContext(Dispatchers.Default) { DartString.warmUp() }
+        withContext(dispatcher) { DartString.warmUp() }
         verifyOrThrow(input, expectedUsername, fetchByNpub, facts)
     } catch (e: CancellationException) {
         throw e

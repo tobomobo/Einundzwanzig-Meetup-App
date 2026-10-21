@@ -49,7 +49,7 @@ Package root: `space.einundzwanzig.meetup.data.badges`
 | `BadgeSecurity.isExpired(data, nowSeconds)` / `expiryInfo(data, nowSeconds): ExpiryInfo` (`toGermanString()`) | Expiry |
 | `BadgeSecurity.eventMeetupId(address, title)` / `eventAddressOf(normalized)` / `eventBadgeKey(address)` | Event-badge `m` and keys (spec 02 §8.4) |
 | `BadgeSecurity.signedCoordinates(data)` | Always `(0.0, 0.0)`: `la`/`lo` are unsigned (Audit H1) |
-| `BadgeSecurity.signQrV3(signer, json)` / `verifyQrV3(...)` / `parseQrV3(code)` / `verifyQrLegacy(...)` | Reputation QR `21v3:` (kind 21001, tags `[]`). The legacy check always rejects |
+| `BadgeSecurity.signQrV3(signer, json)` / `verifyQrV3(...)` / `parseQrV3(code)` / `verifyQrLegacy(...)` | Reputation QR `21v3:` (kind 21001, tags `[]`). `parseQrV3` throws `IllegalArgumentException` for bad base64 or invalid UTF-8 (show `qrReadError`). The legacy check always rejects |
 | `BadgeSecurity.canonicalJsonEncode(map)`, `isValidPubkeyHex`, `isValidSignatureHex`, `signLegacy` (→ `""`), `verifyLegacy` (→ `false`) | Helpers. Canonical JSON delegates to `DartJson` |
 | `BadgeSecurity.KIND_BADGE` (21000), `KIND_REPUTATION_QR` (21001), `QR_V3_PREFIX`, `BADGE_VALIDITY_HOURS`, `COMPACT_SIGNED_KEYS` | Constants |
 | `VerifyResult`, `QrSignResult`, `QrVerifyResult`, `ReputationQrV3Parts`, `ExpiryInfo` | Result types |
@@ -60,26 +60,26 @@ Package root: `space.einundzwanzig.meetup.data.badges`
 
 | API | Purpose |
 |---|---|
-| `interface BadgeClaimService` (inject) | `createClaim(orgSig, orgEventId, orgPubkey, blockHeight): ClaimResult`, `verifyClaim(...)`, `verifyBadgeClaim(badge)`, `claimUnboundBadges(list): ClaimBatchResult`, `ensureBadgesClaimed(list): ClaimBatchResult` (call it at start only when the wallet is readable). Pass `repository.badges.value`. Batches are single-flight: a second concurrent caller waits and skips what the first one claimed, so there is one signer prompt per badge. Claims are signed outside the repository lock, then applied with `BadgeRepository.update` to the collection as it is at that point. Badges scanned meanwhile stay, badges removed meanwhile are not brought back. `ClaimBatchResult.badges` is the stored collection, or the input list if nothing was stored |
+| `interface BadgeClaimService` (inject) | `createClaim(orgSig, orgEventId, orgPubkey, blockHeight): ClaimResult`, `verifyClaim(...)`, `verifyBadgeClaim(badge)`, `claimUnboundBadges(list): ClaimBatchResult`, `ensureBadgesClaimed(list): ClaimBatchResult`. Pass `repository.badges.value`. The batch loads the store itself if needed, does nothing while it is unreadable, and only asks the signer for unclaimed badges that are actually stored (the caller's list only selects which identities to claim). Batches are single-flight: a second concurrent caller waits and skips what the first one claimed, so there is one signer prompt per badge. Claims are signed outside the repository lock, then applied with `BadgeRepository.update` to the collection as it is at that point. Badges scanned meanwhile stay, badges removed meanwhile are not brought back, and a claim is only applied if the stored variant still carries the same org sig/event id/pubkey/block height (only the claim fields are written onto it). `ClaimBatchResult.badges` is the stored collection, or the input list if nothing was stored |
 | `BadgeClaims.KIND_CLAIM` (21002), `claimContent(...)`, `claimTags(orgPubkey, blockHeight)`, `verifyClaim(...)`, `verifyBadgeClaim(badge)` | Pure claim format and verification, used by `:data:admin` (promotion claims) and `:data:reputation` |
 | `ClaimResult`, `ClaimVerifyResult`, `ClaimBatchResult(badges, claimedCount)` | Results |
 
 ## Store — `…store`
 
-`interface BadgeRepository` (inject the `@Singleton`; tests: `BadgeRepository.create(prefs, secure, timeSource, dispatcher)` with `InMemoryKeyValueStore`/`InMemorySecureStore`):
+`interface BadgeRepository` (inject the `@Singleton`; tests: `BadgeRepository.create(prefs, secure, timeSource, dispatcher)` with `InMemoryKeyValueStore`/`InMemorySecureStore`). Every operation runs serialized and **non-cancellable** (like Dart futures): cancelling the caller (e.g. leaving a screen) never stops a multi-step write halfway; the caller sees its cancellation after the operation returns.
 
 | Member | Dart |
 |---|---|
 | `badges: StateFlow<List<MeetupBadge>>` | global `myBadges`. It is updated by load, save, clear, promote, merge and reset |
-| `loaded: StateFlow<Boolean>` | Native only. `false` until the store was read once in this process. While it is `false`, `badges`/`badgesUnreadable` mean nothing: show loading and never empty-state actions (spec 03 risk 13) |
+| `loaded: StateFlow<Boolean>` | Native only. `false` until the store was read once in this process. While it is `false`, `badges`/`badgesUnreadable` mean nothing: show loading and never empty-state actions (spec 03 risk 13). `badges` is published before `loaded` flips to `true` |
 | `update { current -> newList or null }: Boolean` | Native only. **This is the preferred write path**: an atomic read-modify-write under the repository lock (scanner add, duplicate cleanup, organizer marker, sync merge). `null` or the same instance means no change. Returns `false` if the wallet is unreadable (the transform is not called) or the save failed. The transform must be pure and must not call the repository |
 | `badgesUnreadable: StateFlow<Boolean>` | `MeetupBadge.badgesUnreadable`. While it is `true`, an empty list is not an empty wallet: never offer actions that write `[]` |
 | `savedEvents: SharedFlow<Unit>` | `onBadgesSaved`. It fires after every successful save, clear, promote and merge. `:data:badgesync` collects it |
 | `loadBadges()` | `loadBadges()` (repairs, unites every version that opens, merges kept-aside badges) |
 | `saveBadges(list, replaceUnreadable=false, discardLocked=false): Boolean` | `saveBadges`. Replaces the whole collection, so prefer `update` for read-modify-write. `[]` clears by archiving and never deletes. Backup restore uses `replaceUnreadable = true` |
 | `keepAside(badge): Boolean` | Keeps a scan aside while the wallet is unreadable. It is encrypted with its own key |
-| `stageIncoming(list)` / `promoteIncoming(formerNpub="")` / `discardIncoming()` | Staging for an identity switch (crash-safe promotion) |
-| `formerCollections()` / `mergeFormer(index)` | Archive (`badges_former`, max 10 entries / 500 Ki characters) |
+| `stageIncoming(list)` / `promoteIncoming(formerNpub="")` / `discardIncoming()` | Staging for an identity switch (crash-safe promotion). After promotion the store reloads; if no device key opens the promoted file it is marked unreadable and kept |
+| `formerCollections()` / `mergeFormer(index)` | Archive (`badges_former`, max 10 entries / 500 Ki characters). An out-of-range `at` shows as the epoch |
 | `resetAll()` | The only real delete (app reset) |
 
 `BadgeStoreKeys` lists the exact Flutter storage keys: prefs `badges_encrypted`, `…_preserved`,
@@ -105,7 +105,7 @@ badge. The internal `ReviewDemoBadgeWriter` binding fills identity's optional ho
 
 | API | Purpose |
 |---|---|
-| `DartString.trim/lower/upper(s)`, `warmUp()` | Byte-exact Dart `trim()`/`toLowerCase()`/`toUpperCase()` (spec 02 §8.14, spec 00 item 12). Uses the shipped `dart_case_table.txt`. Use it for every identity key, slug and npub normalisation. The table is read on first use, and every repository load warms it on the IO dispatcher. Call `warmUp()` off the main thread if you need it earlier. These are meant to move to `:core:common` |
+| `DartString.trim/lower/upper(s)`, `warmUp()` | Byte-exact Dart `trim()`/`toLowerCase()`/`toUpperCase()` (spec 02 §8.14, spec 00 item 12). Uses the shipped `dart_case_table.txt`. Use it for every identity key, slug and npub normalisation. The table is read on first use, and every repository load warms it on the IO dispatcher. Call `warmUp()` off the main thread if you need it earlier. These are meant to move to `:core:common` (core owner). **Until they do, other modules must depend on `:data:badges` for `DartString`/`DartSort` and must never copy them**: a copy can drift and split or merge badges, trust ids, co-attendance keys or slugs |
 | `DartSort.sort(list, cmp)` / `sorted(items, cmp)` | Dart VM `List.sort`: insertion sort (stable) for ≤ 33 elements, otherwise dual-pivot quicksort (not stable). Use it wherever Dart sorts before hashing or ordering (spec 00 item 10) |
 
 ## Tests
@@ -114,10 +114,15 @@ badge. The internal `ReviewDemoBadgeWriter` binding fills identity's optional ho
 tools/gradlew-locked :data:badges:testDebugUnitTest
 ```
 
-The suite has 204 JVM tests. They are ports of `badge_model_test`, `badge_security_test`,
-`meetup_key_test`, `badge_key_retention_test` (21), `badge_storage_copy_test` (19), the
-badge-level parts of `badge_reputation_regression_test` and `promotion_claim_k1_test`, and
-`app_review_demo_test`. They also cover every badge vector of
-`spec/fixtures/02-badges-claim-vectors.json` except `rollingQr`, which belongs to
-`:data:issuance` (the tests read the file directly), plus native tests for `DartString`,
-`DartSort` and the repository flows.
+The suite ports `badge_model_test`, `badge_security_test`, `meetup_key_test`,
+`badge_key_retention_test`, `badge_storage_copy_test`, the badge-level parts of
+`badge_reputation_regression_test` and `promotion_claim_k1_test`, and `app_review_demo_test`
+(run the task for the current count; per-suite numbers are deliberately not listed). They also
+cover every badge vector of `spec/fixtures/02-badges-claim-vectors.json` except `rollingQr`,
+which belongs to `:data:issuance` (the tests read the file directly), plus native tests for
+`DartString`, `DartSort`, the claim batch and the repository flows.
+
+The score-based cases of `badge_reputation_regression_test` live in `:data:trust`
+(`TrustScoreRegressionTest`): 'Organisator-Marker anderer Städte erhöhen die Reputation nicht',
+'Mehrfachscans belegen keine zusätzlichen Plätze im Wochenlimit' and the
+`score([signedMarker]).totalScore == 0` assertion of 'auch Marker mit Signatur…'.

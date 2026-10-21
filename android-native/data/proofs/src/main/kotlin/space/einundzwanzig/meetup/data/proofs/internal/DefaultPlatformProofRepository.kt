@@ -13,6 +13,7 @@ import kotlinx.serialization.json.JsonObject
 import space.einundzwanzig.meetup.core.common.DefaultDispatcher
 import space.einundzwanzig.meetup.core.common.TimeSource
 import space.einundzwanzig.meetup.core.common.json.DartJson
+import space.einundzwanzig.meetup.core.common.json.dartStringOrNull
 import space.einundzwanzig.meetup.core.common.log.DiagnosticLog
 import space.einundzwanzig.meetup.core.data.prefs.KeyValueEditor
 import space.einundzwanzig.meetup.core.data.prefs.KeyValueStore
@@ -83,6 +84,12 @@ internal class DefaultPlatformProofRepository @Inject constructor(
             ),
             content = content,
         )
+        // External signers can block for minutes; if the identity switched meanwhile (spec 06 §14
+        // R20), the proof belongs to the old key and must not land in the new key's store.
+        if (identity.npub() != npub) {
+            log.warn(TAG, "Identität hat während der Signatur gewechselt — Plattform-Proof verworfen")
+            return ProofCreateResult.Failure(ProofCreateError.SIGNER_OR_UNKNOWN, IDENTITY_CHANGED)
+        }
         val proof = PlatformProof(platform = platform, username = trimmedUsername, proofSig = signed.sig, createdAt = now)
         // One atomic transaction: an identity-switch clear cannot land between read and write.
         val saved = store.edit {
@@ -107,12 +114,14 @@ internal class DefaultPlatformProofRepository @Inject constructor(
     override suspend fun getProofsForPublishing(): LinkedHashMap<String, PlatformProof> =
         LinkedHashMap<String, PlatformProof>().apply { getSavedProofs().forEach { put(it.platform, it) } }
 
-    override suspend fun replaceAllRaw(validated: List<JsonElement>): Boolean {
-        if (validated.isEmpty()) return true
-        return withContext(dispatcher) { store.edit { write(validated) } }
+    override suspend fun replaceAllRaw(validated: List<JsonElement>): Boolean = withContext(dispatcher) {
+        // Enforced here, not only by the caller (Audit 2 finding #4); idempotent.
+        val restorable = PlatformProofBackup.restorable(validated)
+        if (restorable.isEmpty()) true else store.edit { write(restorable) }
     }
 
     override suspend fun unionRaw(incoming: List<JsonElement>): Boolean = withContext(dispatcher) {
+        val restorable = PlatformProofBackup.restorable(incoming)
         var unreadable = false
         val ok = store.edit {
             unreadable = false
@@ -130,7 +139,7 @@ internal class DefaultPlatformProofRepository @Inject constructor(
                 unreadable = true
                 return@edit // keep the device value (Dart threw before writing)
             }
-            val merged = PlatformProofBackup.union(device, incoming)
+            val merged = PlatformProofBackup.union(device, restorable)
             if (merged.isNotEmpty()) write(merged)
         }
         if (unreadable) {
@@ -168,11 +177,13 @@ internal class DefaultPlatformProofRepository @Inject constructor(
         return parsed
     }
 
-    private fun platformOf(entry: JsonElement): String? = (entry as? JsonObject)?.get("platform").dartToStringOrNull()
+    /** Only string platforms match, the same rule as [PlatformProof.fromStorageJson]. */
+    private fun platformOf(entry: JsonElement): String? = (entry as? JsonObject)?.get("platform").dartStringOrNull()
 
     companion object {
         private const val TAG = "PlatformProof"
         private const val KEY = PlatformProof.STORAGE_KEY
+        private const val IDENTITY_CHANGED = "Die Identität hat während der Signatur gewechselt."
 
         /** Kind of the never-published platform proof event. */
         const val KIND_PLATFORM_PROOF: Int = 21003

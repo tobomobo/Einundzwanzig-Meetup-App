@@ -111,4 +111,40 @@ class IdentityRecoveryTest {
         assertNull(id.secure.entries.value["legacy_esp/nostr_priv_hex"])
         assertEquals(oldNsec, id.secure.entries.value[IdentityKeys.NSEC])
     }
+
+    @Test
+    fun passwordWrapShowsAndRestoresOnlyItsOwnIdentity() = runBlocking {
+        // legacy_recovered/ mixes values of different retries: a stray npub of A next to a wrap of B.
+        val b = KeyPair.generate()
+        val ncryptsec = Nip49.encrypt(b.privateKeyHex, "geheim123", logN = 8)
+        val id = TestIdentity(
+            secureInit = mapOf(
+                "legacy_recovered/nostr_npub_key" to oldNpub,
+                "legacy_recovered/easyauth_password_ncryptsec" to ncryptsec,
+                "legacy_recovered/easyauth_password_wrap_npub" to b.npub,
+            ),
+        )
+        val current = id.keys.generateKeyPair()
+        val candidate = id.recovery.candidates().single()
+        assertEquals(b.npub, candidate.npub)
+        assertTrue(candidate.needsPassword)
+        assertEquals(b.npub, id.recovery.adopt(candidate, "geheim123").npub)
+        assertEquals(b.npub, id.keyStore.getNpub())
+
+        // Without a wrap binding the shown npub is checked after decrypting: a mismatch never
+        // replaces the active key.
+        val other = TestIdentity(
+            secureInit = mapOf(
+                "legacy_recovered/nostr_npub_key" to oldNpub,
+                "legacy_recovered/easyauth_password_ncryptsec" to ncryptsec,
+            ),
+        )
+        val active = other.keys.generateKeyPair()
+        val shown = other.recovery.candidates().single()
+        assertEquals(oldNpub, shown.npub)
+        assertTrue(runCatching { other.recovery.adopt(shown, "geheim123") }.exceptionOrNull() is KeyFormatException)
+        assertEquals(active.npub, other.keyStore.getNpub())
+        assertTrue(other.secure.entries.value.containsKey("legacy_recovered/easyauth_password_ncryptsec"))
+        assertTrue(current.npub != b.npub)
+    }
 }

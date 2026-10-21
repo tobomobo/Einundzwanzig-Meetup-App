@@ -1,6 +1,9 @@
 package space.einundzwanzig.meetup.data.proofs
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -32,6 +35,7 @@ import space.einundzwanzig.meetup.data.proofs.internal.DefaultHumanityProofRepos
 import space.einundzwanzig.meetup.data.proofs.internal.HumanityReverifyStartupTask
 import space.einundzwanzig.meetup.data.proofs.zap.ZapProviderResolver
 import java.time.ZoneOffset
+import kotlin.time.Duration.Companion.milliseconds
 import java.util.concurrent.CopyOnWriteArrayList
 
 /** Spec 06 §10.6 humanity flow (fake relays, fake provider resolver) and status rules. */
@@ -195,7 +199,7 @@ class HumanityProofTest {
         relays.add("wss://r1", receiptWithSender(provider, sender = me, recipient = friend.publicKeyHex))
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         try {
-            HumanityReverifyStartupTask(r, store, scope, log).run()
+            HumanityReverifyStartupTask(r, store, identity, scope, log).run()
             awaitStored { store.getBool(HumanityKeys.NEEDS_REVERIFICATION) == null }
         } finally {
             scope.cancel()
@@ -212,7 +216,7 @@ class HumanityProofTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         try {
             // Flag is not set at start: run() returns at once and nothing is searched.
-            withTimeout(1_000) { HumanityReverifyStartupTask(r, store, scope, log).run() }
+            withTimeout(1_000) { HumanityReverifyStartupTask(r, store, identity, scope, log).run() }
             assertTrue(relays.connector.connects.isEmpty())
             relays.add("wss://r1", receiptWithSender(provider, sender = me, recipient = friend.publicKeyHex))
             // Onboarding / backup screen restore after the task already ran.
@@ -287,5 +291,238 @@ class HumanityProofTest {
         assertEquals("3.5.2025", HumanityStatus(false, lastCheckedAt = 1_746_230_400L).lastCheckedStr(now, zone))
         assertEquals("3.5.2025", HumanityStatus(true, firstZapAt = 1_746_230_400L).firstZapDateStr(zone))
         assertEquals("", HumanityStatus(true).firstZapDateStr(zone))
+    }
+
+    // ---- identity switch during a running search (spec 06 §14 R20) ----
+
+    /** [FakeResolver] that runs [during] on the first provider check, i.e. while the search runs. */
+    private class HookResolver(val inner: ZapProviderResolver, val during: suspend () -> Unit) : ZapProviderResolver by inner {
+        private var fired = false
+        override suspend fun isFromRecipientProvider(receiptPubkey: String, recipientPubkey: String, senderPubkey: String): Boolean {
+            if (!fired) {
+                fired = true
+                during()
+            }
+            return inner.isFromRecipientProvider(receiptPubkey, recipientPubkey, senderPubkey)
+        }
+    }
+
+    @Test
+    fun `clearForIdentitySwitch while the relay is answering keeps humanity_verified false`() = runBlocking<Unit> {
+        relays.add("wss://r1", receiptWithSender(provider, sender = me, recipient = friend.publicKeyHex))
+        lateinit var r: DefaultHumanityProofRepository
+        r = repo(HookResolver(resolver) { assertTrue(r.clearForIdentitySwitch()) })
+        val result = r.checkForZaps()
+        assertFalse(result.found)
+        assertEquals(HumanityOutcome.ERROR, result.outcome)
+        assertEquals(false, store.getBool(HumanityKeys.VERIFIED))
+        assertNull(store.getString(HumanityKeys.RECEIPT_ID))
+        assertNull(store.getInt(HumanityKeys.FIRST_ZAP_AT))
+        assertNull(store.getInt(HumanityKeys.CHECKED_AT))
+    }
+
+    @Test
+    fun `badge-sync wipe plus a new npub during the search writes nothing`() = runBlocking<Unit> {
+        relays.add("wss://r1", receiptWithSender(provider, sender = me, recipient = friend.publicKeyHex))
+        val r = repo(
+            HookResolver(resolver) {
+                identity.npubOverride = friend.npub
+                store.edit { HumanityKeys.clearIdentityProofs(this); setBool("badge_restore_proofs", true) }
+            },
+        )
+        assertFalse(r.checkForZaps().found)
+        assertEquals(false, store.getBool(HumanityKeys.VERIFIED))
+        assertNull(store.getString(HumanityKeys.RECEIPT_ID))
+    }
+
+    @Test
+    fun `a new npub alone during the search writes nothing, also not checked_at`() = runBlocking<Unit> {
+        relays.add("wss://r1", receiptWithSender(provider, sender = me, recipient = friend.publicKeyHex))
+        val r = repo(HookResolver(resolver) { identity.npubOverride = friend.npub })
+        assertEquals(HumanityOutcome.ERROR, r.checkForZaps().outcome)
+        assertNull(store.getBool(HumanityKeys.VERIFIED))
+        assertNull(store.getInt(HumanityKeys.CHECKED_AT))
+    }
+
+    @Test
+    fun `reverify does not confirm a proof whose flag an identity switch cleared`() = runBlocking<Unit> {
+        store.setBool(HumanityKeys.VERIFIED, false)
+        store.setBool(HumanityKeys.NEEDS_REVERIFICATION, true)
+        relays.add("wss://r1", receiptWithSender(provider, sender = me, recipient = friend.publicKeyHex))
+        lateinit var r: DefaultHumanityProofRepository
+        r = repo(HookResolver(resolver) { r.clearForIdentitySwitch() })
+        assertFalse(r.reverifyIfNeeded())
+        assertEquals(false, store.getBool(HumanityKeys.VERIFIED))
+        assertNull(store.getBool(HumanityKeys.NEEDS_REVERIFICATION))
+        assertFalse(r.getStatus().verified)
+    }
+
+    @Test
+    fun `clearing the flag cancels a running startup re-verification`() = runBlocking<Unit> {
+        store.setBool(HumanityKeys.NEEDS_REVERIFICATION, true)
+        relays.add("wss://r1", receiptWithSender(provider, sender = me, recipient = friend.publicKeyHex))
+        val entered = CompletableDeferred<Unit>()
+        val cancelled = CompletableDeferred<Unit>()
+        val blocking = HookResolver(resolver) {
+            entered.complete(Unit)
+            try {
+                awaitCancellation()
+            } finally {
+                cancelled.complete(Unit)
+            }
+        }
+        val r = repo(blocking)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            HumanityReverifyStartupTask(r, store, identity, scope, log).run()
+            withTimeout(10_000) { entered.await() }
+            assertTrue(r.clearForIdentitySwitch())
+            withTimeout(10_000) { cancelled.await() }
+            assertEquals(false, store.getBool(HumanityKeys.VERIFIED))
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `concurrent checks share one search`() = runBlocking<Unit> {
+        relays.add("wss://r1", receiptWithSender(provider, sender = me, recipient = friend.publicKeyHex))
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val r = repo(
+            HookResolver(resolver) {
+                entered.complete(Unit)
+                release.await()
+            },
+        )
+        val first = async(Dispatchers.Default) { r.checkForZaps() }
+        withTimeout(10_000) { entered.await() }
+        val second = async(Dispatchers.Default) { r.checkForZaps() }
+        delay(300) // the second caller is now waiting for the running search
+        release.complete(Unit)
+        val a = first.await()
+        val b = second.await()
+        assertTrue(a.found)
+        assertEquals(a, b)
+        assertEquals(1, relays.connector.connects.count { it == "wss://r1" })
+    }
+
+    // ---- review fixes: discarded runs, self-cancelling startup attempt, retries, ERROR text ----
+
+    /** Pass-through resolver that blocks on the [blockOn]-th provider check until [release]. */
+    private class NthCallResolver(val inner: ZapProviderResolver, val blockOn: Int) : ZapProviderResolver by inner {
+        val calls = java.util.concurrent.atomic.AtomicInteger()
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        override suspend fun isFromRecipientProvider(receiptPubkey: String, recipientPubkey: String, senderPubkey: String): Boolean {
+            if (calls.incrementAndGet() == blockOn) {
+                entered.complete(Unit)
+                release.await()
+            }
+            return inner.isFromRecipientProvider(receiptPubkey, recipientPubkey, senderPubkey)
+        }
+    }
+
+    @Test
+    fun `a waiter behind a discarded run searches again instead of taking an older result`() = runBlocking<Unit> {
+        relays.add("wss://r1", receiptWithSender(provider, sender = me, recipient = friend.publicKeyHex))
+        val resolver2 = NthCallResolver(resolver, blockOn = 2)
+        val r = repo(resolver2)
+        // Search A: FOUND.
+        assertTrue(r.checkForZaps().found)
+        // Manual search B is running ...
+        val b = async(Dispatchers.Default) { r.checkForZaps() }
+        withTimeout(10_000) { resolver2.entered.await() }
+        // ... when a backup restore marks the proof pending; the startup re-verification waits.
+        assertTrue(r.restoreFromBackup(jsonObjectOf("verified" to true, "receipt_event_id" to "ee".repeat(32)), additive = false))
+        val reverify = async(Dispatchers.Default) { r.reverifyIfNeeded() }
+        delay(300)
+        resolver2.release.complete(Unit)
+        val bResult = b.await()
+        assertEquals(HumanityOutcome.ERROR, bResult.outcome) // B saw the restore: discarded
+        assertEquals("Prüfung fehlgeschlagen — bitte erneut versuchen.", bResult.message)
+        assertTrue(reverify.await())
+        // A fresh relay search ran for the re-verification (not A's result).
+        assertEquals(3, resolver2.calls.get())
+        assertEquals(3, relays.connector.connects.count { it == "wss://r1" })
+        assertTrue(r.getStatus().verified)
+        assertNull(store.getBool(HumanityKeys.NEEDS_REVERIFICATION))
+    }
+
+    @Test
+    fun `a manual check waiting behind the startup attempt reuses its result although the attempt was cancelled by its own write`() =
+        runBlocking<Unit> {
+            store.setBool(HumanityKeys.NEEDS_REVERIFICATION, true)
+            relays.add("wss://r1", receiptWithSender(provider, sender = me, recipient = friend.publicKeyHex))
+            val blocking = NthCallResolver(resolver, blockOn = 1)
+            val r = repo(blocking)
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            try {
+                HumanityReverifyStartupTask(r, store, identity, scope, log).run()
+                withTimeout(10_000) { blocking.entered.await() }
+                val manual = async(Dispatchers.Default) { r.checkForZaps() }
+                delay(300)
+                blocking.release.complete(Unit)
+                assertTrue(withTimeout(10_000) { manual.await() }.found)
+                assertEquals(1, blocking.calls.get())
+                assertEquals(1, relays.connector.connects.count { it == "wss://r1" })
+                assertTrue(r.getStatus().verified)
+            } finally {
+                scope.cancel()
+            }
+        }
+
+    @Test
+    fun `startup task retries after the backoff while the flag stays set`() = runBlocking<Unit> {
+        store.setBool(HumanityKeys.NEEDS_REVERIFICATION, true)
+        val r = repo()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val task = HumanityReverifyStartupTask(r, store, identity, scope, log)
+            task.retryDelays = listOf(200.milliseconds)
+            task.run()
+            awaitStored { store.getInt(HumanityKeys.CHECKED_AT) != null } // 1st attempt: nothing found
+            assertEquals(true, store.getBool(HumanityKeys.NEEDS_REVERIFICATION))
+            relays.add("wss://r1", receiptWithSender(provider, sender = me, recipient = friend.publicKeyHex))
+            awaitStored { store.getBool(HumanityKeys.NEEDS_REVERIFICATION) == null }
+            assertTrue(r.getStatus().verified)
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `startup task retries when a signer becomes ready after the backoff ran out`() = runBlocking<Unit> {
+        store.setBool(HumanityKeys.NEEDS_REVERIFICATION, true)
+        identity.npubOverride = "" // signer not ready yet: NO_KEY
+        val r = repo()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val task = HumanityReverifyStartupTask(r, store, identity, scope, log)
+            task.retryDelays = emptyList()
+            task.run()
+            delay(300)
+            assertEquals(true, store.getBool(HumanityKeys.NEEDS_REVERIFICATION))
+            assertTrue(relays.connector.connects.isEmpty())
+            relays.add("wss://r1", receiptWithSender(provider, sender = me, recipient = friend.publicKeyHex))
+            identity.npubOverride = null
+            identity.signerReadyEvents.emit(Unit)
+            awaitStored { store.getBool(HumanityKeys.NEEDS_REVERIFICATION) == null }
+            assertTrue(r.getStatus().verified)
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `ERROR has its own message`() {
+        assertEquals(
+            "Prüfung fehlgeschlagen — bitte erneut versuchen.",
+            space.einundzwanzig.meetup.data.proofs.humanity.HumanityCheckResult(false, HumanityOutcome.ERROR).message,
+        )
+        assertTrue(
+            space.einundzwanzig.meetup.data.proofs.humanity.HumanityCheckResult(false, HumanityOutcome.NOT_FOUND).message
+                .startsWith("Kein Zap-Receipt gefunden."),
+        )
     }
 }

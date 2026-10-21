@@ -3,6 +3,8 @@ package space.einundzwanzig.meetup.data.meetups.internal
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -15,6 +17,7 @@ import space.einundzwanzig.meetup.core.common.json.DartJson
 import space.einundzwanzig.meetup.core.common.json.jsonObjectOf
 import space.einundzwanzig.meetup.core.common.log.DiagnosticLog
 import space.einundzwanzig.meetup.core.common.log.measure
+import space.einundzwanzig.meetup.core.common.result.runSuspendCatching
 import space.einundzwanzig.meetup.core.crypto.CryptoRandom
 import space.einundzwanzig.meetup.core.crypto.toHex
 import space.einundzwanzig.meetup.core.data.prefs.KeyValueStore
@@ -67,9 +70,7 @@ internal class PortalApiServiceImpl @Inject constructor(
 
     override suspend fun hasToken(): Boolean = getToken() != null
 
-    override suspend fun storeToken(token: String) {
-        persistToken(token)
-    }
+    override suspend fun storeToken(token: String): Boolean = persistToken(token)
 
     /**
      * Stores [token] bound to the active identity (mode-aware: Amber/NIP-46/local; Amber bug
@@ -77,7 +78,9 @@ internal class PortalApiServiceImpl @Inject constructor(
      * `false` (and a log line) if nothing was stored; Dart threw in that case.
      */
     private suspend fun persistToken(token: String): Boolean {
-        val ownNpub = runCatching { signing.npub() }.getOrNull()
+        val ownNpub = runSuspendCatching { signing.npub() }
+            .onFailure { log.warn(TAG, "npub fuer Token-Bindung nicht lesbar: $it") }
+            .getOrNull()
         val ok = if (ownNpub.isNullOrEmpty()) {
             secure.write(TOKEN_KEY, token)
         } else {
@@ -87,7 +90,7 @@ internal class PortalApiServiceImpl @Inject constructor(
         return ok
     }
 
-    override suspend fun setManualToken(token: String) = storeToken(token.dartTrim())
+    override suspend fun setManualToken(token: String): Boolean = persistToken(token.dartTrim())
 
     override suspend fun deleteToken(): Boolean {
         // A silently failed delete keeps the user logged in after logout: never swallow it.
@@ -143,25 +146,34 @@ internal class PortalApiServiceImpl @Inject constructor(
     }
 
     override suspend fun logout() {
-        val token = getToken()
-        if (token != null) {
-            // Best effort: the token expires server-side anyway.
-            client.sendJsonOn(
-                io,
-                "DELETE",
-                "$API/mobile/token",
-                null,
-                headers = mapOf("Authorization" to "Bearer $token", "Accept" to JSON),
-                maxBytes = MAX_BYTES,
-                timeout = PortalUrls.TIMEOUT,
-            )
+        // Spec 09 §9 item 6: the local delete must always happen, even if the caller's scope
+        // (app reset, cleared ViewModel) is cancelled during the up-to-15 s revoke call.
+        withContext(NonCancellable) {
+            val token = getToken()
+            if (token != null) {
+                // Best effort: the token expires server-side anyway.
+                client.sendJsonOn(
+                    io,
+                    "DELETE",
+                    "$API/mobile/token",
+                    null,
+                    headers = mapOf("Authorization" to "Bearer $token", "Accept" to JSON),
+                    maxBytes = MAX_BYTES,
+                    timeout = PortalUrls.TIMEOUT,
+                )
+            }
+            deleteToken()
         }
-        deleteToken()
     }
 
     override suspend fun tokenMatchesCurrentKey(): Boolean {
         val t = getToken() ?: return false
-        val cur = runCatching { signing.npub() }.getOrNull()
+        val cur = runSuspendCatching { signing.npub() }.getOrElse {
+            // Dart let this exception reach the caller, which kept the token. A signer hiccup
+            // (Amber/NIP-46 unreachable) is no verdict: never let it delete a valid login.
+            log.diag(TAG, "Token-Prüfung: aktive Identität nicht lesbar ($it) — keine Änderung.")
+            return true
+        }
         if (cur.isNullOrEmpty()) return false
 
         val stored = secure.read(TOKEN_NPUB_KEY)
@@ -213,6 +225,9 @@ internal class PortalApiServiceImpl @Inject constructor(
             log.diag(TAG, "Token-Prüfung: Portal bestätigt aktuellen Schlüssel — Bindung repariert.")
             return true
         }
+        // Deliberate deviation: Dart's `portalNpub.substring(0, 12)` threw a RangeError for a
+        // < 12-char nostr value -> offline branch (`stored == null`); native treats it as a foreign
+        // account (false), which is safer against inherited logins. Do not "fix" back to Dart.
         log.warn(
             TAG,
             "Token-Prüfung: Portal-Konto gehört zu anderem npub (${portalNpub.take(12)}…) als die aktive Identität (${cur.take(12)}…).",

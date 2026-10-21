@@ -151,10 +151,22 @@ class LocationTest {
     }
 
     @Test
-    fun `denied forever does not request`() = runTest {
-        val p = FakePlatform(permission = LocationPermission.DENIED_FOREVER)
+    fun `denied forever re-validates with one request`() = runTest {
+        val p = FakePlatform(permission = LocationPermission.DENIED_FOREVER, afterRequest = LocationPermission.DENIED_FOREVER)
         assertEquals(LocationStatus.DENIED_FOREVER, acquire(p).getCurrentLocation().status)
-        assertEquals(0, p.requests)
+        assertEquals(1, p.requests)
+    }
+
+    @Test
+    fun `denied forever reset in the settings prompts again and gets a fix`() = runTest {
+        val pos = Position(1.0, 2.0, 30.0, time.now)
+        val p = FakePlatform(
+            permission = LocationPermission.DENIED_FOREVER,
+            afterRequest = LocationPermission.GRANTED,
+            first = pos,
+        )
+        assertEquals(LocationResult(LocationStatus.OK, pos), acquire(p).getCurrentLocation())
+        assertEquals(1, p.requests)
     }
 
     @Test
@@ -208,6 +220,23 @@ class LocationTest {
         assertEquals(LocationPermission.DENIED_FOREVER, bridge.request())
         assertTrue(bridge.deniedForever)
         assertNull(bridge.pendingRequest.value)
+        job.cancel()
+    }
+
+    @Test
+    fun `bridge without a collector keeps a remembered denied forever`() = runTest {
+        val bridge = LocationPermissionBridgeImpl()
+        bridge.onResult(granted = false, permanentlyDenied = true) // late answer, no request
+        assertTrue(bridge.deniedForever)
+        assertEquals(LocationPermission.DENIED_FOREVER, bridge.request())
+        // A later prompt answered with a plain denial (permission reset to "Ask every time").
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            bridge.pendingRequest.collect { r ->
+                if (r != null && bridge.onLaunched(r.id)) bridge.onResult(granted = false, permanentlyDenied = false)
+            }
+        }
+        assertEquals(LocationPermission.DENIED, bridge.request())
+        assertFalse(bridge.deniedForever)
         job.cancel()
     }
 

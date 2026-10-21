@@ -2,6 +2,8 @@ package space.einundzwanzig.meetup.data.proofs
 
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -40,14 +42,22 @@ internal class FakeIdentity(
     var npubOverride: String? = null,
     var canSign: Boolean = true,
     var signError: Exception? = null,
+    /** Runs inside [signEvent] before signing (e.g. an identity switch while the signer blocks). */
+    var onSign: (() -> Unit)? = null,
 ) : ProofsIdentity {
     val signed = CopyOnWriteArrayList<NostrEvent>()
+
+    /** Emit to simulate `SigningService.signerReady`. */
+    val signerReadyEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
+
+    override val signerReady: Flow<Unit> get() = signerReadyEvents
 
     override suspend fun npub(): String? = npubOverride ?: keyPair?.npub
 
     override suspend fun canSign(): Boolean = canSign && keyPair != null
 
     override suspend fun signEvent(kind: Int, tags: List<List<String>>, content: String): NostrEvent {
+        onSign?.invoke()
         signError?.let { throw it }
         return EventIds.sign(keyPair!!, 1_760_000_123L, kind, tags, content).also { signed += it }
     }
@@ -152,6 +162,12 @@ internal class FakeRelays {
     val reqs = CopyOnWriteArrayList<Pair<String, JsonArray>>()
     val reachable = HashSet<String>()
 
+    /**
+     * Relays that end the connection after their events instead of sending EOSE: value `null` =
+     * normal close, otherwise the transport error.
+     */
+    val closeInsteadOfEose = HashMap<String, Throwable?>()
+
     fun add(relay: String, vararg evs: JsonObject) {
         reachable += relay
         events.getOrPut(relay) { mutableListOf() } += evs
@@ -168,7 +184,7 @@ internal class FakeRelays {
             for (ev in events[url].orEmpty()) {
                 if (EventGuard.answersFilter(ev, filter)) socket.push(listOf("EVENT", sub, ev))
             }
-            socket.push(listOf("EOSE", sub))
+            if (url in closeInsteadOfEose) socket.finish(closeInsteadOfEose[url]) else socket.push(listOf("EOSE", sub))
         }
     }
 }

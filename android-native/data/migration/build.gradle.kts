@@ -10,8 +10,6 @@ dependencies {
     api(project(":core:data"))
     // AES-GCM/CBC, hex, NIP-19, key derivation, Schnorr (cleanup check), badge blobs.
     implementation(project(":core:crypto"))
-    // Recovery-name prefixes shared with IdentityRecovery (spec 14 §4.8).
-    implementation(project(":data:identity"))
     // Read-only decryption of flutter_secure_storage 9.x EncryptedSharedPreferences (E1, spec 14 F1).
     implementation(libs.tink.android)
 

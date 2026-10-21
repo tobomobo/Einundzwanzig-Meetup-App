@@ -88,3 +88,29 @@ data class FavoriteMeetupCard(
     val city: String,
     val next: MeetupDate?,
 )
+
+/**
+ * Outcome of `MyEventsService.loadFavoriteCards`, so the UI can tell "no favorites" from
+ * "load failed". [cards] is the list to render in every case (empty for [NoFavorites]/[Failed]).
+ */
+sealed interface FavoriteCards {
+    /** Cards to render. */
+    val cards: List<FavoriteMeetupCard>
+
+    /** The user has no favorite and no home meetup. */
+    data object NoFavorites : FavoriteCards {
+        override val cards: List<FavoriteMeetupCard> get() = emptyList()
+    }
+
+    /**
+     * Cards built. [datesAvailable] is `false` when no meetup dates could be loaded at all
+     * (portal and iCal unreachable or empty): every card then has `next = null`, and the
+     * stored widget meetup was left untouched.
+     */
+    data class Loaded(override val cards: List<FavoriteMeetupCard>, val datesAvailable: Boolean) : FavoriteCards
+
+    /** An unexpected error; already logged. */
+    data object Failed : FavoriteCards {
+        override val cards: List<FavoriteMeetupCard> get() = emptyList()
+    }
+}

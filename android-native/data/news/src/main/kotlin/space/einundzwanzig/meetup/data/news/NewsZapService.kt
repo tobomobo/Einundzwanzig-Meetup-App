@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import space.einundzwanzig.meetup.core.common.log.AppLogger
+import space.einundzwanzig.meetup.core.common.log.DiagnosticLog
 import space.einundzwanzig.meetup.core.common.log.describeError
 import space.einundzwanzig.meetup.data.profile.LightningAddressLookup
 import kotlin.time.Duration
@@ -49,7 +50,7 @@ interface NewsZapService {
     /**
      * The author's lightning address from the newest kind-0 profile on the read targets
      * (delegates to `:data:profile` `LightningAddressLookup`): trimmed `lud16` with `@`,
-     * [LightningAddressLookup.LUD06_MARKER] for lud06-only profiles, or `null`.
+     * [LUD06_MARKER] for lud06-only profiles (unsupported, show `newsZapUnsupportedAddress`), or `null`.
      */
     suspend fun fetchLightningAddress(pubkeyHex: String): String?
 
@@ -76,6 +77,12 @@ interface NewsZapService {
     ): ZapResult
 
     companion object {
+        /**
+         * Result of [fetchLightningAddress] for a profile with only `lud06` (`"lud06:"`); compare
+         * with `==`. Re-exported so callers need no `:data:profile` dependency.
+         */
+        const val LUD06_MARKER: String = LightningAddressLookup.LUD06_MARKER
+
         /** Amounts offered by the zap sheet. */
         val ZAP_AMOUNTS_SATS: List<Long> = listOf(21L, 210L, 2100L, 21000L)
 
@@ -104,6 +111,8 @@ interface NewsZapService {
  * `<queries>` manifest entry is needed.
  */
 object ZapInvoiceLauncher {
+    private const val TAG = "NewsZap"
+
     /** The `ACTION_VIEW lightning:<bolt11>` intent. */
     fun intent(bolt11: String): Intent = Intent(Intent.ACTION_VIEW, Uri.parse("lightning:$bolt11"))
 
@@ -111,8 +120,15 @@ object ZapInvoiceLauncher {
      * Starts the wallet. Returns `false` when no app handles `lightning:` (or the start failed);
      * then show the `newsZapNoWallet` sheet with the invoice and `newsZapCopyInvoice`. A
      * non-Activity [context] gets `FLAG_ACTIVITY_NEW_TASK`.
+     *
+     * Any start failure, including a `SecurityException` from the wallet (e.g. a non-exported
+     * activity), returns `false` → fallback sheet; failures other than "no wallet" are logged
+     * to [log] at debug level.
+     *
+     * @param log diagnostic log for start failures; defaults to the static [AppLogger], pass the
+     *   injected [DiagnosticLog] where available.
      */
-    fun open(context: Context, bolt11: String): Boolean = try {
+    fun open(context: Context, bolt11: String, log: DiagnosticLog = AppLogger): Boolean = try {
         val intent = intent(bolt11)
         if (context !is Activity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         context.startActivity(intent)
@@ -120,7 +136,7 @@ object ZapInvoiceLauncher {
     } catch (e: ActivityNotFoundException) {
         false
     } catch (e: Exception) {
-        AppLogger.debug("NewsZap", "Wallet-Start fehlgeschlagen: ${describeError(e)}")
+        log.debug(TAG, "Wallet-Start fehlgeschlagen: ${describeError(e)}")
         false
     }
 }

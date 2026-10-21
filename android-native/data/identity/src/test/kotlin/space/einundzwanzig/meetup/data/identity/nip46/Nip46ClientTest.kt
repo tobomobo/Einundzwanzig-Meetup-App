@@ -205,6 +205,22 @@ class Nip46ClientTest {
         client.close()
     }
 
+    @Test
+    fun closedWhileSubscribingNeverRegistersTheLink() = runBlocking {
+        signer.closedOnReq = setOf(relayA)
+        signer.respond = { r -> jsonObjectOf("id" to r["id"], "result" to "pong") }
+        val client = build(relays = listOf(relayA, relayB))
+        assertTrue(client.ping())
+        val dead = signer.links.first { it.url == relayA }
+        eventually { dead.closed }
+        // The request went only to the subscribed relay, never to the dead subscription.
+        assertTrue(dead.sentFrames.none { it.startsWith("[\"EVENT\"") })
+        assertTrue(signer.links.first { it.url == relayB }.sentFrames.any { it.startsWith("[\"EVENT\"") })
+        assertTrue(client.ping())
+        assertTrue(dead.sentFrames.none { it.startsWith("[\"EVENT\"") })
+        client.close()
+    }
+
     // ---------------- Fehlerwege ----------------
 
     @Test

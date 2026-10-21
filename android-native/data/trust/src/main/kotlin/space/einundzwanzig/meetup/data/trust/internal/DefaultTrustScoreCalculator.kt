@@ -51,6 +51,7 @@ internal class DefaultTrustScoreCalculator @Inject constructor(
         val trusted = badges.filter { it.isNostrSigned && !it.isOrganizer }.toMutableList()
         DartSort.sort(trusted) { a, b -> a.date.compareTo(b.date) }
         val seen = HashSet<String>()
+        // identityKey's date fallback reads the JVM default zone, not [zoneProvider] (see ZoneIdProvider).
         val trustedBadges = trusted.filter { seen.add(BadgeIdentity.identityKey(it)) }
         if (trustedBadges.size != trusted.size) {
             log.diag(TAG, "${trusted.size - trustedBadges.size} doppelte Badge(s) fuer die Reputation ignoriert.")
@@ -83,7 +84,8 @@ internal class DefaultTrustScoreCalculator @Inject constructor(
             val coData = coAttestors?.get(badgeToEventId(badge, zone))
             val attendeeCount = coData?.attendeeCount ?: 1
             val veteranCount = coData?.veteranCount ?: 0
-            val coAttestorBonus = ln((attendeeCount + 1).toDouble()) / LN2
+            // Double addition: Dart adds in int64, an Int sum would wrap at Int.MAX_VALUE (NaN).
+            val coAttestorBonus = ln(attendeeCount.toDouble() + 1.0) / LN2
             val signerBonus = 1.0 + (veteranCount * 0.3)
             val ageWeeks = now.difference(badge.date).inDays / 7.0
             val decayFactor = 0.5.pow(ageWeeks / TrustConfig.HALF_LIFE_WEEKS)
@@ -136,8 +138,9 @@ internal class DefaultTrustScoreCalculator @Inject constructor(
             "age" to PromotionProgress("Account-Alter (Tage)", accountAgeDays, thresholds.minAccountAgeDays),
             "score" to PromotionProgress(
                 "Trust Score",
-                // Dart `round()` throws for NaN/±Infinity (far-future badge dates) and saturates
-                // at int64; native saturates instead of crashing the caller's coroutine.
+                // Dart `round()` throws for NaN/±Infinity (far-future badge dates), so Flutter never
+                // promotes such a profile; native fails closed (0, not met) instead of throwing.
+                // Finite values saturate like Dart's int64 round.
                 roundForProgress(totalScore),
                 thresholds.promotionScore.dartRound().toInt(),
             ),
@@ -272,14 +275,13 @@ internal class DefaultTrustScoreCalculator @Inject constructor(
         internal fun weekNumber(date: DartDateTime, anchor: DartDateTime): Long = date.difference(anchor).inDays / 7
 
         /**
-         * Saturating Dart `round()` narrowed to `Int`: NaN → 0, ±Infinity → `Int.MAX_VALUE`/`Int.MIN_VALUE`,
-         * finite values rounded half away from zero and clamped to the `Int` range (Dart's
-         * int64 result never wraps, so `met` keeps the Dart sign).
+         * Dart `round()` narrowed to `Int`, failing closed: NaN and ±Infinity → 0 (Dart throws
+         * there, so the score criterion is never met in Flutter); finite values rounded half
+         * away from zero and clamped to the `Int` range (Dart's int64 result never wraps, so
+         * `met` keeps the Dart sign).
          */
         internal fun roundForProgress(x: Double): Int = when {
-            x.isNaN() -> 0
-            x == Double.POSITIVE_INFINITY -> Int.MAX_VALUE
-            x == Double.NEGATIVE_INFINITY -> Int.MIN_VALUE
+            x.isNaN() || x.isInfinite() -> 0
             else -> x.dartRound().coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt()
         }
     }

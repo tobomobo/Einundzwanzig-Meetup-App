@@ -9,6 +9,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import space.einundzwanzig.meetup.core.common.json.jsonObjectOf
 import space.einundzwanzig.meetup.core.common.json.toJsonElement
 import space.einundzwanzig.meetup.core.crypto.KeyPair
 import space.einundzwanzig.meetup.core.nostr.EventGuard
@@ -70,6 +71,15 @@ class RelayEventSignatureCalendarTest {
     fun `replaceableCreatedAt guards future timestamps`() {
         assertEquals(now, EventGuard.replaceableCreatedAt(signedCalendarEvent(), now))
         assertNull(EventGuard.replaceableCreatedAt(signedCalendarEvent().with("created_at", now + 3600), now))
-        assertNull(EventGuard.verifiedEvent(JsonPrimitive("garbage"), "Test"))
+    }
+
+    @Test
+    fun `broken message does not crash`() {
+        // Dart 'Kaputte Nachricht crasht nicht'.
+        val before = EventGuard.rejectedEventCount
+        assertNull(EventGuard.verifiedEvent(JsonPrimitive("kein objekt")))
+        assertNull(EventGuard.verifiedEvent(jsonObjectOf("kind" to "x", "tags" to 42)))
+        assertTrue(EventGuard.rejectedEventCount > 0)
+        assertTrue(EventGuard.rejectedEventCount > before) // the map was counted as rejected
     }
 }

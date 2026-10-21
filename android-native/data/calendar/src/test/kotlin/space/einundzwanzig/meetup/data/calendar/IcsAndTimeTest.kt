@@ -32,6 +32,10 @@ class IcsAndTimeTest {
         assertEquals(Instant.parse("2026-07-21T16:00:00Z"), PortalStart.portalStart("2026-07-21T16:00:00.789", berlin))
         assertNull(PortalStart.portalStart("", berlin))
         assertNull(PortalStart.portalStart("garbage", berlin))
+        // Wall clock inside Berlin's DST gap: read as UTC directly (02:30Z = 04:30 CEST), not
+        // shifted to 03:30 by a local parse first.
+        assertEquals("04:30", localHm(PortalStart.portalStart("2026-03-29 02:30", berlin)))
+        assertEquals(Instant.parse("2026-03-29T02:30:00Z"), PortalStart.portalStart("2026-03-29 02:30", berlin))
     }
 
     private fun comp(dtstart: String?) = IcsComponent("VEVENT", buildMap { if (dtstart != null) put("dtstart", IcsDateTime(dtstart)) })
@@ -106,6 +110,10 @@ class IcsAndTimeTest {
         fails("BEGIN:VCALENDAR\nPRODID:x\nEND:VCALENDAR")
         fails("BEGIN:VCALENDAR\nVERSION:2.0\nEND:VCALENDAR")
         fails("BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:x\nBEGIN:VEVENT\nGEO:a;b\nEND:VEVENT\nEND:VCALENDAR")
+        fails("BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:x\nBEGIN:VEVENT\nSTATUS:FOO\nEND:VEVENT\nEND:VCALENDAR")
+        fails("BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:x\nBEGIN:VEVENT\nTRANSP:x\nEND:VEVENT\nEND:VCALENDAR")
+        // Known values pass, case-insensitive like `IcsStatus.fromString`.
+        IcsParser.parse("BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:x\nBEGIN:VEVENT\nSTATUS:confirmed\nTRANSP:Opaque\nEND:VEVENT\nEND:VCALENDAR")
         assertEquals(emptyList<Any>(), IcsMeetupDates.fromIcs("garbage", now, berlin))
     }
 

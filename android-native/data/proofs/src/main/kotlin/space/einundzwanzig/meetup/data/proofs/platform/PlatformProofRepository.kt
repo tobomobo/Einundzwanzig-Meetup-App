@@ -11,7 +11,7 @@ enum class ProofCreateError {
     /** The trimmed username is empty ("Benutzername darf nicht leer sein", `ppErrEmptyUsername`). */
     EMPTY_USERNAME,
 
-    /** Signer rejection, timeout or storage error ("Fehler: $e", `proofErrGeneric`). */
+    /** Signer rejection, timeout, storage error or an identity switch during signing ("Fehler: $e", `proofErrGeneric`). */
     SIGNER_OR_UNKNOWN,
 }
 
@@ -78,7 +78,8 @@ interface PlatformProofRepository {
     suspend fun createProof(platformId: String, username: String, customPlatformName: String? = null): ProofCreateResult
 
     /**
-     * Dart `removeProof`: removes every entry whose `platform` equals [platformId] exactly.
+     * Dart `removeProof`: removes every entry whose `platform` is a string equal to [platformId]
+     * (a non-string `platform` never matches, like [PlatformProof.fromStorageJson] never reads it).
      * @return `false` if the write failed (the stored list is unchanged).
      */
     suspend fun removeProof(platformId: String): Boolean
@@ -87,15 +88,18 @@ interface PlatformProofRepository {
     suspend fun getProofsForPublishing(): LinkedHashMap<String, PlatformProof>
 
     /**
-     * Backup restore, replace mode: writes [validated] verbatim if it is not empty, otherwise
-     * keeps the device list. Pass entries already filtered with [PlatformProofBackup.restorable].
+     * Backup restore, replace mode: filters [validated] with [PlatformProofBackup.restorable]
+     * (only entries with a 128-hex `proof_sig`, Audit 2 finding #4; enforced here, so callers that
+     * filter already are unaffected) and writes the rest verbatim. If nothing is left, the device
+     * list is kept and the call returns `true` without writing.
      * @return `false` if the write failed.
      */
     suspend fun replaceAllRaw(validated: List<JsonElement>): Boolean
 
     /**
-     * Backup restore, additive mode: [PlatformProofBackup.union] of the device list and
-     * [incoming] (device wins per lowercased platform), written only if the union is not empty.
+     * Backup restore, additive mode: [PlatformProofBackup.union] of the device list and the
+     * [PlatformProofBackup.restorable] entries of [incoming] (device wins per lowercased
+     * platform), written only if the union is not empty.
      * A stored value that is not a JSON list is kept untouched (Dart's `jsonDecode(raw) as List`
      * threw before writing) and the call returns `false`.
      * @return `false` if the write failed or the device value is unreadable.

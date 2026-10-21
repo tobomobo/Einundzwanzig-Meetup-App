@@ -84,6 +84,9 @@ class ScriptedRelay(val url: String, var requireAuth: Boolean = true) {
     var onEvent: (event: JsonObject, socket: FakeRelaySocket) -> Unit = { ev, s -> s.push(listOf("OK", ev.id(), true, "")) }
     var unreachable: IOException? = null
 
+    /** Runs right after the relay answered an AUTH (e.g. drop the connection after the OK). */
+    var afterAuth: (socket: FakeRelaySocket) -> Unit = {}
+
     val reqs = CopyOnWriteArrayList<String>()
     val auths = CopyOnWriteArrayList<JsonObject>()
     val published = CopyOnWriteArrayList<JsonObject>()
@@ -105,6 +108,7 @@ class ScriptedRelay(val url: String, var requireAuth: Boolean = true) {
                 val ev = msg[1] as JsonObject
                 auths += ev
                 s.push(listOf("OK", ev.id(), acceptAuth, if (acceptAuth) "" else "auth-required: denied"))
+                afterAuth(s)
             }
             "REQ" -> {
                 reqs += frame

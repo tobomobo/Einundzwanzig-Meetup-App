@@ -8,9 +8,10 @@ package space.einundzwanzig.meetup.data.migration
  *
  * Usage:
  * - `Application.onCreate` launches [ensureMigrated] in `@ApplicationScope` (IO); `MainActivity`
- *   keeps the splash screen until [gate] completes; widgets and workers call [MigrationGate.await].
- * - The app reset (spec 12) calls [onAppReset] **after** clearing the native stores (F6).
- * - A later release (not the first native one) calls [cleanupIfEligible] once per start.
+ *   keeps the splash screen until [gate] completes (bounded, e.g. `withTimeoutOrNull(20s)`, so a
+ *   hanging Keystore call cannot keep the splash forever); widgets and workers call [MigrationGate.await].
+ * - The app reset (spec 12) calls [onAppReset] **first**, then clears the native stores (F6/R8).
+ * - Every start may call [cleanupIfEligible]; it refuses (`RELEASE`) within the first native release.
  *
  * State lives in `noBackupFilesDir/flutter_migration/state.json` (never in `app_prefs`), so an app
  * reset cannot trigger a re-import. Nothing here ever logs a value (spec 14 §4.10).
@@ -23,7 +24,10 @@ interface FlutterMigration {
     /**
      * Runs the migration if it has not run yet (idempotent, process-wide mutex). After an
      * `IMPORTED_WITH_ERRORS` result it retries every secret not yet imported, once per process
-     * start and at most [MAX_AUTOMATIC_ATTEMPTS] times. The attempt runs in a process-wide scope:
+     * start and at most [MAX_AUTOMATIC_ATTEMPTS] times. After two attempts in a row that died
+     * (process kill or native crash inside AndroidKeyStore/Tink, spec 14 R6), automatic attempts run
+     * in *safe mode* (warning `SAFE_MODE`): prefs, E0 plaintext and rolling-QR secrets only, every
+     * encrypted secure-storage entry stays pending until [retryNow]. The attempt runs in a process-wide scope:
      * cancelling the caller only stops its wait, never the import. Never throws (except the
      * caller's own cancellation); always completes [gate] once the attempt has finished.
      */
@@ -31,9 +35,22 @@ interface FlutterMigration {
 
     /**
      * Manual retry from Settings → Diagnose ("Alte Daten erneut übernehmen"): like
-     * [ensureMigrated] but ignores the automatic attempt limit. No-op for `NOT_NEEDED`/`CLEANED`.
+     * [ensureMigrated] but ignores the automatic attempt limit and safe mode (always the full
+     * Keystore/Tink path). Also retries secrets given up with [abandonPendingSecrets] (they are
+     * never reported as pending again, whatever the outcome). No-op for `NOT_NEEDED`/`CLEANED`.
      */
     suspend fun retryNow(): MigrationReport
+
+    /**
+     * Settings → Diagnose, **after an explicit user confirmation**: gives up on every secret that
+     * is still pending (e.g. the ESP master key is gone for good, warning `ESP_MASTER_KEY_MISSING`,
+     * or the 10-attempt limit is reached), so the domains may create a new identity / NIP-46 session
+     * / badge key. Sets state `IMPORTED` with warning `ABANDONED:<names>`; [pendingLegacySecrets]
+     * is empty afterwards. The Flutter files are kept (cleanup waits) so [retryNow] can still import
+     * them; a value the user created meanwhile is never overwritten (it goes to `legacy_recovered/…`).
+     * No-op unless the state is `IMPORTED_WITH_ERRORS`.
+     */
+    suspend fun abandonPendingSecrets(): MigrationReport
 
     /** The persisted report (state `NOT_STARTED` if the migration never ran). */
     suspend fun currentReport(): MigrationReport
@@ -42,24 +59,30 @@ interface FlutterMigration {
      * flutter_secure_storage key names that exist in the Flutter files but could not be imported
      * yet. A domain must treat these keys as **unreadable** (never generate a replacement), like
      * Dart `resetOnError: false`. For `IMPORTED_WITH_ERRORS` the failed names (all known keys
-     * when the secure-storage or prefs file was unreadable); for `NOT_STARTED` with Flutter files
-     * present (an attempt aborted before finishing, or a corrupt state file) every legacy secret
-     * name; otherwise empty.
+     * when the secure-storage or prefs file was unreadable, or the state file was corrupt and
+     * the key is absent natively); for `NOT_STARTED` with Flutter files present (an attempt
+     * aborted before finishing) every legacy secret name; otherwise empty.
      */
     suspend fun pendingLegacySecrets(): Set<String>
 
     /**
      * Deletes the Flutter legacy files, Keystore aliases and the snapshot when the migration is
      * verified (spec 14 §4.7 "Cleanup"): state `IMPORTED`, ≥ 3 native app starts, every imported
-     * secret still readable, the local identity (if any) signs and matches its npub, and the
-     * badge collection (if any) opens. Never call it in the first native release.
+     * secret not unreadable (`badge_encryption_key` also present; secrets the domains delete in
+     * normal use may be gone), the local identity (if any) signs and matches its npub, the badge
+     * collection (if any) opens, and no secret was given up ([abandonPendingSecrets]). Returns
+     * `NotYet("GATE")` before this process' migration finished, and `NotYet("RELEASE")` while the
+     * installed `versionCode` is not greater than the one of the first native start (spec 14 §4.7:
+     * not before the release after the native one). Records `CLEANED` before deleting.
      */
     suspend fun cleanupIfEligible(): CleanupOutcome
 
     /**
-     * Part of the full app reset (spec 12 §2.5.12, F6): unless already `CLEANED`, deletes every
-     * Flutter legacy file, alias and the snapshot and records `CLEANED`, so a later start can never
-     * re-import the identity the user just deleted. The state file itself survives.
+     * Part of the full app reset (spec 12 §2.5.12, F6). Call it **before** wiping `KeyValueStore`
+     * / `SecureStore`: it first records `CLEANED`, then deletes every Flutter legacy file, alias and
+     * the snapshot, so neither a process death halfway nor a later start can re-import the identity
+     * the user just deleted. Runs detached from the caller (a cancelled ViewModel scope cannot skip
+     * it). Repeats an incomplete delete when already `CLEANED`. The state file itself survives.
      */
     suspend fun onAppReset()
 
@@ -137,7 +160,8 @@ enum class StorageEra {
  * @property recovered secure-store recovery names written (`legacy_esp/…`, `legacy_backup/…`,
  *   `legacy_recovered/…`); the owning domains offer them to the user.
  * @property warnings machine-readable codes such as `IMPLAUSIBLE:nostr_npub_key`,
- *   `IDENTITY_INCONSISTENT`, `UNDECODABLE_PREF:<key>`, `EXCEPTION:<class>`.
+ *   `IDENTITY_INCONSISTENT`, `UNDECODABLE_PREF:<key>`, `EXCEPTION:<class>`, `ATTEMPT_DIED`,
+ *   `SAFE_MODE`, `ESP_MASTER_KEY_MISSING`, `ABANDONED:<names>`.
  */
 data class MigrationReport(
     val state: MigrationState,
@@ -176,6 +200,9 @@ sealed interface CleanupOutcome {
     /** Nothing to clean (`NOT_NEEDED` or already `CLEANED`). */
     data object NothingToDo : CleanupOutcome
 
-    /** A precondition failed; [reason] is a code such as `STATE`, `STARTS`, `SECRET_MISSING:<key>`, `IDENTITY`, `BADGES`. */
+    /**
+     * A precondition failed; [reason] is a code such as `GATE`, `STATE`, `STARTS`, `ABANDONED`,
+     * `SECRET_MISSING:<key>`, `SECRET_UNREADABLE:<key>`, `IDENTITY`, `BADGES`.
+     */
     data class NotYet(val reason: String) : CleanupOutcome
 }

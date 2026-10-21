@@ -155,7 +155,14 @@ class NewsZapServiceTest {
         assertEquals(ZapResult.Failure(ZapError.LnurlUnreachable), zap())
         server.enqueue(json("""{"tag":"payRequest","callback":"${cb()}","minSendable":"1000"}"""))
         assertEquals(ZapResult.Failure(ZapError.LnurlUnreachable), zap())
-        assertEquals(5, server.requestCount)
+        // Non-finite limits from an untrusted server must not escape as an exception.
+        server.enqueue(json("""{"tag":"payRequest","callback":"${cb()}","minSendable":1e400}"""))
+        assertEquals(ZapResult.Failure(ZapError.LnurlUnreachable), zap())
+        // An integer literal beyond the double range also becomes Infinity. (A merely 30-digit
+        // one is a finite double; Dart's toInt() clamps it, so it is accepted like in Dart.)
+        server.enqueue(json("""{"tag":"payRequest","callback":"${cb()}","maxSendable":1${"0".repeat(400)}}"""))
+        assertEquals(ZapResult.Failure(ZapError.LnurlUnreachable), zap())
+        assertEquals(7, server.requestCount)
     }
 
     @Test

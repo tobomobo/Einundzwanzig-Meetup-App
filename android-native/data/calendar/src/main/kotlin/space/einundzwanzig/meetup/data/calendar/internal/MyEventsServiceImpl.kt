@@ -1,6 +1,9 @@
 package space.einundzwanzig.meetup.data.calendar.internal
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import space.einundzwanzig.meetup.core.common.TimeSource
 import space.einundzwanzig.meetup.core.common.log.DiagnosticLog
 import space.einundzwanzig.meetup.data.calendar.CalendarEventService
@@ -9,6 +12,7 @@ import space.einundzwanzig.meetup.data.calendar.MeetupCalendarService
 import space.einundzwanzig.meetup.data.calendar.MyEventsService
 import space.einundzwanzig.meetup.data.calendar.RsvpError
 import space.einundzwanzig.meetup.data.calendar.match.MeetupEventMatcher
+import space.einundzwanzig.meetup.data.calendar.model.FavoriteCards
 import space.einundzwanzig.meetup.data.calendar.model.FavoriteMeetupCard
 import space.einundzwanzig.meetup.data.calendar.model.MeetupDate
 import space.einundzwanzig.meetup.data.calendar.model.MyMeetupDate
@@ -38,19 +42,21 @@ internal class MyEventsServiceImpl @Inject constructor(
     private val log: DiagnosticLog,
 ) : MyEventsService {
 
+    /** Local zone for "today" (Dart `DateTime.now()` local); tests pin it. */
+    internal var zoneProvider: () -> ZoneId = ZoneId::systemDefault
+
     private fun now(): Instant = Instant.ofEpochMilli(time.nowMillis())
 
     override suspend fun loadAcceptedEvents(): List<NostrCalendarEvent> = guard(emptyList()) {
         val mine = rsvps.loadMine()
         val from = now().minus(Duration.ofDays(1))
-        val out = ArrayList<NostrCalendarEvent>()
-        for ((address, status) in mine) {
-            if (status != RsvpStatus.ACCEPTED) continue
-            val ev = calendar.fetchByAddress(address) ?: continue
-            if (ev.start.isBefore(from)) continue
-            out += ev
-        }
-        out.sortedBy { it.start }
+        val accepted = mine.filterValues { it == RsvpStatus.ACCEPTED }.keys.toList()
+        // Bounded parallelism (Dart: sequential); the order is irrelevant because of the sort.
+        coroutineScope {
+            accepted.chunked(FETCH_PARALLELISM).flatMap { batch ->
+                batch.map { address -> async { calendar.fetchByAddress(address) } }.awaitAll()
+            }
+        }.filterNotNull().filter { !it.start.isBefore(from) }.sortedBy { it.start }
     }
 
     override suspend fun loadMeetupRsvps(dates: List<MeetupDate>?): List<MyMeetupDate> = guard(emptyList()) {
@@ -82,19 +88,19 @@ internal class MyEventsServiceImpl @Inject constructor(
     override suspend fun withdraw(event: NostrCalendarEvent): RsvpError? =
         rsvps.setStatus(event.address, event.pubkey, RsvpStatus.DECLINED)
 
-    override suspend fun loadFavoriteCards(dates: List<MeetupDate>?, updateWidget: Boolean): List<FavoriteMeetupCard> =
-        guard(emptyList()) {
+    override suspend fun loadFavoriteCards(dates: List<MeetupDate>?, updateWidget: Boolean): FavoriteCards =
+        guard(FavoriteCards.Failed) {
             val user = profiles.load()
             val favs = user.favoriteMeetupIds.ifEmpty {
                 if (user.homeMeetupId.isNotEmpty()) listOf(user.homeMeetupId) else emptyList()
             }
             if (favs.isEmpty()) {
                 if (updateWidget) widget.updateMeetup("", null)
-                return@guard emptyList()
+                return@guard FavoriteCards.NoFavorites
             }
             val events = dates ?: meetupDates.fetchPortalFirst()
             if (meetups.cached.isEmpty()) meetups.fetchMeetups()
-            val zone = ZoneId.systemDefault()
+            val zone = zoneProvider()
             val todayStart = now().atZone(zone).toLocalDate().atStartOfDay(zone).toInstant()
             val cards = favs.map { key ->
                 val next = events
@@ -114,11 +120,17 @@ internal class MyEventsServiceImpl @Inject constructor(
                     else -> sa.compareTo(sb)
                 }
             }
+            val datesAvailable = events.isNotEmpty()
             if (updateWidget) {
-                val front = sorted.first()
-                widget.updateMeetup(front.city, front.next?.start)
+                if (datesAvailable) {
+                    val front = sorted.first()
+                    widget.updateMeetup(front.city, front.next?.start)
+                } else {
+                    // Portal and iCal unreachable: keep the stored countdown instead of clearing it.
+                    log.debug(TAG, "Keine Termine geladen, Widget-Meetup bleibt unveraendert.")
+                }
             }
-            sorted
+            FavoriteCards.Loaded(sorted, datesAvailable)
         }
 
     private suspend fun <T> guard(fallback: T, block: suspend () -> T): T = try {
@@ -132,5 +144,6 @@ internal class MyEventsServiceImpl @Inject constructor(
 
     private companion object {
         const val TAG = "Home"
+        const val FETCH_PARALLELISM = 4
     }
 }

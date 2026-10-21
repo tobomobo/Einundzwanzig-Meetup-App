@@ -11,9 +11,11 @@ interface NearbyMeetupService {
 
     /**
      * Loads meetups and dates concurrently and caches them for the process lifetime. Without
-     * [forceReload] it returns immediately when both caches are set. An empty directory falls back
-     * to the bundled list; meetups are deduplicated by `city.lowercase().trim()` (first wins,
-     * empty keys always kept) — parity with Dart (spec 09 §14 item 12).
+     * [forceReload] it returns immediately when both caches hold real answers. An empty directory
+     * falls back to the bundled list; meetups are deduplicated by `city.lowercase().trim()` (first
+     * wins, empty keys always kept) — parity with Dart (spec 09 §14 item 12). Native deviation:
+     * the fallback list and an empty date list are not final, so the next call retries only the
+     * missing part (Dart kept them until the process ended).
      */
     suspend fun preload(forceReload: Boolean = false)
 

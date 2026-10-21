@@ -44,7 +44,10 @@ internal class LocationAcquisition(
     private suspend fun acquire(): LocationResult {
         if (!platform.isServiceEnabled()) return LocationResult(LocationStatus.SERVICE_DISABLED)
         var permission = platform.checkPermission()
-        if (permission == LocationPermission.DENIED) permission = platform.requestPermission()
+        // DENIED_FOREVER is only remembered from the last prompt, and the user may have reset the
+        // permission in the system settings since. Re-validate with one request: if it really is
+        // denied forever, Android answers instantly without a dialog (Dart skipped the request).
+        if (permission != LocationPermission.GRANTED) permission = platform.requestPermission()
         if (permission == LocationPermission.DENIED_FOREVER) return LocationResult(LocationStatus.DENIED_FOREVER)
         if (permission == LocationPermission.DENIED) return LocationResult(LocationStatus.DENIED)
 

@@ -3,6 +3,22 @@ plugins {
     id("einundzwanzig.android.hilt")
 }
 
+android {
+    buildFeatures {
+        buildConfig = true
+    }
+    defaultConfig {
+        // SatoshiDuell Supabase publishable key (spec 06 §14 R16): the project may rotate it, so a
+        // build can override it with -PsatoshiduellPublishableKey=sb_publishable_...; empty (the
+        // default) means the key the web app ships today, SatoshiDuellClient.PUBLISHABLE_KEY.
+        val satoshiDuellKey = providers.gradleProperty("satoshiduellPublishableKey").orNull?.trim() ?: ""
+        require(satoshiDuellKey.none { it == '"' || it == '\\' || it.isWhitespace() }) {
+            "satoshiduellPublishableKey must not contain quotes, backslashes or whitespace"
+        }
+        buildConfigField("String", "SATOSHIDUELL_PUBLISHABLE_KEY", "\"$satoshiDuellKey\"")
+    }
+}
+
 dependencies {
     // AppLogger, TimeSource, DartJson, DartUri, AppStartupTask, dispatchers.
     api(project(":core:common"))

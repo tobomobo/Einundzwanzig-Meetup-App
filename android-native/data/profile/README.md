@@ -67,7 +67,8 @@ re-encode (≤1200 px, q85) to a temp file, then `uploadImage(file)`; show
 
 ## Tests
 
-`tools/gradlew-locked :data:profile:testDebugUnitTest` — 49 JVM tests.
+`tools/gradlew-locked :data:profile:testDebugUnitTest` — 53 JVM tests (NostrProfileLookupTest 19, DisplayNamesTest 15,
+LightningAddressLookupTest 9, BlossomUploadServiceTest 7, ProfileSourceTest 3).
 
 - `NostrProfileLookupTest`: all 16 cases of `test/nostr_profile_lookup_test.dart` (spec 07 §10.7),
   including `clearCache` via the service, plus cache wire format and the non-int `fetchedAt` case.
@@ -96,8 +97,17 @@ can replace any of them via `@TestInstallIn`.
   trailing whitespace trimmed) and host/scheme are not lower-cased. Only display is affected.
 - `fetchDisplayName` queries the relays in parallel instead of one after the other (allowed by
   spec 07 §8.4/§14 risk 12; identical results). Concurrent calls for the same pubkey share one
-  in-flight lookup (run in `@ApplicationScope`), and at most `MAX_PARALLEL_NAME_LOOKUPS` (4)
+  in-flight lookup (run in `@ApplicationScope`), and at most `MAX_PARALLEL_NAME_LOOKUPS` (10)
   lookups query the relays at once, so a list of `NpubChip`s does not open chips × relays sockets.
+  A queued lookup whose callers have all been cancelled (chip scrolled away) is dropped before it
+  takes a permit, so on-screen chips are not stuck behind it; a lookup that already started runs to
+  the end and caches its result. One lookup can take 12–24 s with unreachable relays, so **list
+  screens with many chips (admin panel, calendar) must first call `cachedDisplayNames()` and
+  `fetchDisplayNames(hexes)`** (one batch REQ per relay); both fill the in-memory cache that
+  `fetchDisplayName` / the chips read before querying.
+- `fetchDisplayNames` re-reads `nostr_display_names_v1` and applies only its own additions/removals
+  under a mutex before writing, so overlapping calls do not overwrite each other's names (Dart
+  writes back the map it read before the network phase). A failed write is swallowed, as in Dart.
 - `uploadImage` treats a directory or an unreadable file as `failure("Datei nicht gefunden")`
   (Dart: directory = not found, unreadable = uncaught exception); reading and hashing run on IO.
 - Profile cache writes check the lookup generation inside the atomic `KeyValueStore.edit`, so a

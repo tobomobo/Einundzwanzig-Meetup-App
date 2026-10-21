@@ -30,12 +30,18 @@ interface HumanityProofRepository {
      * provider. Found → stores the proof (and, unlike Flutter, clears a pending re-verification,
      * spec 06 §14 R6). Not found → only `humanity_checked_at` is updated; a previous verification
      * stays. Cancellable; never throws except for cancellation.
+     *
+     * Single flight: one search at a time; a caller that waited for a search that finished
+     * meanwhile for the same npub gets that result. Identity guard (spec 06 §14 R20): if the npub
+     * changed, [clearForIdentitySwitch] ran or any `humanity_*` key changed during the search,
+     * nothing is written and the outcome is [HumanityOutcome.ERROR].
      */
     suspend fun checkForZaps(): HumanityCheckResult
 
     /**
      * Dart `reverifyIfNeeded()`: if `humanity_needs_reverification` is set, runs [checkForZaps];
-     * on success sets `humanity_verified` and removes the flag. @return `true` on success.
+     * on success sets `humanity_verified` and removes the flag, but only while the flag is still
+     * set and the npub unchanged (an identity switch in between wins). @return `true` on success.
      */
     suspend fun reverifyIfNeeded(): Boolean
 

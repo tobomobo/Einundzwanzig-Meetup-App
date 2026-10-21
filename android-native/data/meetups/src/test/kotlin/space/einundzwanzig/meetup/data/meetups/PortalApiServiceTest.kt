@@ -1,5 +1,9 @@
 package space.einundzwanzig.meetup.data.meetups
 
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -9,6 +13,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import space.einundzwanzig.meetup.core.common.json.DartJson
@@ -26,6 +31,8 @@ import space.einundzwanzig.meetup.data.meetups.portal.PortalErrorKind
 import space.einundzwanzig.meetup.data.meetups.portal.PortalMeetup
 import space.einundzwanzig.meetup.data.meetups.portal.PortalMeetupEvent
 import java.time.LocalDate
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class PortalApiServiceTest {
 
@@ -223,10 +230,51 @@ class PortalApiServiceTest {
     }
 
     @Test
+    fun `logout deletes locally even when the caller is cancelled during the revoke`() = runBlocking {
+        loginToken()
+        val gate = CountDownLatch(1)
+        val requested = CountDownLatch(1)
+        server.respond = { _, _ ->
+            requested.countDown()
+            gate.await(10, TimeUnit.SECONDS)
+            status(200, "")
+        }
+        val job = launch(Dispatchers.Default) { api.logout() }
+        assertTrue(requested.await(10, TimeUnit.SECONDS))
+        job.cancel()
+        gate.countDown()
+        job.join()
+        assertNull(secure.read(PortalApiService.TOKEN_KEY))
+        assertNull(secure.read(PortalApiService.TOKEN_NPUB_KEY))
+    }
+
+    @Test
+    fun `signer failure while storing keeps the token without binding`() = runTest {
+        signer.failNpub = IllegalStateException("Amber nicht erreichbar")
+        assertTrue(api.storeToken("tok"))
+        assertEquals("tok", secure.read(PortalApiService.TOKEN_KEY))
+        assertNull(secure.read(PortalApiService.TOKEN_NPUB_KEY))
+    }
+
+    @Test
+    fun `cancellation while reading the npub propagates`() = runTest {
+        loginToken()
+        signer.failNpub = CancellationException("weg")
+        assertThrows(CancellationException::class.java) { runBlocking { api.tokenMatchesCurrentKey() } }
+        assertThrows(CancellationException::class.java) { runBlocking { api.storeToken("tok2") } }
+        assertEquals("tok", secure.read(PortalApiService.TOKEN_KEY))
+    }
+
+    @Test
     fun `manual token is trimmed and bound`() = runTest {
-        api.setManualToken("  abc \n")
+        assertTrue(api.setManualToken("  abc \n"))
         assertEquals("abc", api.getToken())
         assertEquals(signer.keyPair!!.npub, secure.entries.value[PortalApiService.TOKEN_NPUB_KEY])
+        // A rejected write is reported, not swallowed.
+        secure.failWrite = { true }
+        assertFalse(api.setManualToken("xyz"))
+        assertFalse(api.storeToken("xyz"))
+        assertEquals("abc", api.getToken())
     }
 
     @Test
@@ -246,6 +294,15 @@ class PortalApiServiceTest {
         loginToken()
         signer.keyPair = null
         assertFalse(api.tokenMatchesCurrentKey())
+    }
+
+    @Test
+    fun `token match - signer failure is no verdict and keeps the token`() = runTest {
+        loginToken(npub = "npub1other")
+        signer.failNpub = IllegalStateException("NIP-46 Timeout")
+        assertTrue(api.tokenMatchesCurrentKey())
+        assertEquals(0, server.seen.size)
+        assertEquals("tok", secure.read(PortalApiService.TOKEN_KEY))
     }
 
     @Test
@@ -293,6 +350,13 @@ class PortalApiServiceTest {
     fun `token match - different npub is false`() = runTest {
         loginToken(npub = null)
         server.respond = { _, _ -> json("""{"nostr":"${KeyPair.generate().npub}"}""") }
+        assertFalse(api.tokenMatchesCurrentKey())
+    }
+
+    @Test
+    fun `token match - short foreign nostr is false (deliberate deviation, Dart threw)`() = runTest {
+        loginToken(npub = null)
+        server.respond = { _, _ -> json("""{"nostr":"npub1short"}""") }
         assertFalse(api.tokenMatchesCurrentKey())
     }
 

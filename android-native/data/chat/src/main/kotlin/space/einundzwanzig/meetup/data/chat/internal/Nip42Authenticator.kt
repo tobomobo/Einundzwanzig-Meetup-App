@@ -40,7 +40,10 @@ internal typealias EventSigner = suspend (kind: Int, tags: List<List<String>>, c
  *   supersedes a pending one, and a renewal `OK` never changes the authentication state.
  * - Every other decoded array is forwarded to the caller's `onMessage`, also after this returns.
  *
- * Signing runs on the dispatcher of the calling coroutine (virtual time in tests).
+ * Signing runs on the dispatcher of the calling coroutine (virtual time in tests) while frames
+ * arrive on the transport thread. All state, every completion of the handshake and the AUTH send
+ * itself happen under one lock, so an abort or a newer renewal can never interleave between
+ * "still current?" and the send (Dart was single-threaded and got this for free).
  *
  * @param timeout deadline for the whole handshake (Dart `timeout:`; 8 s local key, NIP-46 sign
  *   timeout + 20 s, 25 s Amber).
@@ -67,24 +70,29 @@ internal class Nip42Authenticator(
         // for a non-Exception Throwable of the signer (Dart `catch (e)` caught everything): fail
         // the handshake instead of crashing the app through the uncaught-exception handler.
         val failed = CoroutineExceptionHandler { _, t ->
-            log.warn(TAG, "Anmeldung konnte nicht signiert werden", t)
-            ready.complete(false)
+            // Complete first, log only if this ended the handshake: at most one WARN per handshake.
+            if (abort()) log.warn(TAG, "Anmeldung konnte nicht signiert werden", t)
         }
         val signScope = CoroutineScope(SupervisorJob() + dispatcher + failed)
         socket.invokeOnClose { signScope.cancel() }
 
         socket.listen(
             onFrame = { frame -> onFrame(frame, socket, signScope, onMessage) },
-            onDone = { ready.complete(false) },
+            onDone = { abort() },
         )
 
         val ok = try {
             withTimeoutOrNull(timeout) { ready.await() } ?: run {
-                log.warn(TAG, "Anmeldung nicht rechtzeitig fertig (${timeout.inWholeSeconds} s).")
-                if (ready.complete(false)) false else ready.getCompleted()
+                // Only the path that actually completes [ready] logs (a signer failure may race).
+                if (abort()) {
+                    log.warn(TAG, "Anmeldung nicht rechtzeitig fertig (${timeout.inWholeSeconds} s).")
+                    false
+                } else {
+                    ready.getCompleted()
+                }
             }
         } catch (e: CancellationException) {
-            ready.complete(false)
+            abort()
             socket.close()
             throw e
         }
@@ -94,6 +102,13 @@ internal class Nip42Authenticator(
         }
         return socket
     }
+
+    /**
+     * Ends the initial handshake as failed, under [lock]: [signAndSend] decides "still current"
+     * and sends its AUTH frame in one critical section, so after this returns no AUTH frame of the
+     * aborted handshake can go out (spec 11 §8.2). `true` if this call ended the handshake.
+     */
+    private fun abort(): Boolean = synchronized(lock) { ready.complete(false) }
 
     private fun onFrame(frame: String, socket: RelaySocket, scope: CoroutineScope, onMessage: (JsonArray) -> Unit) {
         val msg = try {
@@ -113,24 +128,35 @@ internal class Nip42Authenticator(
 
         if (type == "OK" && msg.size >= 3) {
             val id = msg.stringAt(1)
+            // Decided under the lock, logged outside it (this runs on the transport thread).
+            val authAnswer: Boolean?
             val consumed = synchronized(lock) {
                 when {
                     // A renewal OK never changes the authentication that already succeeded.
-                    renewalEventId != null && id == renewalEventId -> true
+                    renewalEventId != null && id == renewalEventId -> {
+                        authAnswer = null
+                        true
+                    }
                     authEventId != null && id == authEventId -> {
                         val accepted = msg.isTrue(2)
-                        log.debug(
-                            TAG,
-                            "Anmeldung ${if (accepted) "angenommen" else "abgelehnt: ${if (msg.size >= 4) msg[3].dartToStringOrNull() else ""}"}",
-                        )
+                        authAnswer = accepted
                         if (!ready.isCompleted) {
                             authenticated = accepted
                             ready.complete(accepted)
                         }
                         true
                     }
-                    else -> false
+                    else -> {
+                        authAnswer = null
+                        false
+                    }
                 }
+            }
+            if (authAnswer != null) {
+                log.debug(
+                    TAG,
+                    "Anmeldung ${if (authAnswer) "angenommen" else "abgelehnt: ${if (msg.size >= 4) msg[3].dartToStringOrNull() else ""}"}",
+                )
             }
             if (consumed) return
         }
@@ -170,9 +196,11 @@ internal class Nip42Authenticator(
             // CancellationException (e.g. a TimeoutCancellationException of an inner withTimeout)
             // is a signing failure like any other (Dart `catch (e)`).
             if (e is CancellationException) currentCoroutineContext().ensureActive()
+            // Decided atomically: the initial handshake reports only if this call completed [ready]
+            // (the deadline or a changed challenge may have ended it first).
             val report = synchronized(lock) {
                 if (generation == INITIAL) {
-                    !ready.isCompleted
+                    ready.complete(false)
                 } else {
                     if (generation != renewalEpoch) return
                     if (renewalChallenge == challenge) renewalChallenge = null
@@ -181,9 +209,13 @@ internal class Nip42Authenticator(
             }
             if (!report) return
             log.warn(TAG, "Anmeldung konnte nicht signiert werden", e)
-            if (generation == INITIAL) ready.complete(false)
             return
         }
+        val frame = RelayFrames.auth(signed)
+        // Check, record and send atomically: an abort (deadline, changed challenge, socket end) or
+        // a newer renewal challenge on another thread either happens before (nothing is sent) or
+        // after the frame went out. RelaySocket.send only enqueues and never blocks, and the
+        // socket invokes no listener while holding its own lock, so sending here cannot deadlock.
         synchronized(lock) {
             if (generation == INITIAL) {
                 if (ready.isCompleted) return
@@ -192,8 +224,8 @@ internal class Nip42Authenticator(
                 if (generation != renewalEpoch) return
                 renewalEventId = signed.id
             }
+            socket.send(frame)
         }
-        socket.send(RelayFrames.auth(signed))
     }
 
     private fun JsonArray.stringAt(i: Int): String? = (getOrNull(i) as? JsonPrimitive)?.takeIf { it.isString }?.content

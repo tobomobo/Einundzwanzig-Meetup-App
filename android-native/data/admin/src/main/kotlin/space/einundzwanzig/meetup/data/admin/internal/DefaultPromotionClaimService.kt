@@ -1,6 +1,10 @@
 package space.einundzwanzig.meetup.data.admin.internal
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.longOrNull
@@ -29,7 +33,12 @@ import space.einundzwanzig.meetup.data.badges.model.MeetupBadge
 import java.time.ZoneId
 import kotlin.time.Duration.Companion.seconds
 
-/** Port of `lib/services/promotion_claim_service.dart` (spec 05 §8.5). */
+/**
+ * Port of `lib/services/promotion_claim_service.dart` (spec 05 §8.5).
+ *
+ * @param cpuDispatcher where claim verification runs (JSON decode, BIP-340 and SHA-256 per
+ *   proof); production injects `@DefaultDispatcher` so callers on Main never block.
+ */
 internal class DefaultPromotionClaimService(
     private val store: KeyValueStore,
     private val relayClient: RelayClient,
@@ -38,6 +47,7 @@ internal class DefaultPromotionClaimService(
     private val timeSource: TimeSource,
     private val zone: () -> ZoneId,
     private val log: DiagnosticLog,
+    private val cpuDispatcher: CoroutineDispatcher,
 ) : PromotionClaimService {
 
     override suspend fun publishAdminClaim(badges: List<MeetupBadge>, meetupName: String): Boolean {
@@ -76,30 +86,42 @@ internal class DefaultPromotionClaimService(
             val claims = fetchClaimsFromRelays()
             if (claims.isNullOrEmpty()) return verifiedClaims
 
-            // Genesis + registry. Organic claims deliberately do NOT count (K1).
-            val knownPubkeys = LinkedHashSet<String>()
-            runCatching { Nip19.decodeNpub(AdminConstants.SUPER_ADMIN_NPUB) }.getOrNull()?.let { knownPubkeys += it }
-            for (admin in registry.getAdminList()) {
-                runCatching { Nip19.decodeNpub(admin.npub) }.getOrNull()?.let { knownPubkeys += it }
-            }
-
-            for (claim in claims) {
-                try {
-                    val result = verifyClaim(claim, knownPubkeys)
-                    if (result != null) {
-                        verifiedClaims += result
-                        val short = runCatching { Nip19.shortenNpub(Nip19.encodeNpub(claim.pubkey)) }.getOrDefault(claim.pubkey)
-                        log.debug(TAG, "Organischer Claim akzeptiert: $short")
-                    }
-                } catch (e: Exception) {
-                    log.debug(TAG, "Claim-Verifikation fehlgeschlagen: $e")
-                }
-            }
+            // Up to 100 claims with several signature checks each: off the caller's thread.
+            verifiedClaims += withContext(cpuDispatcher) { verifyAll(claims) }
             saveOrganicClaims(verifiedClaims)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             log.debug(TAG, "Sync fehlgeschlagen: $e")
+        }
+        return verifiedClaims
+    }
+
+    /** Verifies [claims] against genesis + registry; failures of single claims are logged and skipped. */
+    private suspend fun verifyAll(claims: List<RawClaim>): List<VerifiedClaim> {
+        val verifiedClaims = mutableListOf<VerifiedClaim>()
+        // Genesis + registry. Organic claims deliberately do NOT count (K1).
+        val knownPubkeys = LinkedHashSet<String>()
+        runCatching { Nip19.decodeNpub(AdminConstants.SUPER_ADMIN_NPUB) }.getOrNull()?.let { knownPubkeys += it }
+        for (admin in registry.getAdminList()) {
+            runCatching { Nip19.decodeNpub(admin.npub) }.getOrNull()?.let { knownPubkeys += it }
+        }
+
+        for (claim in claims) {
+            // CPU-bound loop (BIP-340 + SHA-256 per proof): stop when the caller is cancelled.
+            currentCoroutineContext().ensureActive()
+            try {
+                val result = PromotionClaims.verifyClaim(claim, knownPubkeys, timeSource.nowSeconds())
+                if (result != null) {
+                    verifiedClaims += result
+                    val short = runCatching { Nip19.shortenNpub(Nip19.encodeNpub(claim.pubkey)) }.getOrDefault(claim.pubkey)
+                    log.debug(TAG, "Organischer Claim akzeptiert: $short")
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log.debug(TAG, "Claim-Verifikation fehlgeschlagen: $e")
+            }
         }
         return verifiedClaims
     }
@@ -118,8 +140,8 @@ internal class DefaultPromotionClaimService(
         emptyList()
     }
 
-    override fun verifyClaim(claim: RawClaim, knownAdminPubkeys: Set<String>): VerifiedClaim? =
-        PromotionClaims.verifyClaim(claim, knownAdminPubkeys, timeSource.nowSeconds())
+    override suspend fun verifyClaim(claim: RawClaim, knownAdminPubkeys: Set<String>): VerifiedClaim? =
+        withContext(cpuDispatcher) { PromotionClaims.verifyClaim(claim, knownAdminPubkeys, timeSource.nowSeconds()) }
 
     /** Newest claim per claimer (strictly greater `claimedAt` wins), first-seen order. */
     private suspend fun saveOrganicClaims(claims: List<VerifiedClaim>) {

@@ -1,11 +1,16 @@
 package space.einundzwanzig.meetup.data.calendar
 
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import mockwebserver3.Dispatcher
@@ -160,5 +165,33 @@ class MeetupCalendarServiceTest {
         icsBody = "kein Kalender"
         assertTrue(service({ emptyList() }, scheduler = scheduler).fetchIcs().isEmpty())
         Unit
+    }
+
+    @Test
+    fun `portal loads are single-flight with a short cache`() = runTest {
+        val start = Instant.ofEpochMilli(time.now).plus(1, ChronoUnit.DAYS)
+        val raw = DartJson.decode("""{"id":1,"start":"$start","meetup.name":"A"}""") as JsonObject
+        var calls = 0
+        val gate = CompletableDeferred<Unit>()
+        val svc = service({
+            calls++
+            runBlocking { gate.await() }
+            listOf(raw)
+        }, scheduler = testScheduler)
+        val a = async(Dispatchers.Default) { svc.fetchPortalFirst() }
+        val b = async(Dispatchers.Default) { svc.fetchPortalFirst() }
+        withContext(Dispatchers.Default) { delay(200) }
+        gate.complete(Unit)
+        assertEquals(a.await(), b.await())
+        assertEquals(1, calls)
+
+        svc.fetchPortalFirst()
+        assertEquals(1, calls) // cached within the TTL
+        svc.fetchPortalFirst(force = true)
+        assertEquals(2, calls) // explicit refresh bypasses the cache
+        time.now += MeetupCalendarService.CACHE_TTL_MS
+        svc.fetchPortalFirst()
+        assertEquals(3, calls) // expired
+        assertEquals(0, server.requestCount)
     }
 }

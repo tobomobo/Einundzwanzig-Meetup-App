@@ -40,6 +40,16 @@ interface EventChatService {
      */
     suspend fun unreadCounts(addresses: List<String>): Map<String, Int>
 
+    /**
+     * Persists the local read mark of the thread on [eventAddress] (key [readKey]; never
+     * decreases). Use this instead of `ChatService.markRead` so the `evt|` prefix cannot be
+     * forgotten.
+     */
+    suspend fun markRead(eventAddress: String, until: Instant)
+
+    /** The read mark (Unix seconds) of the thread on [eventAddress], `0` if never opened. */
+    suspend fun lastReadFor(eventAddress: String): Long
+
     companion object {
         /** Read-mark key of an event thread in [ChatReadMarkStore] (Dart `readKey`). */
         fun readKey(eventAddress: String): String = "evt|$eventAddress"

@@ -19,6 +19,7 @@ import space.einundzwanzig.meetup.core.crypto.AesCbc
 import space.einundzwanzig.meetup.core.crypto.AesGcm
 import space.einundzwanzig.meetup.core.crypto.Hex
 import space.einundzwanzig.meetup.data.migration.legacy.DecryptOnlyGcmAead
+import space.einundzwanzig.meetup.data.migration.legacy.EspMasterKey
 import space.einundzwanzig.meetup.data.migration.legacy.FlutterSecureStorageReader
 import space.einundzwanzig.meetup.data.migration.legacy.Fss
 import space.einundzwanzig.meetup.data.migration.legacy.LegacyKeystore
@@ -105,7 +106,12 @@ internal class FakeLegacyKeystore : LegacyKeystore {
     var espMasterKey: SecretKey? = SecretKeySpec(ByteArray(32).also(SecureRandom()::nextBytes), "AES")
     var aliasesDeleted = 0
 
+    /** Calls of the Keystore read paths (safe mode must make none). */
+    @Volatile
+    var uses = 0
+
     override fun unwrapAesKey(wrapped: ByteArray, mode: RsaMode): ByteArray? = try {
+        uses++
         val present = if (mode == RsaMode.OAEP) oaepPresent else pkcs1Present
         if (!present) {
             null
@@ -117,9 +123,22 @@ internal class FakeLegacyKeystore : LegacyKeystore {
         null
     }
 
-    override fun espMasterAead(): Aead? = espMasterKey?.let(::DecryptOnlyGcmAead)
+    /** Simulates a Keystore failure (instead of a missing alias) while loading the master key. */
+    var espMasterUnavailable = false
+
+    /** Throws from [deleteLegacyAliases] (simulates a process death in the middle of a reset). */
+    var deleteThrows: Throwable? = null
+
+    override fun espMasterKey(): EspMasterKey {
+        uses++
+        return when {
+            espMasterUnavailable -> EspMasterKey.Unavailable
+            else -> espMasterKey?.let { EspMasterKey.Available(DecryptOnlyGcmAead(it)) } ?: EspMasterKey.Missing
+        }
+    }
 
     override fun deleteLegacyAliases(): Boolean {
+        deleteThrows?.let { throw it }
         aliasesDeleted++
         return true
     }

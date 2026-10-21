@@ -17,9 +17,9 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 /**
- * Logic parts of the details sheets (`event_details_sheet_test.dart` covers only layout; its
- * content — when line, share text, links — is tested here), issuer input, portal RSVP map and
- * widget formatting vectors (spec 10 §10, fixture `widget_formatting`).
+ * Details-sheet texts of spec 10 §2.2 (when line, share text, links), issuer input, portal RSVP
+ * map and widget formatting vectors (spec 10 §10, fixture `widget_formatting`). The assertions of
+ * `event_details_sheet_test.dart` are UI-only and belong to Compose UI tests in `:feature:events`.
  */
 class FormatAndInputTest {
 
@@ -46,6 +46,9 @@ class FormatAndInputTest {
             CalendarFormat.links("Siehe (https://a.b/c) und http://x.y, https://a.b/c", "[https://z]"),
         )
         assertEquals(emptyList<String>(), CalendarFormat.links("ftp://nope", ""))
+        // Dart `\s` (JS semantics) also stops at Unicode spaces and the BOM.
+        assertEquals(listOf("https://a.b"), CalendarFormat.links("https://a.b\u00A0mehr", ""))
+        assertEquals(listOf("https://c.d", "https://e.f"), CalendarFormat.links("https://c.d\u3000x https://e.f\uFEFFy", ""))
     }
 
     @Test
@@ -95,10 +98,11 @@ class FormatAndInputTest {
         assertEquals(-1, PortalRsvp.count(jsonObjectOf("attendees" to "4")))
         assertEquals(-1, PortalRsvp.count(null))
         assertEquals(2, PortalRsvp.might(jsonObjectOf("might_attendees" to 2)))
-        assertTrue(PortalRsvp.isGoing(jsonObjectOf("status" to "maybe")))
-        assertTrue(PortalRsvp.isGoing(jsonObjectOf("status" to "none", "is_going" to true)))
-        assertFalse(PortalRsvp.isGoing(jsonObjectOf("going" to "true")))
-        assertTrue(PortalRsvp.isGoing(jsonObjectOf("going" to null, "rsvped" to true)))
+        assertEquals("maybe", PortalRsvp.status(jsonObjectOf("status" to "maybe")))
+        assertEquals("", PortalRsvp.status(jsonObjectOf("status" to null)))
+        assertEquals("", PortalRsvp.status(null))
+        assertEquals("1", PortalRsvp.status(jsonObjectOf("status" to 1)))
+        assertEquals("true", PortalRsvp.status(jsonObjectOf("status" to true)))
         val initial = PortalRsvp.initial(MeetupDate("T", "", "", Instant.EPOCH, "", attendees = 3))
         assertEquals(3, PortalRsvp.count(initial))
         assertEquals(0, PortalRsvp.might(initial))

@@ -132,6 +132,12 @@ internal class DefaultEventChatService @Inject constructor(
         return counts
     }
 
+    override suspend fun markRead(eventAddress: String, until: Instant) =
+        readMarks.markRead(EventChatService.readKey(eventAddress), until)
+
+    override suspend fun lastReadFor(eventAddress: String): Long =
+        readMarks.lastReadFor(EventChatService.readKey(eventAddress))
+
     private fun queryOptions() = RelayQueryOptions(
         connectTimeout = CONNECT_TIMEOUT,
         responseTimeout = RESPONSE_TIMEOUT,

@@ -406,7 +406,13 @@ object BadgeSecurity {
         if (!code.startsWith(QR_V3_PREFIX)) return null
         val parts = code.substring(QR_V3_PREFIX.length).split('.')
         if (parts.size < 5) return null
-        val json = DartUtf8.decodeStrict(DartBase64.decode(parts[0]))
+        val bytes = DartBase64.decode(parts[0])
+        val json = try {
+            DartUtf8.decodeStrict(bytes)
+        } catch (e: java.nio.charset.CharacterCodingException) {
+            // Dart's utf8.decode throws FormatException; keep the documented IAE contract.
+            throw IllegalArgumentException("Invalid UTF-8 in 21v3 payload", e)
+        }
         return ReputationQrV3Parts(json, parts[1], parts[2], dartIntTryParse(parts[3]) ?: 0, parts[4])
     }
 

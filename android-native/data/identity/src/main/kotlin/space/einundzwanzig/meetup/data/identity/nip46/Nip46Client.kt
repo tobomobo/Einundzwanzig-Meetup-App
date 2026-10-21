@@ -406,11 +406,15 @@ class Nip46Client(
     /**
      * Removes [url]'s link. A late `onDone` of an old socket must not remove a newer link for the
      * same URL ([expected] identity check). The socket is closed asynchronously.
+     *
+     * With [expected] `null` (relay `CLOSED`, cooldown) a link that is still subscribing is dropped
+     * as well: its subscription is dead, so [openLink] must not register it as usable.
      */
     private fun dropLink(url: String, expected: Nip46RelayLink?, closeSocket: Boolean = true) {
         val link = synchronized(lock) {
-            if (expected != null && opening[url] === expected) {
-                // Ended while subscribing: openLink discards it.
+            val subscribing = opening[url]
+            if (subscribing != null && (expected == null || subscribing === expected)) {
+                // Ended while subscribing: openLink sees it is gone, discards and closes it.
                 opening.remove(url)
                 return
             }

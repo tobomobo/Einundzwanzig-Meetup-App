@@ -106,41 +106,50 @@ internal class DefaultBlossomUploadService(
                 lastError = e.toString()
                 continue
             }
-            when (val response = client.executeCapped(request, MAX_RESPONSE_BYTES, TIMEOUT)) {
-                is HttpResult.Response -> {
-                    if (response.status == 200 || response.status == 201) {
-                        try {
-                            val json = DartJson.decode(response.text()) as? JsonObject
-                                ?: throw IllegalArgumentException("Antwort ist kein JSON-Objekt")
-                            val url = json["url"].let {
-                                when (it) {
-                                    null, is JsonNull -> ""
-                                    is JsonPrimitive -> it.content
-                                    else -> it.toString()
+            // Dart wraps the whole per-server block in `catch (e)`: any exception (also a
+            // non-IO one from reading the response) becomes lastError and the next server is tried.
+            try {
+                when (val response = client.executeCapped(request, MAX_RESPONSE_BYTES, TIMEOUT)) {
+                    is HttpResult.Response -> {
+                        if (response.status == 200 || response.status == 201) {
+                            try {
+                                val json = DartJson.decode(response.text()) as? JsonObject
+                                    ?: throw IllegalArgumentException("Antwort ist kein JSON-Objekt")
+                                val url = json["url"].let {
+                                    when (it) {
+                                        null, is JsonNull -> ""
+                                        is JsonPrimitive -> it.content
+                                        else -> it.toString()
+                                    }
                                 }
+                                if (url.isNotEmpty()) {
+                                    log.debug(TAG, "Upload bei $server erfolgreich: $url")
+                                    return UploadResult.success(url)
+                                }
+                                lastError = "Antwort ohne URL"
+                            } catch (e: Exception) {
+                                lastError = e.toString()
                             }
-                            if (url.isNotEmpty()) {
-                                log.debug(TAG, "Upload bei $server erfolgreich: $url")
-                                return UploadResult.success(url)
-                            }
-                            lastError = "Antwort ohne URL"
-                        } catch (e: Exception) {
-                            lastError = e.toString()
+                        } else {
+                            // Blossom puts the reason into the X-Reason header.
+                            lastError = response.header("x-reason") ?: "HTTP ${response.status}"
                         }
-                    } else {
-                        // Blossom puts the reason into the X-Reason header.
-                        lastError = response.header("x-reason") ?: "HTTP ${response.status}"
+                        log.debug(TAG, "$server abgelehnt: $lastError")
                     }
-                    log.debug(TAG, "$server abgelehnt: $lastError")
+                    is HttpResult.TooLarge -> {
+                        lastError = "HTTP ${response.status}"
+                        log.debug(TAG, "$server abgelehnt: Antwort zu groß")
+                    }
+                    is HttpResult.Failure -> {
+                        lastError = response.cause.toString()
+                        log.debug(TAG, "$server nicht erreichbar: ${response.cause}")
+                    }
                 }
-                is HttpResult.TooLarge -> {
-                    lastError = "HTTP ${response.status}"
-                    log.debug(TAG, "$server abgelehnt: Antwort zu groß")
-                }
-                is HttpResult.Failure -> {
-                    lastError = response.cause.toString()
-                    log.debug(TAG, "$server nicht erreichbar: ${response.cause}")
-                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                lastError = e.toString()
+                log.debug(TAG, "$server nicht erreichbar: $e")
             }
         }
         return UploadResult.failure(lastError ?: "Kein Server erreichbar")

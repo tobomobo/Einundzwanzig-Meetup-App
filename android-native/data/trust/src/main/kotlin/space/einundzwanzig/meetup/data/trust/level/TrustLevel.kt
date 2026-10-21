@@ -65,8 +65,11 @@ enum class TrustLevelIcon {
 
 /**
  * Semantic colour of a level. Features map it to theme colours (`MaterialTheme.extendedColors`:
- * [SUCCESS_GREEN] → `success`, [COMMUNITY_GOLD] → `community`, [BITCOIN_ORANGE] → `bitcoin`,
- * [NEUTRAL_GREY] → a neutral/outline tone, or `textTertiary` on home); never hard-code ARGB.
+ * [AMBER] → `community` (`:core:ui` has no amber token yet; Flutter amber 0xFFFFC107 and gold
+ * 0xFFD4A017 are close, the level icon tells VETERAN and AKTIV apart; switch once an amber
+ * token exists), [SUCCESS_GREEN] → `success`, [COMMUNITY_GOLD] → `community`,
+ * [BITCOIN_ORANGE] → `bitcoin`, [NEUTRAL_GREY] → `colorScheme.outline`, or `textTertiary` on
+ * home); never hard-code ARGB.
  */
 enum class TrustLevelColor {
     /** Flutter `Colors.amber` (VETERAN). */

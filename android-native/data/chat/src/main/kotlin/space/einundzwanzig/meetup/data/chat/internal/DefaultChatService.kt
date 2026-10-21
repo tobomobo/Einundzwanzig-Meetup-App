@@ -17,12 +17,12 @@ import space.einundzwanzig.meetup.core.common.result.runSuspendCatching
 import space.einundzwanzig.meetup.core.nostr.EventGuard
 import space.einundzwanzig.meetup.core.nostr.NostrEvent
 import space.einundzwanzig.meetup.core.nostr.relay.RelayClient
+import space.einundzwanzig.meetup.core.nostr.relay.RelayConnectException
 import space.einundzwanzig.meetup.core.nostr.relay.RelayPublishOptions
 import space.einundzwanzig.meetup.core.nostr.relay.RelayPublishStatus
 import space.einundzwanzig.meetup.core.nostr.relay.RelayQueryOptions
 import space.einundzwanzig.meetup.core.nostr.relay.RelayQueryStatus
 import space.einundzwanzig.meetup.core.nostr.relay.RelaySubscriptionEvent
-import space.einundzwanzig.meetup.data.badges.text.DartString
 import space.einundzwanzig.meetup.data.chat.ChatKinds
 import space.einundzwanzig.meetup.data.chat.ChatMessage
 import space.einundzwanzig.meetup.data.chat.ChatReadMarkStore
@@ -36,6 +36,7 @@ import space.einundzwanzig.meetup.data.identity.SigningService
 import space.einundzwanzig.meetup.data.identity.nip46.Nip46Timeouts
 import java.io.IOException
 import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
@@ -61,31 +62,56 @@ internal class DefaultChatService @Inject constructor(
      */
     private val roomsMutex = Mutex()
 
-    /** Number of finished room fetches and the outcome of the last one (written under [roomsMutex]). */
+    /**
+     * Sequence numbers of the room fetches (all written under [roomsMutex]): [startedSeq] counts
+     * started fetches, [lastFetchSeq] is the number of the fetch that produced [lastFetch].
+     */
     @Volatile
-    private var fetchCount = 0L
+    private var startedSeq = 0L
+
+    @Volatile
+    private var lastFetchSeq = 0L
     private var lastFetch: Result<List<ChatRoom>>? = null
+
+    /**
+     * Rooms found by [findRoomForMeetupId] + lookup time (ms), per portal id. Positive answers
+     * only: `null` ("no room") and [ChatRelayUnavailable] are never cached (spec 11 §14.17), so a
+     * newly created room or a recovered relay shows up on the next lookup.
+     */
+    private val roomByIdCache = ConcurrentHashMap<String, Pair<ChatRoom, Long>>()
+
+    /** Serialises concurrent lookups of the same portal id (one connection / Amber prompt at a time). */
+    private val roomByIdLocks = ConcurrentHashMap<String, Mutex>()
 
     // ------------------------------------------------------------------ rooms
 
     override suspend fun loadMeetupRooms(force: Boolean): List<ChatRoom> {
+        // An explicit reload also drops the per-meetup-id answers.
+        if (force) roomByIdCache.clear()
         if (!force) roomCache?.takeIf(::isFresh)?.let { return it.first }
-        val seen = fetchCount
+        val startedAtCall = startedSeq
+        val finishedAtCall = lastFetchSeq
         return roomsMutex.withLock {
-            // A fetch finished while this call waited: it ran concurrently with this call, so its
-            // outcome (rooms, or ChatRelayUnavailable) is shared instead of opening another
-            // authenticated connection, also for force.
-            if (fetchCount != seen) lastFetch?.let { return@withLock it.getOrThrow() }
+            // Share the outcome (rooms, or ChatRelayUnavailable) of a fetch instead of opening
+            // another authenticated connection. A normal call takes any fetch that finished while
+            // it waited; force only one that started after this call began, so an explicit
+            // reload never returns an answer from before it was asked.
+            val last = lastFetch
+            if (last != null) {
+                val shared = if (force) lastFetchSeq > startedAtCall else lastFetchSeq != finishedAtCall
+                if (shared) return@withLock last.getOrThrow()
+            }
             val cached = roomCache
             if (!force && cached != null && isFresh(cached)) return@withLock cached.first
+            val seq = ++startedSeq
             val outcome = runSuspendCatching { fetchRooms(cached) }
-            fetchCount++
             lastFetch = outcome
+            lastFetchSeq = seq
             outcome.getOrThrow()
         }
     }
 
-    private fun isFresh(cached: Pair<List<ChatRoom>, Long>): Boolean =
+    private fun isFresh(cached: Pair<*, Long>): Boolean =
         time.nowMillis() - cached.second < CACHE_TTL.inWholeMilliseconds
 
     private suspend fun fetchRooms(cached: Pair<List<ChatRoom>, Long>?): List<ChatRoom> {
@@ -105,7 +131,7 @@ internal class DefaultChatService @Inject constructor(
         val events = when (
             val answer = queryStrict(jsonObjectOf("kinds" to listOf(ChatKinds.ROOM_META), "#t" to listOf("meetup"), "limit" to 500))
         ) {
-            is Answer.None -> throw ChatRelayUnavailable(offline = answer.offline)
+            is Answer.None -> throw ChatRelayUnavailable(offline = answer.offline, cause = answer.error)
             is Answer.Events -> answer.events
         }
         val rooms = LinkedHashMap<String, ChatRoom>()
@@ -124,20 +150,31 @@ internal class DefaultChatService @Inject constructor(
 
     override suspend fun findMeetupRoom(slug: String): ChatRoom? {
         if (slug.isEmpty()) return null
-        val needle = DartString.lower(slug)
-        val room = loadMeetupRooms().firstOrNull { DartString.lower(it.meetupSlug) == needle }
+        val needle = slug.dartLower()
+        val room = loadMeetupRooms().firstOrNull { it.meetupSlug.dartLower() == needle }
         if (room == null) AppLogger.debug(TAG, "Kein Raum für Meetup-Slug \"$slug\".")
         return room
     }
 
     override suspend fun findRoomForMeetupId(portalId: String): ChatRoom? {
         if (portalId.isEmpty()) return null
+        roomByIdCache[portalId]?.takeIf(::isFresh)?.let { return it.first }
+        return roomByIdLocks.computeIfAbsent(portalId) { Mutex() }.withLock {
+            // A caller that waited may now find the room another lookup just produced.
+            roomByIdCache[portalId]?.takeIf(::isFresh)?.let { return@withLock it.first }
+            val room = findRoomForMeetupIdUncached(portalId)
+            if (room != null) roomByIdCache[portalId] = room to time.nowMillis()
+            room
+        }
+    }
+
+    private suspend fun findRoomForMeetupIdUncached(portalId: String): ChatRoom? {
         val events = when (
             val answer = queryStrict(
                 jsonObjectOf("kinds" to listOf(ChatKinds.ROOM_META), "#i" to listOf("meetup:$portalId"), "limit" to 5),
             )
         ) {
-            is Answer.None -> throw ChatRelayUnavailable(offline = answer.offline)
+            is Answer.None -> throw ChatRelayUnavailable(offline = answer.offline, cause = answer.error)
             is Answer.Events -> answer.events
         }
         var best: ChatRoom? = null
@@ -255,7 +292,8 @@ internal class DefaultChatService @Inject constructor(
 
     private sealed interface Answer {
         class Events(val events: List<JsonObject>) : Answer
-        class None(val offline: Boolean) : Answer
+        /** No information; [error] is the underlying connect/AUTH/socket failure, if any. */
+        class None(val offline: Boolean, val error: Throwable? = null) : Answer
     }
 
     /** Dart `_query`: "no answer" reads as an empty list. */
@@ -281,9 +319,9 @@ internal class DefaultChatService @Inject constructor(
             RelayQueryStatus.CONNECT_FAILED -> {
                 val offline = isOffline(result.error)
                 AppLogger.warn(TAG, if (offline) "Kein Netz — Relay nicht erreichbar" else "Verbindung fehlgeschlagen", result.error)
-                Answer.None(offline)
+                Answer.None(offline, result.error)
             }
-            RelayQueryStatus.AUTH_FAILED -> Answer.None(offline = false)
+            RelayQueryStatus.AUTH_FAILED -> Answer.None(offline = false, error = result.error)
             RelayQueryStatus.CLOSED -> {
                 val reason = result.closedReason ?: "ohne Grund"
                 AppLogger.warn(TAG, "Abfrage abgelehnt: $reason")
@@ -291,13 +329,13 @@ internal class DefaultChatService @Inject constructor(
                     AppLogger.diag(TAG, "Anmeldung kam zu spaet — zweiter Versuch.")
                     queryStrict(filter, timeout, isRetry = true)
                 } else {
-                    Answer.None(offline = false)
+                    Answer.None(offline = false, error = IOException("CLOSED: $reason"))
                 }
             }
             RelayQueryStatus.TIMEOUT, RelayQueryStatus.DISCONNECTED ->
                 if (result.events.isEmpty()) {
                     AppLogger.warn(TAG, "Keine Antwort vom Relay binnen ${timeout.inWholeSeconds} s.")
-                    Answer.None(offline = false)
+                    Answer.None(offline = false, error = result.error)
                 } else {
                     Answer.Events(result.events)
                 }
@@ -327,20 +365,28 @@ internal class DefaultChatService @Inject constructor(
             RelayPublishStatus.ACCEPTED, RelayPublishStatus.SENT -> null
             RelayPublishStatus.REJECTED -> result.message
             RelayPublishStatus.TIMEOUT, RelayPublishStatus.DISCONNECTED -> "Zeitüberschreitung"
-            RelayPublishStatus.CONNECT_FAILED, RelayPublishStatus.AUTH_FAILED -> {
-                if (result.status == RelayPublishStatus.CONNECT_FAILED) {
-                    val offline = isOffline(result.error)
-                    AppLogger.warn(TAG, if (offline) "Kein Netz — Relay nicht erreichbar" else "Verbindung fehlgeschlagen", result.error)
+            RelayPublishStatus.AUTH_FAILED -> AUTH_FAILED_TEXT
+            RelayPublishStatus.CONNECT_FAILED -> {
+                val error = result.error
+                if (error is RelayConnectException) {
+                    // The connection never opened (Dart `_connectAuthed` returned null).
+                    val offline = isOffline(error)
+                    AppLogger.warn(TAG, if (offline) "Kein Netz — Relay nicht erreichbar" else "Verbindung fehlgeschlagen", error)
+                    AUTH_FAILED_TEXT
+                } else {
+                    // Authenticated, but the EVENT frame could not be sent (connection dropped):
+                    // Dart's `ws.add` threw inside `_publish`'s try and returned `e.toString()`.
+                    AppLogger.warn(TAG, "Senden fehlgeschlagen", error)
+                    error?.let(::errorText) ?: "Zeitüberschreitung"
                 }
-                "Anmeldung am Relay fehlgeschlagen"
             }
         }
     }
 
     /**
      * Connect failure classification: the exception heuristics of Dart `_looksOffline`, plus the
-     * native ConnectivityManager check (no validated network, e.g. a connect timeout behind a
-     * captive portal or right after airplane mode).
+     * native ConnectivityManager check (no active network with `INTERNET` at all, e.g. a connect
+     * timeout right after airplane mode). A connected but unvalidated network is not offline.
      */
     private fun isOffline(error: Throwable?): Boolean = looksOffline(error) || !networkStatus.isOnline()
 
@@ -352,6 +398,9 @@ internal class DefaultChatService @Inject constructor(
         private const val TAG = "Chat"
         private const val QUERY_SUBSCRIPTION = "q"
         private const val LIVE_SUBSCRIPTION = "live"
+
+        /** Dart `_publish` when `_connectAuthed` gave no socket. */
+        private const val AUTH_FAILED_TEXT = "Anmeldung am Relay fehlgeschlagen"
 
         /** WebSocket connect deadline. */
         val CONNECT_TIMEOUT: Duration = 5.seconds

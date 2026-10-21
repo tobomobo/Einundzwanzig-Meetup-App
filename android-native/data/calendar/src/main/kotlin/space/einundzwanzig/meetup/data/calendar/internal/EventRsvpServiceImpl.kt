@@ -40,7 +40,7 @@ internal class EventRsvpServiceImpl @Inject constructor(
             throw e
         } catch (e: Exception) {
             log.warn(TAG, "Signieren fehlgeschlagen", e)
-            return RsvpError.SigningFailed(e.toString(), e)
+            return RsvpError.SigningFailed(e.message?.takeIf { it.isNotBlank() } ?: e::class.simpleName.orEmpty(), e)
         }
         val relays = targets()
         val results = relayClient.publishAll(

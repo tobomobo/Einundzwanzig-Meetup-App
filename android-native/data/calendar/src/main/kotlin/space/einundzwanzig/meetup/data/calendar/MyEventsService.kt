@@ -1,6 +1,6 @@
 package space.einundzwanzig.meetup.data.calendar
 
-import space.einundzwanzig.meetup.data.calendar.model.FavoriteMeetupCard
+import space.einundzwanzig.meetup.data.calendar.model.FavoriteCards
 import space.einundzwanzig.meetup.data.calendar.model.MeetupDate
 import space.einundzwanzig.meetup.data.calendar.model.MyMeetupDate
 import space.einundzwanzig.meetup.data.calendar.model.NostrCalendarEvent
@@ -12,7 +12,7 @@ interface MyEventsService {
 
     /**
      * Nostr events the user accepted (Home `_loadMyEvents`): own RSVPs with status `accepted`,
-     * each fetched by address (sequentially), unknown/cancelled ones and those starting before
+     * each fetched by address (up to 4 in parallel), unknown/cancelled ones and those starting before
      * now − 1 day dropped, sorted by start.
      */
     suspend fun loadAcceptedEvents(): List<NostrCalendarEvent>
@@ -33,8 +33,10 @@ interface MyEventsService {
      * midnight on; sorted (with date by start, then without date by city). Empty without
      * favorites. When [updateWidget] is set, the front card feeds the home-screen widget
      * (`meetupCity`/countdown) — an empty city when there are no favorites (spec 10 §14 item 18).
+     * When no dates are available at all (portal and iCal unreachable), the stored widget meetup
+     * is left untouched instead of being cleared ([FavoriteCards.Loaded.datesAvailable] `false`).
      */
-    suspend fun loadFavoriteCards(dates: List<MeetupDate>? = null, updateWidget: Boolean = true): List<FavoriteMeetupCard>
+    suspend fun loadFavoriteCards(dates: List<MeetupDate>? = null, updateWidget: Boolean = true): FavoriteCards
 
     companion object {
         /** Days ahead the favorite RSVP scan looks. */

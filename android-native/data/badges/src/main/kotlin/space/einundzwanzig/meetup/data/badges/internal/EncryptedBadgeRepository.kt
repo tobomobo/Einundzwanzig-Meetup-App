@@ -1,6 +1,7 @@
 package space.einundzwanzig.meetup.data.badges.internal
 
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -72,7 +73,14 @@ internal class EncryptedBadgeRepository @Inject constructor(
             _unreadable.value = value
         }
 
-    private suspend fun <T> locked(block: suspend () -> T): T = withContext(dispatcher) { mutex.withLock { block() } }
+    /**
+     * Runs a store operation under [mutex], **non-cancellable**: the write algorithms are
+     * multi-step (stash/rotate, archive, delete secure copy, commit primary) and, like Dart
+     * futures, must not stop between steps because the caller's scope (e.g. a ViewModel) went
+     * away. The caller still observes its own cancellation once the operation returns.
+     */
+    private suspend fun <T> locked(block: suspend () -> T): T =
+        withContext(dispatcher + NonCancellable) { mutex.withLock { block() } }
 
     /**
      * Writers must know whether the file is readable before they touch it: without a load in this
@@ -81,14 +89,12 @@ internal class EncryptedBadgeRepository @Inject constructor(
      * relied on `main()` loading first; here every write path loads once on its own.
      */
     private suspend fun ensureLoaded() {
-        if (!_loaded.value) _badges.value = loadInternal()
+        if (!_loaded.value) loadInternal()
     }
 
     // ------------------------------------------------------------------ public API
 
-    override suspend fun loadBadges(): List<MeetupBadge> = locked {
-        loadInternal().also { _badges.value = it }
-    }
+    override suspend fun loadBadges(): List<MeetupBadge> = locked { loadInternal() }
 
     override suspend fun saveBadges(badges: List<MeetupBadge>, replaceUnreadable: Boolean, discardLocked: Boolean): Boolean =
         locked {
@@ -127,12 +133,13 @@ internal class EncryptedBadgeRepository @Inject constructor(
         if (badges.isEmpty()) return@locked false
         ensureLoaded()
         val key = getBadgeKey(create = true) ?: return@locked false
-        try {
-            commitString(BadgeStoreKeys.INCOMING, encryptBlob(badges, key))
+        val blob = try {
+            encryptBlob(badges, key)
         } catch (e: Exception) {
             AppLogger.warn(TAG, "Puffer für den Identitätswechsel nicht geschrieben", e)
-            false
+            return@locked false
         }
+        commitString(BadgeStoreKeys.INCOMING, blob)
     }
 
     override suspend fun promoteIncoming(formerNpub: String): Boolean = locked {
@@ -153,7 +160,9 @@ internal class EncryptedBadgeRepository @Inject constructor(
         writeSecureCopy(incoming)
         prefs.remove(BadgeStoreKeys.INCOMING)
         unreadable = false
-        openWithDeviceKeys(incoming)?.let { _badges.value = it }
+        // Reload instead of guessing: if no device key opens the promoted file, the load marks the
+        // collection unreadable, so the next update cannot write the old in-memory list over it.
+        loadInternal()
         _saved.tryEmit(Unit)
         true
     }
@@ -169,7 +178,7 @@ internal class EncryptedBadgeRepository @Inject constructor(
             val e = entries[i]
             out += FormerCollection(
                 index = i,
-                at = DartDateTime.fromMillisecondsSinceEpoch(atOf(e) * 1000),
+                at = atDateTime(atOf(e)),
                 reason = stringOf(e["reason"]),
                 npub = stringOf(e["npub"]),
                 badges = openWithDeviceKeys(stringOf(e["blob"])),
@@ -183,7 +192,6 @@ internal class EncryptedBadgeRepository @Inject constructor(
         if (index < 0 || index >= entries.size) return@locked false
         val former = openWithDeviceKeys(stringOf(entries[index]["blob"])) ?: return@locked false
         val current = loadInternal()
-        _badges.value = current
         if (unreadable) return@locked false
         saveInternal(BadgeIdentity.unionByIdentity(current, former))
     }
@@ -209,10 +217,15 @@ internal class EncryptedBadgeRepository @Inject constructor(
 
     // ------------------------------------------------------------------ load / save
 
+    /**
+     * Loads and publishes: the list first, then [loaded], so a collector of `combine(loaded, badges)`
+     * never sees `loaded = true` next to the previous (or empty) list.
+     */
     private suspend fun loadInternal(): List<MeetupBadge> {
         // The first identityKey() (wallet filter, union) must not read the case table on the main thread.
         DartString.warmUp()
         val result = loadFromStores()
+        _badges.value = result
         _loaded.value = true
         return result
     }
@@ -339,19 +352,21 @@ internal class EncryptedBadgeRepository @Inject constructor(
 
         val pending = readPending() // null = present but unreadable: keep it for later
         val toStore = BadgeIdentity.unionByIdentity(badges, pending ?: emptyList())
-        try {
-            val stored = encryptBlob(toStore, key)
-            if (!commitString(BadgeStoreKeys.PRIMARY, stored)) return false
-            writeSecureCopy(stored)
-            if (prefs.contains(BadgeStoreKeys.LEGACY)) {
-                prefs.remove(BadgeStoreKeys.LEGACY)
-                AppLogger.debug(TAG, "Legacy-Klartextbadges aus SharedPrefs entfernt")
-            }
+        // Only the (non-suspending) crypto sits in the try: storage calls below are suspend and
+        // must not have a CancellationException mislabelled as an encryption failure.
+        val stored = try {
+            encryptBlob(toStore, key)
         } catch (e: Exception) {
             // Dart fell back to a plaintext `badges` list here when no file existed; the native
             // app never writes plaintext (spec 02 §14 item 15).
             AppLogger.error(TAG, "Verschlüsselung fehlgeschlagen, nichts gespeichert", e)
             return false
+        }
+        if (!commitString(BadgeStoreKeys.PRIMARY, stored)) return false
+        writeSecureCopy(stored)
+        if (prefs.contains(BadgeStoreKeys.LEGACY)) {
+            prefs.remove(BadgeStoreKeys.LEGACY)
+            AppLogger.debug(TAG, "Legacy-Klartextbadges aus SharedPrefs entfernt")
         }
 
         if (pending != null) writePending(emptyList())
@@ -623,13 +638,13 @@ internal class EncryptedBadgeRepository @Inject constructor(
             return true
         }
         val key = getPendingKey(create = true) ?: return false
-        val written = try {
-            prefs.setString(BadgeStoreKeys.PENDING, encryptBlob(badges, key))
+        val blob = try {
+            encryptBlob(badges, key)
         } catch (e: Exception) {
             AppLogger.warn(TAG, "Vormerkung nicht verschlüsselbar", e)
-            false
+            return false
         }
-        if (!written) return false
+        if (!prefs.setString(BadgeStoreKeys.PENDING, blob)) return false
         prefs.remove(BadgeStoreKeys.LEGACY_PENDING)
         return true
     }
@@ -816,6 +831,14 @@ internal class EncryptedBadgeRepository @Inject constructor(
             return out.withIndex().sortedWith(compareBy<IndexedValue<JsonObject>> { atOf(it.value) }.thenBy { it.index })
                 .map { it.value }
         }
+
+        /**
+         * Archive time from seconds. A corrupt or foreign `at` (overflowing `* 1000` or beyond
+         * Dart's ±8.64e15 ms range) becomes the epoch instead of failing the whole archive listing.
+         */
+        internal fun atDateTime(seconds: Long): DartDateTime =
+            runCatching { DartDateTime.fromMillisecondsSinceEpoch(Math.multiplyExact(seconds, 1000L)) }
+                .getOrElse { DartDateTime.fromMillisecondsSinceEpoch(0) }
 
         /** `(e['at'] as num?)?.toInt() ?? 0`. */
         private fun atOf(entry: JsonObject): Long {

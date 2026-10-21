@@ -1,6 +1,7 @@
 package space.einundzwanzig.meetup.data.identity
 
 import space.einundzwanzig.meetup.data.identity.nip46.Nip46Client
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** Outcome of [SigningService.connectAmber]. */
 sealed interface AmberConnectResult {
@@ -46,9 +47,10 @@ sealed interface Nip46ConnectResult {
 
 /**
  * A running `nostrconnect://` pairing (Dart `Nip46Pairing`). Show [uri] as QR code / text, then
- * call [SigningService.completeNip46Pairing]. Call [cancel] when the user aborts, otherwise the
- * relay sockets stay open. Once [SigningService.completeNip46Pairing] succeeded the client is the
- * live session: do **not** cancel it any more.
+ * call [SigningService.completeNip46Pairing]. Call [cancel] when the user aborts or the screen
+ * goes away, otherwise the relay sockets stay open. Once [SigningService.completeNip46Pairing]
+ * succeeded the client is the live session and [cancel] is a no-op, so an unconditional
+ * `cancel()` in `onCleared`/dispose is safe.
  */
 class Nip46Pairing internal constructor(
     /** The `nostrconnect://` URI (contains the one-time secret, never the client key). */
@@ -61,8 +63,13 @@ class Nip46Pairing internal constructor(
     /** The unpaired client that waits for the signer (internal: it holds the session key). */
     internal val client: Nip46Client,
 ) {
-    /** Closes the client and its relay sockets. */
-    suspend fun cancel() = client.close()
+    /** Set once the client became the live signing session; [cancel] then leaves it alone. */
+    internal val adopted = AtomicBoolean(false)
+
+    /** Closes the client and its relay sockets, unless the pairing already became the live session. */
+    suspend fun cancel() {
+        if (!adopted.get()) client.close()
+    }
 
     override fun toString(): String = "Nip46Pairing(relays=$relays)"
 }

@@ -48,6 +48,11 @@ internal data class EspEntries(
     val readable: Boolean,
     /** Number of encrypted (non-reserved, non-custom) entries in the file. */
     val encryptedEntryCount: Int,
+    /**
+     * The keysets could not be opened and the ESP master alias does not exist: permanent, no
+     * retry can read these entries (spec 14 R6).
+     */
+    val masterKeyMissing: Boolean = false,
 )
 
 /**
@@ -144,13 +149,21 @@ internal class FlutterSecureStorageReader(
             v is String && !name.startsWith(Fss.ENTRY) && name != Fss.ESP_KEY_KEYSET && name != Fss.ESP_VALUE_KEYSET &&
                 name != Fss.MARKER_KEY_ALGORITHM && name != Fss.MARKER_STORAGE_ALGORITHM
         }
+        var masterKey: EspMasterKey = EspMasterKey.Unavailable
         val primitives = runCatching {
             registerTink()
-            val master = keystore.espMasterAead()
+            masterKey = keystore.espMasterKey()
+            val master = (masterKey as? EspMasterKey.Available)?.aead
             val daead = parseKeyset(keyKeyset, master).getPrimitive(RegistryConfiguration.get(), DeterministicAead::class.java)
             val aead = parseKeyset(valueKeyset, master).getPrimitive(RegistryConfiguration.get(), Aead::class.java)
             daead to aead
-        }.getOrNull() ?: return EspEntries(emptyMap(), emptyList(), readable = false, encryptedEntryCount = candidates.size)
+        }.getOrNull() ?: return EspEntries(
+            emptyMap(),
+            emptyList(),
+            readable = false,
+            encryptedEntryCount = candidates.size,
+            masterKeyMissing = masterKey == EspMasterKey.Missing,
+        )
         val (daead, aead) = primitives
         val fileNameBytes = Fss.DATA.toByteArray(StandardCharsets.UTF_8)
         val values = LinkedHashMap<String, String>()

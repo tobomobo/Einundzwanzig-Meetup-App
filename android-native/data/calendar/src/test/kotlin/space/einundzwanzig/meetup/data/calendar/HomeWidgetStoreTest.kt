@@ -40,7 +40,7 @@ class HomeWidgetStoreTest {
         time,
         testLog(),
         UnconfinedTestDispatcher(scheduler),
-    )
+    ).also { it.zoneProvider = { ZoneId.of("Europe/Berlin") } }
 
     @Test
     fun `flutter-written values render like the fixture`() = runTest {
@@ -119,8 +119,8 @@ class HomeWidgetStoreTest {
     }
 
     @Test
-    fun `launch target is consumed once and home is never stored`() {
-        val targets = WidgetLaunchTargetStoreImpl(context)
+    fun `launch target is consumed once and home is never stored`() = runTest {
+        val targets = WidgetLaunchTargetStoreImpl(context, UnconfinedTestDispatcher(testScheduler))
         assertFalse(targets.store("home"))
         assertFalse(targets.store(""))
         assertNull(targets.consume())

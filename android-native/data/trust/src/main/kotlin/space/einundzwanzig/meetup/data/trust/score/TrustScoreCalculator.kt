@@ -29,9 +29,9 @@ interface TrustScoreCalculator {
      *   yyyy-MM-dd` in the device zone); `null` in production.
      *
      * Never throws for extreme badge dates: where Dart's `round()` would throw on a non-finite
-     * `totalScore` (badges dated centuries ahead), the `"score"` progress saturates to
-     * `Int.MAX_VALUE`/`Int.MIN_VALUE` (NaN → 0); finite values beyond the `Int` range are
-     * clamped, never wrapped.
+     * `totalScore` (badges dated centuries ahead) and so never promotes, the `"score"` progress
+     * fails closed (`current = 0`, not met, so [TrustScore.meetsPromotionThreshold] is `false`);
+     * finite values beyond the `Int` range are clamped, never wrapped.
      */
     fun calculate(
         badges: List<MeetupBadge>,
@@ -81,7 +81,11 @@ interface TrustScoreCalculator {
         fun coAttestorKey(badge: MeetupBadge, zone: ZoneId): String =
             DefaultTrustScoreCalculator.badgeToEventId(badge, zone)
 
-        /** A calculator for [time] and [zone] (tests, workers). */
+        /**
+         * A calculator for [time] and [zone] (tests, workers). A non-system [zone] must be
+         * paired with a pinned JVM default zone (`TimeZone.setDefault`), because
+         * de-duplication via `BadgeIdentity.identityKey` reads the default zone (see [ZoneIdProvider]).
+         */
         fun create(
             time: TimeSource,
             zone: ZoneIdProvider = ZoneIdProvider.SYSTEM,

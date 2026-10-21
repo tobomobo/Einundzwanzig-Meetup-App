@@ -40,16 +40,34 @@ internal class NearbyMeetupServiceImpl @Inject constructor(
     @Volatile
     private var eventCache: List<MeetupEventInfo>? = null
 
+    /** The meetup cache holds a real directory answer (not the bundled fallback). */
+    @Volatile
+    private var meetupsFinal = false
+
+    /** The event cache holds a non-empty answer (the source reports failures as `[]`). */
+    @Volatile
+    private var eventsFinal = false
+
     override suspend fun preload(forceReload: Boolean) = mutex.withLock {
-        if (!forceReload && meetupCache != null && eventCache != null) return@withLock
+        // Native deviation (spec 09 §8.8): Dart cached the offline fallback / an empty event list
+        // for the whole process, so the map kept showing only the 3 bundled meetups after
+        // connectivity returned. Only real answers are final; the rest is retried next time.
+        if (!forceReload && meetupsFinal && eventsFinal) return@withLock
+        val reloadMeetups = forceReload || !meetupsFinal
+        val reloadEvents = forceReload || !eventsFinal
         val (loaded, dates) = coroutineScope {
-            val m = async { meetupService.fetchMeetups() }
-            val e = async { loadEvents() }
-            m.await() to e.await()
+            val m = if (reloadMeetups) async { meetupService.fetchMeetups() } else null
+            val e = if (reloadEvents) async { loadEvents() } else null
+            m?.await() to e?.await()
         }
-        val meetups = loaded.ifEmpty { meetupService.fallbackMeetups }
-        meetupCache = dedupeByCity(meetups)
-        eventCache = dates
+        if (loaded != null) {
+            meetupsFinal = loaded.isNotEmpty()
+            meetupCache = dedupeByCity(loaded.ifEmpty { meetupService.fallbackMeetups })
+        }
+        if (dates != null) {
+            eventsFinal = dates.isNotEmpty()
+            eventCache = dates
+        }
     }
 
     private suspend fun loadEvents(): List<MeetupEventInfo> {

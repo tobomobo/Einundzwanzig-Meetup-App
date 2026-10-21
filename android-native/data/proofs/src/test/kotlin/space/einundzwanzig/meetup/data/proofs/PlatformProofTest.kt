@@ -20,7 +20,7 @@ import space.einundzwanzig.meetup.data.proofs.platform.PlatformCatalog
 import space.einundzwanzig.meetup.data.proofs.platform.PlatformIcon
 import space.einundzwanzig.meetup.data.proofs.platform.PlatformProof
 import space.einundzwanzig.meetup.data.proofs.platform.PlatformProofBackup
-import space.einundzwanzig.meetup.data.proofs.platform.PlatformProofVerification
+import space.einundzwanzig.meetup.data.proofs.platform.PlatformProofVerifier
 import space.einundzwanzig.meetup.data.proofs.platform.ProofCreateError
 import space.einundzwanzig.meetup.data.proofs.platform.ProofCreateResult
 import space.einundzwanzig.meetup.data.proofs.platform.ReputationFacts
@@ -32,6 +32,7 @@ import space.einundzwanzig.meetup.data.proofs.platform.VerifyStringCodec
 class PlatformProofTest {
 
     private val s = "a".repeat(128)
+    private val verifier = PlatformProofVerifier(testDispatcher)
 
     // ---- verify string ----
 
@@ -89,7 +90,7 @@ class PlatformProofTest {
     private data class Rep(val bound: Int, val total: Int, val proofs: Map<String, JsonElement> = emptyMap())
 
     private suspend fun verify(input: String, rep: Rep?, expected: String? = null) =
-        PlatformProofVerification.verify(input, expected, { rep }) { ReputationFacts(it.bound, it.total, it.proofs) }
+        verifier.verify(input, expected, { rep }) { ReputationFacts(it.bound, it.total, it.proofs) }
 
     @Test
     fun `verification decision table`() = runTest {
@@ -146,7 +147,7 @@ class PlatformProofTest {
         }
         assertEquals(VerifyMessage.NpubWithBindings, verify(npub, Rep(1, 2)).message)
         assertEquals(VerifyLevel.SIGNATURE_ONLY, verify(npub, Rep(0, 2)).level)
-        val failing = PlatformProofVerification.verify(npub, null, { error("boom") }) { _: Rep -> ReputationFacts(0, 0, emptyMap()) }
+        val failing = verifier.verify(npub, null, { error("boom") }) { _: Rep -> ReputationFacts(0, 0, emptyMap()) }
         assertEquals(VerifyLevel.INVALID, failing.level)
         assertEquals("Verifikations-Fehler: boom", failing.message.german)
     }
@@ -303,5 +304,38 @@ class PlatformProofTest {
         assertEquals("""{"username":"u","proof_sig":"$s","created_at":7}""", DartJson.encode(p.toReputationJson()))
         assertEquals("""{"u":"u","s":"$s"}""", DartJson.encode(p.toQrJson()))
         assertEquals(PlatformProof("x", "", "", 0), PlatformProof.fromReputationJson("x", jsonObjectOf("username" to 5)))
+    }
+
+    @Test
+    fun `backup writes enforce the 128-hex filter themselves`() = runTest {
+        val good = jsonObjectOf("platform" to "telegram", "username" to "a", "proof_sig" to "ab".repeat(64), "created_at" to 1)
+        val unsigned = jsonObjectOf("platform" to "x", "username" to "b", "proof_sig" to "")
+        assertTrue(repo.replaceAllRaw(listOf(unsigned)))
+        assertNull(store.getString("platform_proofs")) // nothing restorable → no write
+        assertTrue(repo.replaceAllRaw(listOf(good, unsigned)))
+        assertEquals(listOf("telegram"), repo.getSavedProofs().map { it.platform })
+        assertEquals(1, storedJson().size)
+        assertTrue(repo.unionRaw(listOf(unsigned, jsonObjectOf("platform" to "nostr", "username" to "c", "proof_sig" to "g".repeat(128)))))
+        assertEquals(1, storedJson().size)
+    }
+
+    @Test
+    fun `a numeric platform is neither read nor matched by remove or create`() = runTest {
+        store.setString("platform_proofs", """[{"platform":1,"username":"u","proof_sig":"$s","created_at":5}]""")
+        assertEquals(emptyList<PlatformProof>(), repo.getSavedProofs())
+        assertTrue(repo.removeProof("1"))
+        repo.createProof("1", "n")
+        val stored = storedJson()
+        assertEquals(2, stored.size)
+        assertEquals("""{"platform":1,"username":"u","proof_sig":"$s","created_at":5}""", DartJson.encode(stored[0]))
+    }
+
+    @Test
+    fun `identity switch while the signer blocks discards the proof (R20)`() = runTest {
+        val other = FakeIdentity().keyPair!!.npub
+        identity.onSign = { identity.npubOverride = other }
+        val f = repo.createProof("telegram", "alice")
+        assertEquals(ProofCreateError.SIGNER_OR_UNKNOWN, (f as ProofCreateResult.Failure).error)
+        assertNull(store.getString("platform_proofs"))
     }
 }

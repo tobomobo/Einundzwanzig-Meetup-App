@@ -82,15 +82,25 @@ internal class DefaultBadgeClaimService @Inject constructor(
      * then applies them atomically to the collection as it is **now**: badges scanned meanwhile
      * stay, badges removed meanwhile are not brought back, a badge claimed meanwhile keeps its
      * claim. Must run under [batchMutex].
+     *
+     * Signing is only requested for badges that are actually in the readable store: the work
+     * list is the stored unclaimed badges whose identity the caller asked for. A stale or foreign
+     * caller list, or an unreadable / not yet loaded wallet, therefore never costs a signer
+     * prompt whose claim could not be saved (Dart callers passed `myBadges`, `[]` while unreadable).
      */
     private suspend fun claimBatch(badges: List<MeetupBadge>): ClaimBatchResult {
-        // Already claimed in the stored collection (e.g. by a batch that finished while we waited).
-        val storedClaimed = repository.badges.value.filter { it.isClaimed }.mapTo(HashSet(), BadgeIdentity::unionKey)
+        if (!repository.loaded.value) repository.loadBadges()
+        if (repository.badgesUnreadable.value) {
+            AppLogger.debug(TAG, "Claims ausgesetzt, Sammlung nicht lesbar")
+            return ClaimBatchResult(badges, 0)
+        }
+        val requested = badges.filter(::needsClaim).mapTo(HashSet(), BadgeIdentity::unionKey)
+        // Stored badges already claimed (e.g. by a batch that finished while we waited) drop out here.
+        val work = repository.badges.value.filter { needsClaim(it) && BadgeIdentity.unionKey(it) in requested }
         val claims = LinkedHashMap<String, MeetupBadge>()
-        for (badge in badges) {
-            if (!needsClaim(badge)) continue
+        for (badge in work) {
             val key = BadgeIdentity.unionKey(badge)
-            if (key in storedClaimed || key in claims) continue
+            if (key in claims) continue
             val result = createClaim(badge.sig, badge.sigId, badge.adminPubkey, badge.blockHeight)
             if (result.success) {
                 claims[key] = badge.withClaim(
@@ -111,11 +121,21 @@ internal class DefaultBadgeClaimService @Inject constructor(
             applied = 0
             val next = current.map { stored ->
                 val claimed = claims[BadgeIdentity.unionKey(stored)]
-                if (claimed == null || stored.isClaimed) {
+                if (claimed == null || stored.isClaimed || !signsSameOrgProof(stored, claimed)) {
+                    // A sync/restore may have swapped in another variant meanwhile: its claim
+                    // would bind other org data. Skip it; the next start retries.
                     stored
                 } else {
                     applied++
-                    claimed
+                    // Only the claim fields come from the (possibly stale) caller object.
+                    stored.withClaim(
+                        claimSig = claimed.claimSig,
+                        claimEventId = claimed.claimEventId,
+                        claimPubkey = claimed.claimPubkey,
+                        claimTimestamp = claimed.claimTimestamp,
+                        isRetroactive = true,
+                        presenceVerified = stored.presenceVerified,
+                    )
                 }
             }
             if (applied == 0) null else next
@@ -125,10 +145,15 @@ internal class DefaultBadgeClaimService @Inject constructor(
             return ClaimBatchResult(badges, 0)
         }
         if (applied < claims.size) {
-            AppLogger.debug(TAG, "${claims.size - applied} Claims verworfen, Badge nicht mehr in der Sammlung")
+            AppLogger.debug(TAG, "${claims.size - applied} Claims verworfen, Badge nicht mehr (unverändert) in der Sammlung")
         }
         return if (applied == 0) ClaimBatchResult(badges, 0) else ClaimBatchResult(repository.badges.value, applied)
     }
+
+    /** `true` if [claimed]'s claim content (org sig, event id, org pubkey, block height) fits [stored]. */
+    private fun signsSameOrgProof(stored: MeetupBadge, claimed: MeetupBadge): Boolean =
+        stored.sig == claimed.sig && stored.sigId == claimed.sigId &&
+            stored.adminPubkey == claimed.adminPubkey && stored.blockHeight == claimed.blockHeight
 
     private fun needsClaim(badge: MeetupBadge): Boolean = badge.hasCryptoProof && !badge.isClaimed
 

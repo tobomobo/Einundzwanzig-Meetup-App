@@ -2,8 +2,6 @@ package space.einundzwanzig.meetup.data.migration.internal
 
 import space.einundzwanzig.meetup.core.crypto.Keys
 import space.einundzwanzig.meetup.core.crypto.Nip19
-import space.einundzwanzig.meetup.data.identity.keys.IdentityKeys
-import space.einundzwanzig.meetup.data.identity.keys.RecoverySource
 import space.einundzwanzig.meetup.data.migration.legacy.LegacySecret
 import space.einundzwanzig.meetup.data.migration.legacy.SecureKeyInventory
 
@@ -15,6 +13,13 @@ internal data class SecretSources(
     val backup: Map<String, LegacySecret> = emptyMap(),
     /** EncryptedSharedPreferences entries (E1 / F1 orphans). */
     val esp: Map<String, String> = emptyMap(),
+    /**
+     * Keys with a custom-cipher entry (main or `_BACKUP`) that exists but could not be decrypted
+     * (no candidate key opened it, safe mode). Such an entry is newer than any ESP value (E1→E2
+     * device), so an ESP value never replaces it: the key stays unresolved (pending) and the ESP
+     * value is only parked under `legacy_esp/<key>`.
+     */
+    val undecryptable: Set<String> = emptySet(),
     /** Plaintext prefs routed to secure keys (E0 identity keys, legacy rolling-QR secrets): they overwrite, as Dart did. */
     val plaintext: Map<String, String> = emptyMap(),
     /** npubs the Flutter prefs still reference (`nostr`, `amber_npub`, `nip46_npub`). */
@@ -53,23 +58,29 @@ internal object SecretResolver {
                 plain != null -> LegacySecret(plain, LegacySecret.Source.PLAINTEXT_PREFS)
                 main != null -> main
                 backup != null -> backup
-                esp != null && (key !in SecureKeyInventory.IDENTITY_KEYS || espIdentityAccepted) ->
+                esp != null && key !in s.undecryptable &&
+                    (key !in SecureKeyInventory.IDENTITY_KEYS || espIdentityAccepted) ->
                     LegacySecret(esp, LegacySecret.Source.ESP)
                 else -> null
             }
             if (chosen != null) primary[key] = chosen
+            if (chosen == null && esp != null && key in s.undecryptable) warnings += "ESP_HELD_BACK:$key"
             // Every other distinct value is kept under a recovery name, never dropped.
             if (plain != null && main != null && main.value != plain) {
-                recovery[recoveryName(RecoverySource.BACKUP, key)] = main.value
+                recovery[recoveryName(RecoveryNames.BACKUP, key)] = main.value
                 warnings += "PLAINTEXT_OVERRODE_SECURE:$key"
             }
-            if (backup != null && chosen !== backup && backup.value != chosen?.value &&
-                recovery[recoveryName(RecoverySource.BACKUP, key)] == null
-            ) {
-                recovery[recoveryName(RecoverySource.BACKUP, key)] = backup.value
+            if (backup != null && chosen !== backup && backup.value != chosen?.value) {
+                val backupName = recoveryName(RecoveryNames.BACKUP, key)
+                when (recovery[backupName]) {
+                    null -> recovery[backupName] = backup.value
+                    backup.value -> Unit
+                    // The slot already holds the main value the plaintext overrode: never drop a third value.
+                    else -> recovery[recoveryName(RecoveryNames.RECOVERED, key)] = backup.value
+                }
             }
             if (esp != null && chosen?.source != LegacySecret.Source.ESP && esp != chosen?.value) {
-                recovery[recoveryName(RecoverySource.ESP, key)] = esp
+                recovery[recoveryName(RecoveryNames.ESP, key)] = esp
             }
         }
         // Plausibility of authenticated / plaintext values: flag, never reject (§4.6.5).
@@ -85,8 +96,8 @@ internal object SecretResolver {
         return SecretPlan(primary, recovery, warnings)
     }
 
-    /** Secure-store recovery name, shared with `IdentityRecovery` (spec 14 §4.8). */
-    fun recoveryName(source: RecoverySource, key: String): String = IdentityKeys.recoveryName(source.prefix, key)
+    /** Secure-store recovery name, read by `IdentityRecovery` and the badge key scan (spec 14 §4.8). */
+    fun recoveryName(source: RecoveryNames, key: String): String = source.of(key)
 
     /**
      * The npub the ESP identity group belongs to: ESP `nostr_npub_key`, else derived from ESP

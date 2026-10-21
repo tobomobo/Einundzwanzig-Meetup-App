@@ -5,8 +5,10 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import space.einundzwanzig.meetup.core.common.ApplicationScope
+import space.einundzwanzig.meetup.core.common.DefaultDispatcher
 import space.einundzwanzig.meetup.core.common.TimeSource
 import space.einundzwanzig.meetup.core.common.log.AppLogger
 import space.einundzwanzig.meetup.core.data.prefs.KeyValueStore
@@ -65,6 +67,7 @@ internal abstract class AdminModule {
             registry: AdminRegistry,
             timeSource: TimeSource,
             zone: ZoneIdProvider,
+            @DefaultDispatcher cpuDispatcher: CoroutineDispatcher,
         ): PromotionClaimService = DefaultPromotionClaimService(
             store = store,
             relayClient = relayClient,
@@ -73,6 +76,7 @@ internal abstract class AdminModule {
             timeSource = timeSource,
             zone = zone::zone,
             log = AppLogger,
+            cpuDispatcher = cpuDispatcher,
         )
     }
 }

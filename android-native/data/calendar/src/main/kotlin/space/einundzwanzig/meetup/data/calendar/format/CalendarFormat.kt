@@ -14,7 +14,13 @@ import java.time.ZoneId
  */
 object CalendarFormat {
 
-    private val LINK = Regex("https?://[^\\s)\\]>,]+")
+    /**
+     * Dart `RegExp(r'https?://[^\s\)\]>,]+')`. Dart `\s` follows JavaScript and also matches
+     * Unicode spaces and the BOM, while Java `\s` is ASCII only, so the JS set is spelled out.
+     */
+    private val LINK = Regex(
+        "https?://[^\\t\\n\\u000B\\f\\r \\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF)\\]>,]+",
+    )
 
     /** `HH:MM` local. */
     fun hhmm(start: Instant, zone: ZoneId = ZoneId.systemDefault()): String {

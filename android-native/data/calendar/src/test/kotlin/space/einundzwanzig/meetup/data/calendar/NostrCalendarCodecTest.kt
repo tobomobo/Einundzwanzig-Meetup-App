@@ -72,6 +72,25 @@ class NostrCalendarCodecTest {
     }
 
     @Test
+    fun `location and badge image use Dart trim`() {
+        val draft = CalendarEventDraft(
+            title = "T",
+            description = "",
+            location = "\uFEFFPrag\u001F",
+            start = Instant.parse("2026-06-19T08:00:00Z").atZone(ZoneId.of("Europe/Prague")),
+            allDay = false,
+            badgeEnabled = true,
+            badgeImageUrl = "\uFEFFhttps://x\u0085",
+        )
+        val tags = NostrCalendarCodec.buildTags(draft, D).second
+        assertTrue(listOf("location", "Prag\u001F") in tags)
+        assertTrue(listOf("badge_image", "https://x") in tags)
+        // Dart `trim()` empties a BOM-only location, so no location tag is written.
+        val bomOnly = NostrCalendarCodec.buildTags(draft.copy(location = "\uFEFF\u0085"), D).second
+        assertTrue(bomOnly.none { it[0] == "location" })
+    }
+
+    @Test
     fun `badge off writes no badge, g or p tags`() {
         val draft = CalendarEventDraft(
             title = "T", description = "", location = "", start = Instant.parse("2026-06-19T08:00:00Z").atZone(utc),

@@ -117,6 +117,81 @@ class Nip46ServiceFlowTest {
     }
 
     @Test
+    fun cancelAfterASuccessfulPairingKeepsTheLiveSession() = runBlocking {
+        val id = identity()
+        val pairing = id.signing.startNip46Pairing()
+        val result = async { id.signing.completeNip46Pairing(pairing) }
+        val clientPub = pairing.client.clientPubkeyHex
+        while (signer.links.size < pairing.relays.size || signer.links.any { it.sentFrames.isEmpty() }) delay(5)
+        for (link in signer.links) link.push(signer.wrap(jsonObjectOf("id" to "p", "result" to pairing.secret), clientPub))
+        assertTrue(result.await() is Nip46ConnectResult.Success)
+
+        // The sheet's onCleared/dispose cancels unconditionally: the adopted session survives.
+        pairing.cancel()
+        val event = id.signing.signEvent(1, emptyList(), "nach dem Schließen")
+        assertEquals(user.publicKeyHex, event.pubkey)
+        assertEquals(1, id.createdClients.size)
+        assertFalse(signer.links.all { it.closed })
+        id.signing.disconnectNip46()
+    }
+
+    @Test
+    fun modeWriteFailureAfterConnectLeavesNoOrphanSession() = runBlocking {
+        val id = identity()
+        id.prefs.failingKeys = setOf(IdentityKeys.SIGNING_MODE)
+        val result = id.signing.connectNip46Bunker("bunker://${signer.pubkey}?relay=$relay")
+
+        assertTrue(result is Nip46ConnectResult.Error)
+        assertEquals(SigningMode.LOCAL, id.signing.getMode())
+        assertNull(id.prefs.getString(IdentityKeys.NIP46_PUBKEY_HEX))
+        assertNull(id.prefs.getString(IdentityKeys.NIP46_NPUB))
+        assertNull(id.prefs.getString(IdentityKeys.NIP46_BUNKER_URI))
+        assertNull(id.secure.entries.value[IdentityKeys.NIP46_CLIENT_SK])
+        assertTrue(signer.links.all { it.closed })
+    }
+
+    @Test
+    fun authUrlWithoutCollectorWaitsUntilAcknowledged() = runBlocking {
+        val id = identity()
+        val pairing = id.signing.startNip46Pairing()
+        val onAuthUrl = id.authCallbacks.single()
+        // The root is not collecting (user is in the signer app).
+        onAuthUrl("https://a.test/approve")
+
+        val seen = CopyOnWriteArrayList<String>()
+        val job = CoroutineScope(Dispatchers.Unconfined).launch(start = CoroutineStart.UNDISPATCHED) {
+            id.signing.authUrlEvents.collect { seen += it }
+        }
+        assertEquals(listOf("https://a.test/approve"), seen)
+        job.cancel()
+
+        // Not acknowledged yet: a re-subscribing root sees it again ...
+        val again = CopyOnWriteArrayList<String>()
+        val job2 = CoroutineScope(Dispatchers.Unconfined).launch(start = CoroutineStart.UNDISPATCHED) {
+            id.signing.authUrlEvents.collect { again += it }
+        }
+        assertEquals(listOf("https://a.test/approve"), again)
+        // ... acknowledging an older URL keeps a newer one pending.
+        onAuthUrl("https://a.test/newer")
+        id.signing.acknowledgeAuthUrl("https://a.test/approve")
+        job2.cancel()
+        val third = CopyOnWriteArrayList<String>()
+        val job3 = CoroutineScope(Dispatchers.Unconfined).launch(start = CoroutineStart.UNDISPATCHED) {
+            id.signing.authUrlEvents.collect { third += it }
+        }
+        assertEquals(listOf("https://a.test/newer"), third)
+        id.signing.acknowledgeAuthUrl("https://a.test/newer")
+        job3.cancel()
+        val fourth = CopyOnWriteArrayList<String>()
+        val job4 = CoroutineScope(Dispatchers.Unconfined).launch(start = CoroutineStart.UNDISPATCHED) {
+            id.signing.authUrlEvents.collect { fourth += it }
+        }
+        assertTrue(fourth.isEmpty())
+        job4.cancel()
+        pairing.cancel()
+    }
+
+    @Test
     fun silentSignerTimesOutAndClosesTheClient() = runBlocking {
         signer.respond = { null }
         val id = identity(limit = 300.milliseconds)

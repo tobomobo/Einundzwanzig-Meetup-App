@@ -3,6 +3,8 @@ package space.einundzwanzig.meetup.data.calendar.internal
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import space.einundzwanzig.meetup.core.common.DefaultDispatcher
@@ -32,7 +34,28 @@ internal class MeetupCalendarServiceImpl @Inject constructor(
     @DefaultDispatcher private val cpu: CoroutineDispatcher = Dispatchers.Default,
 ) : MeetupCalendarService {
 
-    override suspend fun fetchPortalFirst(): List<MeetupDate> {
+    /** Serializes loads so concurrent callers share one portal/iCal round trip. */
+    private val loadMutex = Mutex()
+
+    /** Last non-empty result and its wall-clock time ([TimeSource.nowMillis]); guarded by [loadMutex]. */
+    private var cached: List<MeetupDate>? = null
+    private var cachedAtMs: Long = 0
+
+    override suspend fun fetchPortalFirst(force: Boolean): List<MeetupDate> = loadMutex.withLock {
+        val now = time.nowMillis()
+        val hit = cached
+        val age = now - cachedAtMs
+        if (!force && hit != null && age in 0 until MeetupCalendarService.CACHE_TTL_MS) return@withLock hit
+        val fresh = loadPortalFirst()
+        // Empty = portal and iCal both failed (or nothing listed): not cached, the next caller retries.
+        if (fresh.isNotEmpty()) {
+            cached = fresh
+            cachedAtMs = time.nowMillis()
+        }
+        fresh
+    }
+
+    private suspend fun loadPortalFirst(): List<MeetupDate> {
         try {
             val raw = portal.getAllMeetupEvents()
             val zone = ZoneId.systemDefault()

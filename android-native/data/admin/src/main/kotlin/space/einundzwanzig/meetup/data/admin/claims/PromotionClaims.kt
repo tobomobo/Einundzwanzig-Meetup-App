@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import space.einundzwanzig.meetup.core.common.dart.DartDateTime
 import space.einundzwanzig.meetup.core.common.dart.toDartString
 import space.einundzwanzig.meetup.core.common.json.DartJson
 import space.einundzwanzig.meetup.core.common.json.DartNumber
@@ -17,7 +18,6 @@ import space.einundzwanzig.meetup.data.admin.model.stringField
 import space.einundzwanzig.meetup.data.badges.claim.BadgeClaims
 import space.einundzwanzig.meetup.data.badges.model.MeetupBadge
 import space.einundzwanzig.meetup.data.badges.security.BadgeSecurity
-import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
 
@@ -159,8 +159,10 @@ object PromotionClaims {
         val normalized = BadgeSecurity.normalize(data, ZoneOffset.UTC)
         val signedAtElement = firstPresent(data, "c", "created_at") ?: JsonPrimitive(0)
         val signedAt = signedAtElement.dartIntOrNull() ?: throw IllegalArgumentException("signed time is not an int")
-        val day = Instant.ofEpochSecond(signedAt).atZone(ZoneOffset.UTC)
-        val dayKey = "${day.year}-${day.monthValue}-${day.dayOfMonth}"
+        // Dart `DateTime.fromMillisecondsSinceEpoch(signedAt * 1000, isUtc: true)`: the 64-bit
+        // product wraps like on the Dart VM and |ms| > 8.64e15 throws (= proof skipped).
+        val day = DartDateTime.fromMillisecondsSinceEpoch(signedAt * 1000, isUtc = true)
+        val dayKey = "${day.year}-${day.month}-${day.day}"
         val meetupId = normalized["meetup_id"]?.takeUnless { it is JsonNull }?.let(::dartToString) ?: "null"
         return ProofSession("$adminPubkey|$meetupId|$dayKey", adminPubkey)
     }

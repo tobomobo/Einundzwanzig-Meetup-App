@@ -153,8 +153,11 @@ data class ChatMessage(
  *
  * @property offline the device had no network at all (DNS failure, network unreachable): show
  *   `chatOffline` instead of `chatRelayUnavailable`.
+ * @param cause why there was no answer, for the diagnostics log: the connect, AUTH or socket
+ *   failure, `IOException("CLOSED: <reason>")` for a refused request, `null` for a plain
+ *   timeout. [toString] stays the user-visible text.
  */
-class ChatRelayUnavailable(val offline: Boolean = false) :
-    Exception(if (offline) "Keine Internetverbindung" else "Gruppen-Relay ohne Auskunft") {
+class ChatRelayUnavailable(val offline: Boolean = false, cause: Throwable? = null) :
+    Exception(if (offline) "Keine Internetverbindung" else "Gruppen-Relay ohne Auskunft", cause) {
     override fun toString(): String = message!!
 }

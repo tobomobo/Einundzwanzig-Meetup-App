@@ -23,12 +23,16 @@ import space.einundzwanzig.meetup.core.common.json.DartJson
 import space.einundzwanzig.meetup.core.crypto.KeyPair
 import space.einundzwanzig.meetup.core.data.testing.InMemoryKeyValueStore
 import space.einundzwanzig.meetup.core.nostr.relay.RelayClient
+import space.einundzwanzig.meetup.core.nostr.relay.RelayConnectException
 import space.einundzwanzig.meetup.core.nostr.testing.FakeRelayConnector
+import space.einundzwanzig.meetup.core.nostr.testing.FakeRelaySocket
 import space.einundzwanzig.meetup.data.chat.internal.DefaultChatReadMarkStore
 import space.einundzwanzig.meetup.data.chat.internal.DefaultChatService
+import space.einundzwanzig.meetup.data.chat.internal.hasUsableNetwork
 import space.einundzwanzig.meetup.data.identity.SigningException
 import space.einundzwanzig.meetup.data.identity.SigningMode
 import java.io.IOException
+import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.time.Instant
 import kotlin.time.Duration.Companion.seconds
@@ -111,10 +115,71 @@ class ChatServiceTest {
         svc.loadMeetupRooms()
         relay.unreachable = IOException("Connection refused")
         assertEquals("r1", svc.loadMeetupRooms(force = true).single().h)
-        // Exact lookup has no cache.
+        // Nothing cached for this id: the exact lookup has no answer.
         val e = runCatching { svc.findRoomForMeetupId("42") }.exceptionOrNull()
         assertTrue(e is ChatRelayUnavailable)
         assertFalse((e as ChatRelayUnavailable).offline)
+        // The reason travels as the cause (diagnostics); the user-visible text is unchanged.
+        assertTrue(e.cause is RelayConnectException)
+        assertEquals("Connection refused", e.cause!!.cause!!.message)
+        assertEquals("Gruppen-Relay ohne Auskunft", e.toString())
+    }
+
+    @Test
+    fun `ChatRelayUnavailable carries the AUTH, CLOSED and offline reasons`() = runTest {
+        relay.unreachable = UnknownHostException("Unable to resolve host")
+        val offline = runCatching { service().findRoomForMeetupId("42") }.exceptionOrNull() as ChatRelayUnavailable
+        assertTrue(offline.offline)
+        assertTrue(offline.cause!!.cause is UnknownHostException)
+        assertEquals("Keine Internetverbindung", offline.toString())
+
+        relay.unreachable = null
+        relay.onReq = { sub, _, s -> s.push(listOf("CLOSED", sub, "restricted: nope")) }
+        val closed = runCatching { service().loadMeetupRooms() }.exceptionOrNull() as ChatRelayUnavailable
+        assertEquals("CLOSED: restricted: nope", closed.cause!!.message)
+
+        relay.acceptAuth = false
+        val rejected = runCatching { service().findRoomForMeetupId("42") }.exceptionOrNull()
+        assertTrue(rejected is ChatRelayUnavailable)
+        assertEquals("Gruppen-Relay ohne Auskunft", rejected.toString())
+    }
+
+    @Test
+    fun `room by portal id caches found rooms only and serialises lookups of one id`() = runTest {
+        val connector = connectorFor(relay)
+        val svc = service(connector)
+        // No room: not cached, the next lookup asks again.
+        assertNull(svc.findRoomForMeetupId("42"))
+        answer(room("r1", NOW_SECONDS - 10, listOf("i", "meetup:42")))
+        // Concurrent lookups of the same id: one connection, the waiter takes the cached room.
+        val found = List(3) { async { svc.findRoomForMeetupId("42")?.h } }.awaitAll()
+        assertEquals(listOf("r1", "r1", "r1"), found)
+        assertEquals(2, connector.connects.size)
+        // Cached: no further connection (no further Amber prompt) for the next dashboard refresh.
+        assertEquals("r1", svc.findRoomForMeetupId("42")!!.h)
+        assertEquals(2, connector.connects.size)
+        // Another id is its own lookup; a failure is not cached.
+        relay.unreachable = IOException("Connection refused")
+        assertTrue(runCatching { svc.findRoomForMeetupId("43") }.exceptionOrNull() is ChatRelayUnavailable)
+        relay.unreachable = null
+        assertEquals("r1", svc.findRoomForMeetupId("42")!!.h)
+        assertEquals(3, connector.connects.size)
+        // An explicit reload drops the per-id answers.
+        svc.loadMeetupRooms(force = true)
+        assertEquals("r1", svc.findRoomForMeetupId("42")!!.h)
+        assertEquals(5, connector.connects.size)
+    }
+
+    @Test
+    fun `send failing after a successful AUTH reports the send error, not an AUTH failure`() = runTest {
+        // The relay accepts AUTH and drops the connection right after the OK: the EVENT cannot go out.
+        relay.afterAuth = { s -> s.finish() }
+        val svc = service()
+        assertEquals("Zeitüberschreitung", svc.send("r1", "hallo"))
+        relay.afterAuth = { s -> s.finish(IOException("Software caused connection abort")) }
+        assertEquals("Software caused connection abort", svc.join("r1"))
+        assertEquals(2, relay.auths.size)
+        assertTrue(relay.published.isEmpty())
     }
 
     @Test
@@ -135,14 +200,31 @@ class ChatServiceTest {
     }
 
     @Test
-    fun `connect failure without a validated network counts as offline`() = runTest {
-        // E.g. a connect timeout behind a captive portal: the exception alone says "relay down".
+    fun `connect failure without any usable network counts as offline`() = runTest {
+        // E.g. a connect timeout right after airplane mode: the exception alone says "relay down".
         relay.unreachable = IOException("timeout")
         val svc = service()
         online = true
         assertFalse((runCatching { svc.findRoomForMeetupId("42") }.exceptionOrNull() as ChatRelayUnavailable).offline)
         online = false
         assertTrue((runCatching { svc.findRoomForMeetupId("42") }.exceptionOrNull() as ChatRelayUnavailable).offline)
+    }
+
+    @Test
+    fun `connected but unvalidated network - relay outage is not offline`() = runTest {
+        // Internet works but Google's check is blocked (VPN, private DNS, corporate Wi-Fi): an
+        // active network with INTERNET and without VALIDATED is online, so a refused or timed-out
+        // connect stays chatRelayUnavailable (Dart dacccf4).
+        assertTrue(hasUsableNetwork(hasActiveNetwork = true, hasInternet = true))
+        assertFalse(hasUsableNetwork(hasActiveNetwork = true, hasInternet = false))
+        assertFalse(hasUsableNetwork(hasActiveNetwork = false, hasInternet = false))
+        online = hasUsableNetwork(hasActiveNetwork = true, hasInternet = true)
+        val svc = service()
+        for (cause in listOf(IOException("Connection refused"), SocketTimeoutException("connect timed out"))) {
+            relay.unreachable = cause
+            val e = runCatching { svc.loadMeetupRooms(force = true) }.exceptionOrNull()
+            assertFalse((e as ChatRelayUnavailable).offline)
+        }
     }
 
     @Test
@@ -153,7 +235,7 @@ class ChatServiceTest {
         val found = listOf(
             async { svc.findRoomForCity("Saarbrücken")?.h },
             async { svc.findMeetupRoom("einundzwanzig-saarbruecken")?.h },
-            async { svc.loadMeetupRooms(force = true).single().h },
+            async { svc.loadMeetupRooms().single().h },
         ).awaitAll()
         assertEquals(listOf("r1", "r1", "r1"), found)
         assertEquals(1, connector.connects.size)
@@ -164,6 +246,40 @@ class ChatServiceTest {
         val fresh = service(connector)
         val errors = List(3) { async { runCatching { fresh.loadMeetupRooms() }.exceptionOrNull() } }.awaitAll()
         assertTrue(errors.all { it is ChatRelayUnavailable })
+        assertEquals(2, connector.connects.size)
+    }
+
+    @Test
+    fun `force issued during an in-flight fetch performs its own REQ`() = runTest {
+        // The first REQ is answered only on demand; later ones at once.
+        val pending = mutableListOf<Pair<String, FakeRelaySocket>>()
+        var holdFirst = true
+        relay.onReq = { sub, _, s ->
+            if (holdFirst) {
+                holdFirst = false
+                pending += sub to s
+            } else {
+                s.push(listOf("EVENT", sub, room("r2", NOW_SECONDS - 5)))
+                s.push(listOf("EOSE", sub))
+            }
+        }
+        val connector = connectorFor(relay)
+        val svc = service(connector)
+        val first = async { svc.loadMeetupRooms(force = true).map { it.h } }
+        runCurrent()
+        assertEquals(1, relay.reqs.size)
+        // Asked while the first fetch is in flight: must not get that older answer.
+        val reload = async { svc.loadMeetupRooms(force = true).map { it.h } }
+        // A normal lookup queued behind it shares the next finished fetch (the reload's).
+        val lookup = async { svc.loadMeetupRooms().map { it.h } }
+        runCurrent()
+        val (sub, socket) = pending.single()
+        socket.push(listOf("EVENT", sub, room("r1", NOW_SECONDS - 10)))
+        socket.push(listOf("EOSE", sub))
+        assertEquals(listOf("r1"), first.await())
+        assertEquals(listOf("r2"), reload.await())
+        assertEquals(listOf("r2"), lookup.await())
+        assertEquals(2, relay.reqs.size)
         assertEquals(2, connector.connects.size)
     }
 

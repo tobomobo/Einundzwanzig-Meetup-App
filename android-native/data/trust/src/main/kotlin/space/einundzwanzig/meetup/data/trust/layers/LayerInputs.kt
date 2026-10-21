@@ -12,8 +12,8 @@ data class ZapLayerInput(
     val activeMonths: Int,
     val hasLightningProof: Boolean,
 ) {
-    /** `sent + received`. */
-    val totalCount: Int get() = sentCount + receivedCount
+    /** `sent + received`, summed in `Long` like Dart's int64 (never wraps negative). */
+    val totalCount: Long get() = sentCount.toLong() + receivedCount
 
     /**
      * Dart `ZapStats.activityLabel` (German, not localized in Flutter): sublabel of the
@@ -21,7 +21,7 @@ data class ZapLayerInput(
      */
     val activityLabel: String
         get() = when {
-            totalCount == 0 -> "Keine Zap-Aktivität"
+            totalCount == 0L -> "Keine Zap-Aktivität"
             totalCount < 5 -> "Wenig Aktivität"
             totalCount < 20 -> "Regelmäßig aktiv"
             else -> "Sehr aktiv"
@@ -32,8 +32,8 @@ data class ZapLayerInput(
         get() {
             var score = 0.0
             if (hasLightningProof) score += 0.5
-            if (sentCount > 0) score += (sentCount.toDouble() / (sentCount + 10)) * 0.75
-            if (receivedCount > 0) score += (receivedCount.toDouble() / (receivedCount + 10)) * 0.75
+            if (sentCount > 0) score += (sentCount.toDouble() / (sentCount.toDouble() + 10)) * 0.75
+            if (receivedCount > 0) score += (receivedCount.toDouble() / (receivedCount.toDouble() + 10)) * 0.75
             if (uniqueRecipientCount > 2) score += 0.25
             if (activeMonths >= 3) score += 0.25
             return score.coerceIn(0.0, 2.5)
@@ -61,7 +61,7 @@ data class SocialLayerInput(
                 score += 0.3
             }
             if (commonContactCount > 0) {
-                score += (commonContactCount.toDouble() / (commonContactCount + 5)) * 1.0
+                score += (commonContactCount.toDouble() / (commonContactCount.toDouble() + 5)) * 1.0
             }
             score += (orgFollowerCount * 0.5).coerceIn(0.0, 1.0)
             return score.coerceIn(0.0, 3.0)
@@ -105,20 +105,23 @@ data class Nip05LayerInput(
  * `ReputationLayersWidget`, spec 04 §8.9). `meetupScore`/`totalScore` are unused there and
  * therefore omitted.
  *
+ * The counts are `Long` because they come from the remote kind 30078 event (`stats.*`, Dart
+ * int64); parsers must not narrow them to `Int`.
+ *
  * @property platformProofs platform id → username (may be empty) in display order, from the
  *   event's `platform_proofs` map.
  */
 data class LayersInput(
-    val badgeCount: Int? = null,
-    val boundBadges: Int? = null,
-    val meetupCount: Int? = null,
-    val signerCount: Int? = null,
+    val badgeCount: Long? = null,
+    val boundBadges: Long? = null,
+    val meetupCount: Long? = null,
+    val signerCount: Long? = null,
     val since: String? = null,
     val zaps: ZapLayerInput? = null,
     val humanityVerified: Boolean = false,
     val social: SocialLayerInput? = null,
     val nip05: Nip05LayerInput? = null,
-    val platformProofCount: Int? = null,
+    val platformProofCount: Long? = null,
     val platformProofs: Map<String, String>? = null,
-    val accountAgeDays: Int? = null,
+    val accountAgeDays: Long? = null,
 )

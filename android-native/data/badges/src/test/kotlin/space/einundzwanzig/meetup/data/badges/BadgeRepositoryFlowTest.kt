@@ -4,6 +4,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -15,6 +16,7 @@ import org.junit.Test
 import space.einundzwanzig.meetup.core.common.dart.DartDateTime
 import space.einundzwanzig.meetup.data.badges.model.MeetupBadge
 import space.einundzwanzig.meetup.data.badges.review.BadgeReviewDemo
+import space.einundzwanzig.meetup.data.badges.store.BadgeStoreKeys
 
 /**
  * Native-only behaviour of the repository that replaces Dart globals: the `badges` StateFlow
@@ -71,6 +73,51 @@ class BadgeRepositoryFlowTest {
         assertTrue(h.repo.loadBadges().isEmpty())
         assertTrue(h.repo.loaded.value)
         assertFalse(h.repo.badgesUnreadable.value)
+    }
+
+    @Test
+    fun `loaded flips only after the list is published`() = runTest {
+        val first = StoreHarness()
+        assertTrue(first.repo.saveBadges(listOf(badge("a"))))
+        val h = StoreHarness(first.prefs, first.secure, first.time)
+        val seen = mutableListOf<Pair<Boolean, Int>>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            combine(h.repo.loaded, h.repo.badges) { l, b -> l to b.size }.collect { seen += it }
+        }
+        h.repo.loadBadges()
+        assertEquals(listOf("a"), h.repo.badges.value.map { it.id })
+        assertFalse(seen.any { (loaded, size) -> loaded && size == 0 })
+        assertEquals(true to 1, seen.last())
+    }
+
+    @Test
+    fun `promoting a blob no device key opens marks the store unreadable and keeps the blob`() = runTest {
+        val h = StoreHarness()
+        assertTrue(h.repo.saveBadges(listOf(badge("a"))))
+        assertTrue(h.repo.stageIncoming(listOf(badge("b"))))
+        val incoming = h.prefs.getString(BadgeStoreKeys.INCOMING)!!
+        // Key A (which sealed the staged blob) is replaced by an unrelated key B.
+        assertTrue(h.secure.write(BadgeStoreKeys.KEY, "b".repeat(64)))
+        assertTrue(h.repo.promoteIncoming())
+        assertEquals(incoming, h.prefs.getString(BadgeStoreKeys.PRIMARY))
+        assertTrue(h.repo.badgesUnreadable.value)
+        assertFalse(h.repo.update { it + badge("x") })
+        assertEquals(incoming, h.prefs.getString(BadgeStoreKeys.PRIMARY))
+    }
+
+    @Test
+    fun `an out-of-range archive time does not fail the archive listing`() = runTest {
+        val h = StoreHarness()
+        assertTrue(
+            h.prefs.setString(
+                BadgeStoreKeys.FORMER,
+                """[{"at":100000000000000000,"reason":"cleared","npub":"","blob":"x:y"},{"at":1760000000,"reason":"replaced","npub":"","blob":"x:z"}]""",
+            ),
+        )
+        val former = h.repo.formerCollections()
+        assertEquals(2, former.size)
+        assertEquals(0L, former.first { it.reason == "cleared" }.at.millisecondsSinceEpoch)
+        assertEquals(1_760_000_000_000L, former.first { it.reason == "replaced" }.at.millisecondsSinceEpoch)
     }
 
     @Test

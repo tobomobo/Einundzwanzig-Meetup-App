@@ -49,8 +49,10 @@ interface SatoshiDuellClient {
         const val BASE_URL: String = "https://uydjemquyogdemjtxyyv.supabase.co/rest/v1"
 
         /**
-         * The public Supabase "publishable" client key (the one the web app ships, limited by
-         * RLS). Not a secret. Rotate here if the SatoshiDuell project changes it.
+         * Default of the public Supabase "publishable" client key (the one the web app ships,
+         * limited by RLS; not a secret). A build overrides it without a code change via the Gradle
+         * property `satoshiduellPublishableKey` (BuildConfig field `SATOSHIDUELL_PUBLISHABLE_KEY`,
+         * spec 06 §14 R16). A rejected key (401) behaves like any other failure.
          */
         const val PUBLISHABLE_KEY: String = "sb_publishable_RESZrjWqb-l_AIiqZcE7-g_JenFWO_d"
 

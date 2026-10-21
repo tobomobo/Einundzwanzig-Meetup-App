@@ -8,6 +8,7 @@ import space.einundzwanzig.meetup.core.common.dart.dartTrim
 import space.einundzwanzig.meetup.core.common.dart.toDartString
 import space.einundzwanzig.meetup.core.common.json.DartJson
 import space.einundzwanzig.meetup.core.common.json.DartNumber
+import space.einundzwanzig.meetup.data.badges.text.DartString
 
 /** `true` for a missing value or JSON `null` (Dart `x == null`). */
 internal val JsonElement?.isDartNull: Boolean get() = this == null || this is JsonNull
@@ -45,40 +46,15 @@ internal fun JsonElement?.dartInt(): Int? {
 }
 
 /**
- * Dart `String.toLowerCase()` approximated per code point with the simple (1:1, context-free,
- * locale-free) Unicode mapping. Unlike Kotlin `lowercase()` it never applies final-sigma or
- * special casing (`İ` → `i`, `Σ` → `σ`), like Dart. Only used for display/lookup comparisons in
- * this module, never for hashed or signed values.
- *
- * WARNING: `Character.toLowerCase` follows the device's Unicode/ICU version, not Dart's case table;
- * the canonical port is `DartString` in `:data:badges` (spec 00 item 12). Replace this with it once
- * `DartString` lives in `:core:common`.
+ * Dart `String.toLowerCase()` via the canonical [DartString] case table (spec 00 item 12), so
+ * lookups and [MeetupServiceImpl.meetupSlug] equal `:data:badges` `MeetupKey.slug` byte for byte.
+ * The table loads lazily (Java resource); [MeetupServiceImpl.fetchMeetups] and the nearby preload
+ * warm it up on the IO dispatcher.
  */
-internal fun String.dartLower(): String {
-    val out = StringBuilder(length)
-    var i = 0
-    while (i < length) {
-        val cp = codePointAt(i)
-        val lower = Character.toLowerCase(cp)
-        // Keep the UTF-16 length unchanged (Dart maps BMP to BMP only).
-        if (Character.charCount(lower) == Character.charCount(cp)) out.appendCodePoint(lower) else out.appendCodePoint(cp)
-        i += Character.charCount(cp)
-    }
-    return out.toString()
-}
+internal fun String.dartLower(): String = DartString.lower(this)
 
-/** Dart `String.toUpperCase()`, same per-code-point approach as [dartLower] (`ß` stays `ß`). */
-internal fun String.dartUpper(): String {
-    val out = StringBuilder(length)
-    var i = 0
-    while (i < length) {
-        val cp = codePointAt(i)
-        val upper = Character.toUpperCase(cp)
-        if (Character.charCount(upper) == Character.charCount(cp)) out.appendCodePoint(upper) else out.appendCodePoint(cp)
-        i += Character.charCount(cp)
-    }
-    return out.toString()
-}
+/** Dart `String.toUpperCase()` via [DartString] (`ß` stays `ß`). */
+internal fun String.dartUpper(): String = DartString.upper(this)
 
 private val DART_DOUBLE = Regex("""[+-]?(NaN|Infinity|(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?)""")
 

@@ -26,6 +26,11 @@ interface NostrProfileService {
      * newest kind-30078 `einundzwanzig-reputation` event's `identity.nickname` (trimmed, not
      * "anon") is used; that path may return `""`. Results, also negative ones, are cached in
      * memory for the process lifetime. An empty [pubkeyHex] returns `null`.
+     *
+     * Single lookups are limited to a few relay queries at a time and one lookup can take
+     * 12–24 s when relays are slow, so screens that show many chips (admin panel, calendar,
+     * lists) should first call [cachedDisplayNames] and then [fetchDisplayNames] with all
+     * pubkeys (one batch REQ per relay); both fill the in-memory cache this method reads first.
      */
     suspend fun fetchDisplayName(pubkeyHex: String): String?
 

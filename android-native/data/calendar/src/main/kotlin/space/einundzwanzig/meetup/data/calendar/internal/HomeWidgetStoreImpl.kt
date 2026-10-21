@@ -48,6 +48,9 @@ internal class HomeWidgetStoreImpl @Inject constructor(
     @IoDispatcher private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : HomeWidgetStore {
 
+    /** Local zone of the countdown (Dart `DateTime.now()` local); tests pin it. */
+    internal var zoneProvider: () -> ZoneId = ZoneId::systemDefault
+
     private val prefs: SharedPreferences by lazy {
         context.getSharedPreferences(HomeWidgetStore.PREFS_FILE, Context.MODE_PRIVATE)
     }
@@ -80,7 +83,7 @@ internal class HomeWidgetStoreImpl @Inject constructor(
     }
 
     override suspend fun updateMeetup(city: String, start: Instant?) {
-        val zone = ZoneId.systemDefault()
+        val zone = zoneProvider()
         val countdown = start?.let {
             val today = Instant.ofEpochMilli(time.nowMillis()).atZone(zone).toLocalDate()
             WidgetFormat.germanCountdown(WidgetFormat.daysUntil(it, today, zone))
@@ -140,17 +143,22 @@ internal class HomeWidgetStoreImpl @Inject constructor(
 @Singleton
 internal class WidgetLaunchTargetStoreImpl @Inject constructor(
     @ApplicationContext private val context: Context,
+    @IoDispatcher private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : WidgetLaunchTargetStore {
 
     private val prefs: SharedPreferences
         get() = context.getSharedPreferences(WidgetLaunchTargetStore.PREFS_FILE, Context.MODE_PRIVATE)
 
-    @Synchronized
-    override fun consume(): WidgetTarget? {
-        val p = prefs
-        val raw = runCatching { p.getString(WidgetLaunchTargetStore.KEY_PENDING_TARGET, null) }.getOrNull() ?: return null
-        p.edit().remove(WidgetLaunchTargetStore.KEY_PENDING_TARGET).commit()
-        return WidgetTarget.fromWire(raw)
+    private val lock = Any()
+
+    override suspend fun consume(): WidgetTarget? = withContext(io) {
+        synchronized(lock) {
+            val p = prefs
+            val raw = runCatching { p.getString(WidgetLaunchTargetStore.KEY_PENDING_TARGET, null) }.getOrNull()
+                ?: return@synchronized null
+            p.edit().remove(WidgetLaunchTargetStore.KEY_PENDING_TARGET).commit()
+            WidgetTarget.fromWire(raw)
+        }
     }
 
     override fun store(target: String): Boolean {

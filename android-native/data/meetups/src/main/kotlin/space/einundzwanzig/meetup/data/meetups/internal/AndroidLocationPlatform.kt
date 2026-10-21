@@ -11,8 +11,11 @@ import androidx.core.content.ContextCompat
 import androidx.core.location.LocationManagerCompat
 import androidx.core.os.CancellationSignal
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import space.einundzwanzig.meetup.core.common.IoDispatcher
 import space.einundzwanzig.meetup.data.meetups.location.LocationPermission
 import space.einundzwanzig.meetup.data.meetups.location.Position
 import java.io.IOException
@@ -29,11 +32,18 @@ import kotlin.coroutines.resume
  *   offers it), else the network provider, else GPS.
  * - Stage 2 ("LocationManager, high accuracy", 20 s): GPS, else network.
  * - Last known: the newest fix of all providers.
+ *
+ * Provider lookups and last-known queries are synchronous binder IPCs, so they run on
+ * [IoDispatcher]. GPS is only considered when it can be used: with `ACCESS_FINE_LOCATION`, or
+ * on API 31+ where a coarse-only app may use GPS (the OS coarsens the result). Before API 31 a
+ * coarse-only grant would make GPS throw `SecurityException`, so selection falls through to the
+ * network provider.
  */
 @Singleton
 internal class AndroidLocationPlatform @Inject constructor(
     @ApplicationContext private val context: Context,
     private val permissions: LocationPermissionBridgeImpl,
+    @IoDispatcher private val io: CoroutineDispatcher,
 ) : LocationPlatform {
 
     private val manager: LocationManager?
@@ -57,25 +67,30 @@ internal class AndroidLocationPlatform @Inject constructor(
 
     override suspend fun currentPositionBalanced(timeoutSeconds: Long): Position {
         val lm = manager ?: throw IOException("Kein LocationManager")
-        val provider = firstEnabled(lm, FUSED, LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER)
-            ?: throw IOException("Kein Standortanbieter aktiv")
+        val provider = withContext(io) {
+            firstEnabled(lm, FUSED, LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER)
+        } ?: throw IOException("Kein Standortanbieter aktiv")
         return currentFix(lm, provider, timeoutSeconds)
     }
 
     override suspend fun currentPositionLocationManager(timeoutSeconds: Long): Position {
         val lm = manager ?: throw IOException("Kein LocationManager")
-        val provider = firstEnabled(lm, LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
-            ?: throw IOException("Kein Standortanbieter aktiv")
+        val provider = withContext(io) {
+            firstEnabled(lm, LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+        } ?: throw IOException("Kein Standortanbieter aktiv")
         return currentFix(lm, provider, timeoutSeconds)
     }
 
     @SuppressLint("MissingPermission") // checked in checkPermission() before every call
     override suspend fun lastKnownPosition(): Position? {
         val lm = manager ?: return null
-        return lm.getProviders(true)
-            .mapNotNull { p -> runCatching { lm.getLastKnownLocation(p) }.getOrNull() }
-            .maxByOrNull { it.time }
-            ?.toPosition()
+        return withContext(io) {
+            runCatching { lm.getProviders(true) }.getOrDefault(emptyList())
+                .filter { usable(it) }
+                .mapNotNull { p -> runCatching { lm.getLastKnownLocation(p) }.getOrNull() }
+                .maxByOrNull { it.time }
+                ?.toPosition()
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -99,9 +114,15 @@ internal class AndroidLocationPlatform @Inject constructor(
     private fun firstEnabled(lm: LocationManager, vararg providers: String): String? {
         val all = runCatching { lm.allProviders }.getOrDefault(emptyList())
         return providers.firstOrNull { p ->
-            p in all && runCatching { lm.isProviderEnabled(p) }.getOrDefault(false)
+            p in all && usable(p) && runCatching { lm.isProviderEnabled(p) }.getOrDefault(false)
         }
     }
+
+    /** GPS needs FINE before API 31; every other provider works with COARSE. */
+    private fun usable(provider: String): Boolean =
+        provider != LocationManager.GPS_PROVIDER ||
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ||
+            isGranted(Manifest.permission.ACCESS_FINE_LOCATION)
 
     private fun isGranted(permission: String): Boolean =
         ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED

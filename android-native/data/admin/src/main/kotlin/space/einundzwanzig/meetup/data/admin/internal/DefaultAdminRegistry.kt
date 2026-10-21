@@ -1,7 +1,12 @@
 package space.einundzwanzig.meetup.data.admin.internal
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -29,6 +34,7 @@ import space.einundzwanzig.meetup.data.admin.registry.AdminRegistryException
 import space.einundzwanzig.meetup.data.admin.registry.AdminRelayFetch
 import space.einundzwanzig.meetup.data.admin.signing.AdminSigner
 import java.time.ZoneId
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -40,9 +46,17 @@ import kotlin.time.Duration.Companion.seconds
 /**
  * Port of `lib/services/admin_registry.dart` (spec 05 §8.4). Pref keys in [AdminConstants].
  *
- * The Dart class was static; this is a `@Singleton` (bound in `AdminModule`). Read-modify-write
- * operations on the cache and the vouch list are serialized with a mutex (Dart relied on the
- * single isolate); the sunset counters are updated in one atomic store transaction.
+ * The Dart class was static; this is a `@Singleton` (bound in `AdminModule`). Concurrency (Dart
+ * relied on the single isolate):
+ * - every write of the admin cache is serialized with [writeMutex]: the read-modify-write edits
+ *   `removeFromCache`/`addAdmin`/`removeAdmin` and the relay saves (`checkAdmin`, `forceRefresh`,
+ *   the background refresh; taken only after the network I/O, never around a fetch), so a local
+ *   edit can no longer overwrite a newer relay list with a stale one; the vouch-list writes use
+ *   the same mutex;
+ * - the organic purge in `loadFromCache` is a compare-and-set, so it never overwrites a newer save;
+ * - the sunset counters are updated in one atomic store transaction;
+ * - the background refresh is single-flight, and concurrent blocking lookups in `checkAdmin`
+ *   (cache miss) share one relay crawl.
  */
 internal class DefaultAdminRegistry(
     private val store: KeyValueStore,
@@ -56,6 +70,12 @@ internal class DefaultAdminRegistry(
 ) : AdminRegistry {
 
     private val writeMutex = Mutex()
+
+    /** The running background refresh, if any (single-flight). */
+    private val refreshJob = AtomicReference<Job?>(null)
+
+    /** The running blocking lookup of `checkAdmin` step 4, if any (shared by concurrent callers). */
+    private val lookupInFlight = AtomicReference<CompletableDeferred<List<AdminEntry>?>?>(null)
 
     // =============================================
     // Sunset
@@ -155,12 +175,10 @@ internal class DefaultAdminRegistry(
         // "Not listed" and "could not look it up" must stay distinguishable (scanner).
         var lookupFailed = false
         try {
-            val relayList = fetchFromRelays()
+            val relayList = sharedRelayLookup()
             if (relayList.isNullOrEmpty()) {
                 lookupFailed = true
             } else {
-                saveToCache(relayList)
-                isSunsetActive()
                 val entry = relayList.firstOrNull { it.npub == userNpub }
                 if (entry != null) {
                     return AdminCheckResult(true, entry.meetup, entry.name, AdminCheckResult.SOURCE_NOSTR_RELAY)
@@ -190,6 +208,43 @@ internal class DefaultAdminRegistry(
             return AdminCheckResult(isAdmin = false, source = AdminCheckResult.SOURCE_INVALID_KEY)
         }
         return checkAdmin(npub)
+    }
+
+    /**
+     * `checkAdmin` step 4: [fetchFromRelays], then (non-empty answer) save + sunset re-evaluation,
+     * as in Dart. Concurrent callers share one crawl; each caller matches its own npub on the
+     * shared result. The crawl runs in the coroutine of the first caller; if that caller is
+     * cancelled, a waiting caller starts a new crawl instead of being cancelled with it.
+     */
+    private suspend fun sharedRelayLookup(): List<AdminEntry>? {
+        while (true) {
+            val running = lookupInFlight.get()
+            if (running != null) {
+                try {
+                    return running.await()
+                } catch (e: CancellationException) {
+                    currentCoroutineContext().ensureActive() // we were cancelled ourselves
+                    lookupInFlight.compareAndSet(running, null)
+                    continue // the owner was cancelled: retry (possibly as the new owner)
+                }
+            }
+            val mine = CompletableDeferred<List<AdminEntry>?>()
+            if (!lookupInFlight.compareAndSet(null, mine)) continue
+            try {
+                val relayList = fetchFromRelays()
+                if (!relayList.isNullOrEmpty()) {
+                    saveRelayList(relayList)
+                    isSunsetActive()
+                }
+                mine.complete(relayList)
+                return relayList
+            } catch (e: Throwable) {
+                mine.completeExceptionally(e)
+                throw e
+            } finally {
+                lookupInFlight.compareAndSet(mine, null)
+            }
+        }
     }
 
     // =============================================
@@ -324,14 +379,19 @@ internal class DefaultAdminRegistry(
     // Background refresh
     // =============================================
 
+    /**
+     * Dart `_refreshFromRelaysInBackground` (fire-and-forget). Single-flight: while one refresh
+     * runs, further cache hits start none (Dart would start one per hit).
+     */
     private fun refreshFromRelaysInBackground() {
-        backgroundScope.launch {
+        if (refreshJob.get()?.isActive == true) return
+        val job = backgroundScope.launch(start = CoroutineStart.LAZY) {
             try {
                 val age = cacheAge()
                 if (age != null && age.inWholeHours < 1) return@launch
                 val relayList = fetchFromRelays()
                 if (relayList != null) {
-                    saveToCache(relayList)
+                    saveRelayList(relayList)
                     isSunsetActive()
                     log.debug(TAG, "Cache im Hintergrund aktualisiert. Total Admins: ${relayList.size}")
                 }
@@ -340,6 +400,12 @@ internal class DefaultAdminRegistry(
             } catch (_: Exception) {
                 // Silent, as in Dart.
             }
+        }
+        val current = refreshJob.get()
+        if (current?.isActive != true && refreshJob.compareAndSet(current, job)) {
+            job.start()
+        } else {
+            job.cancel()
         }
     }
 
@@ -351,7 +417,8 @@ internal class DefaultAdminRegistry(
 
     /**
      * Dart `_loadFromCache`: the only reader of the network cache. Organic legacy claims are
-     * dropped and, if any were present, the list (not the timestamp) is rewritten.
+     * dropped and, if any were present, the list (not the timestamp) is rewritten — only if the
+     * stored list is still the one read (a concurrent relay save wins).
      */
     private suspend fun loadFromCache(): List<AdminEntry>? = try {
         val json = store.getString(AdminConstants.KEY_CACHE)
@@ -361,7 +428,8 @@ internal class DefaultAdminRegistry(
             val raw = AdminEntry.listFromJson(json)
             val clean = withoutLegacyOrganic(raw)
             if (clean.size != raw.size) {
-                store.setString(AdminConstants.KEY_CACHE, AdminEntry.listToJson(clean))
+                val cleanJson = AdminEntry.listToJson(clean)
+                store.edit { if (getString(AdminConstants.KEY_CACHE) == json) setString(AdminConstants.KEY_CACHE, cleanJson) }
                 log.debug(TAG, "${raw.size - clean.size} organische Alt-Claims aus dem Admin-Cache entfernt")
             }
             clean
@@ -372,7 +440,10 @@ internal class DefaultAdminRegistry(
         null
     }
 
-    /** Dart `_saveToCache`: organic-filtered list plus the current timestamp (ms). */
+    /** A relay answer replaces the cache; under [writeMutex] (taken after the fetch). */
+    private suspend fun saveRelayList(list: List<AdminEntry>) = writeMutex.withLock { saveToCache(list) }
+
+    /** Dart `_saveToCache`: organic-filtered list plus the current timestamp (ms). Callers hold [writeMutex]. */
     private suspend fun saveToCache(admins: List<AdminEntry>) {
         val clean = withoutLegacyOrganic(admins)
         store.edit {
@@ -432,7 +503,7 @@ internal class DefaultAdminRegistry(
 
     override suspend fun forceRefresh(): Int {
         val relayList = fetchFromRelays() ?: return -1
-        saveToCache(relayList)
+        saveRelayList(relayList)
         isSunsetActive()
         return relayList.size
     }

@@ -7,7 +7,7 @@ NIP-57 zaps to article authors over LNURL-pay. Spec: `spec/11-chat-news-communit
 Package root: `space.einundzwanzig.meetup.data.news`.
 
 ```kotlin
-implementation(project(":data:news"))   // exposes :core:nostr (+ :core:crypto, :core:common) as api
+implementation(project(":data:news"))
 ```
 
 Ports `lib/services/news_service.dart`, `news_reactions_service.dart`, `news_zap_service.dart`.
@@ -26,11 +26,11 @@ future `:core:network` LNURL client, spec §13), `:core:nostr` `RelayClient`/`Ev
 | `NewsLinks` | `FEED_URL`, `WEBSITE_URL` ("Auf der Webseite öffnen"/fallback), `WRITE_URL` ("Artikel schreiben"), `FEED_USER_AGENT`, `FEED_ACCEPT`, `ARTICLE_RELAYS` |
 | `ArticleAddress.parse(guid): ArticleAddress(pubkey, d)?` | `30023:<pubkey>:<d>` (d may contain `:`); `KIND_LONG_FORM` |
 | `RssParser` | `parse(xml, nowSeconds)`, `parseDate(s, nowSeconds)` (UTC, zone suffix ignored), `clean(s)`, `stripHtml(s)`, `UNTITLED` = `"(ohne Titel)"` |
-| `NewsReactionsService` | `readTargets()` (news relays ∪ `relay.nostr.band` ∪ active relays — the list event chat, RSVP and the zap-receipt check share), `writeTargets()`, `hasLikedLocally(address)` (no network; call first so the heart is filled instantly), `fetchLikes(address): ArticleLikes`, `like(address, authorPubkey): Boolean`. Companion: `KEY_LIKED_REACTIONS` = `news_liked_reactions`, `LIKED_CAP` (500), `NEWS_RELAYS`, `READ_ONLY_RELAYS`, `likeTags(...)`, `isPositive(content)`, `likedEntry(pubkey, address)`, timeouts |
+| `NewsReactionsService` | `readTargets()` (news relays ∪ `relay.nostr.band` ∪ active relays — the list event chat, RSVP and the zap-receipt check share), `writeTargets()`, `hasLikedLocally(address)` (no network; call first so the heart is filled instantly), `fetchLikes(address): ArticleLikes`, `like(address, authorPubkey): Boolean` (`p` tag only for a 64-hex author; overlapping calls for the same address share one sign + publish; the lock is per address, so a slow signer for one article does not block likes of others). Companion: `KEY_LIKED_REACTIONS` = `news_liked_reactions`, `LIKED_CAP` (500), `NEWS_RELAYS`, `READ_ONLY_RELAYS`, `likeTags(...)` (drops a non-hex `p`), `isPositive(content)`, `likedEntry(pubkey, address)`, timeouts |
 | `ArticleLikes(count, mine)` | `withMine()`, `EMPTY`. UI: label = count if loaded and > 0, else `newsLike`; no un-like |
-| `NewsZapService` | `fetchLightningAddress(pubkeyHex)` (delegates to `:data:profile`; `"lud06:"` marker = unsupported), `createZapInvoice(authorPubkey, articleAddress, amountSats, comment = article.title): ZapResult`. Companion: `ZAP_AMOUNTS_SATS` (21/210/2100/21000), `KIND_ZAP_REQUEST`, `HTTP_TIMEOUT` (12 s), `zapRequestTags(...)` |
+| `NewsZapService` | `fetchLightningAddress(pubkeyHex)` (delegates to `:data:profile`; compare with `NewsZapService.LUD06_MARKER` (`"lud06:"`) = unsupported), `createZapInvoice(authorPubkey, articleAddress, amountSats, comment = article.title): ZapResult`. Companion: `LUD06_MARKER`, `ZAP_AMOUNTS_SATS` (21/210/2100/21000), `KIND_ZAP_REQUEST`, `HTTP_TIMEOUT` (12 s), `zapRequestTags(...)` |
 | `ZapResult` (`Success(invoice)` / `Failure(error)`, `ok`, `invoice`), `enum ZapError` | `NoLightningAddress` → `newsZapNoAddress`, `UnsupportedAddress` → `newsZapUnsupportedAddress`, `AmountOutOfRange` → `newsZapAmountRange`, `LnurlUnreachable`/`SigningFailed`/`InvoiceFailed` → `newsZapFailed` |
-| `ZapInvoiceLauncher` | `open(context, bolt11): Boolean` — plain `ACTION_VIEW lightning:<bolt11>` (no chooser, unlike V4V); `false` → show the `newsZapNoWallet` sheet with invoice + `newsZapCopyInvoice`. `intent(bolt11)` |
+| `ZapInvoiceLauncher` | `open(context, bolt11, log = AppLogger): Boolean` (any start failure, incl. `SecurityException`, → `false`; pass the injected `DiagnosticLog`) — plain `ACTION_VIEW lightning:<bolt11>` (no chooser, unlike V4V); `false` → show the `newsZapNoWallet` sheet with invoice + `newsZapCopyInvoice`. `intent(bolt11)` |
 
 ### Wiring notes for `:feature:news` / home
 
@@ -40,7 +40,7 @@ future `:core:network` LNURL client, spec §13), `:core:nostr` `RelayClient`/`Ev
   caller is cancelled), set unread 0, open NewsScreen.
 - **ArticleDetail**: in parallel `fetchArticleContent(article.id)`, `hasLikedLocally(article.id)`
   (→ `ArticleLikes(count, true)`), `fetchLikes(article.id)`. Like:
-  `like(article.id, NewsArticles.zapAuthorPubkey(article))` (publish + remember run in
+  `like(article.id, NewsArticles.zapAuthorPubkey(article))` (`authorPubkey` is safe too, the service drops a non-hex `p`; a double tap or a recreated screen does not send a second event; publish + remember run in
   `@ApplicationScope`, so leaving the screen does not lose an accepted like), on `true` → `likes.withMine()`, else
   `newsLikeFailed`. Zap: disable when `zapAuthorPubkey` is `""`; else
   `createZapInvoice(pk, article.id, sats, comment = article.title)` → `ZapInvoiceLauncher.open`.
@@ -57,7 +57,7 @@ future `:core:network` LNURL client, spec §13), `:core:nostr` `RelayClient`/`Ev
   in Dart key order: `{"kinds":[30023],"authors":[pk],"#d":[d],"limit":1}` (sub `article`),
   `{"kinds":[7],"#a":[address],"limit":500}` (sub `likes`). "Newest wins" uses
   `EventGuard.replaceableCreatedAt` (≤ now + 600 s), ties → later arrival.
-- Like: kind 7, content `"+"`, tags `[["a",addr],["p",author]?,["k","30023"]]`, published to all
+- Like: kind 7, content `"+"`, tags `[["a",addr],["p",author]?,["k","30023"]]` (`p` only if 64 hex), published to all
   write targets in parallel (connect 5 s, 8 s total, early end when every relay answered).
   Success iff ≥ 1 `OK true`; then `"<signerPubkey>|<address>"` is appended (cap 500, oldest out).
 - Zap request (only if LNURL `allowsNostr == true`): kind 9734, content = comment, tags
@@ -67,7 +67,7 @@ future `:core:network` LNURL client, spec §13), `:core:nostr` `RelayClient`/`Ev
 
 ## Tests
 
-`tools/gradlew-locked :data:news:testDebugUnitTest` — 55 JVM tests.
+`tools/gradlew-locked :data:news:testDebugUnitTest` — 62 JVM tests (4 on Robolectric).
 
 Flutter has no Dart unit tests for this domain; the tests implement the spec §10.4 vectors:
 
@@ -79,20 +79,26 @@ Flutter has no Dart unit tests for this domain; the tests implement the spec §1
 - `NewsServiceTest` (13, MockWebServer + fake relays): headers, limit, errors, malformed UTF-8,
   cache TTL / empty not cached, unread first-run/count/markRead (also when the caller is cancelled), wrong pref type, full text
   newest-wins + REQ bytes, forged/future/empty, bad guid, 12 s overall budget.
-- `NewsReactionsServiceTest` (14): like tag layout, likes vector `["+","","🤙","-"," - "]` → 3,
+- `NewsReactionsServiceTest` (17): like tag layout, non-hex author → no `p` tag, overlapping likes sign/publish once, a suspended signer for article A does not block a like of article B, likes vector `["+","","🤙","-"," - "]` → 3,
   duplicate pubkeys, local-only +1, identity switch, publish targets/OK handling, no resend,
   timeout and early finish, signer failure, 500 cap, like cancelled after an OK is still remembered.
 - `NewsZapServiceTest` (13, MockWebServer): zap tags for 2100 sat, byte-exact `nostr=` URL and
   verifiable zap request, comment truncation `V4V –` → `V4V+%E2%80%93`, `'`/`*` → `%27`/`%2A` on the wire (Dart
   `encodeQueryComponent`; OkHttp keeps the escapes), `?`/`&` separator, every
-  `ZapError` path.
+  `ZapError` path (incl. non-finite `minSendable`/`maxSendable`).
+- `ZapInvoiceLauncherTest` (4, Robolectric): `ACTION_VIEW lightning:<bolt11>` without chooser, no
+  wallet → `false`, wallet → started with `FLAG_ACTIVITY_NEW_TASK` from a non-Activity context,
+  `SecurityException` → `false` and logged to the passed `DiagnosticLog`.
 
 ## Deviations from the Dart code
 
-- `like()` callers should pass `NewsArticles.zapAuthorPubkey` (64-hex or `""`), so a link-only
-  article gets no bogus `p` tag (spec §14 risk 12). Valid articles produce identical events.
-- A non-number `minSendable`/`maxSendable` gives `LnurlUnreachable`; Dart threw an uncaught
-  cast error (stuck zap spinner).
+- `like()` adds the `p` tag only for a 64-hex author, so a link-only article gets no bogus `p` tag
+  whatever the caller passes (spec §14 risk 12). Valid articles produce identical events.
+- Overlapping `like()` calls for the same identity + address share one in-flight sign/publish
+  (Dart relied on the widget's `liking` flag, which does not survive a configuration change;
+  spec §14 risk 6).
+- A non-number or non-finite (`1e400`) `minSendable`/`maxSendable` gives `LnurlUnreachable`; Dart
+  threw an uncaught cast / `toInt()` error (stuck zap spinner).
 - `news_last_read_ts` / `news_liked_reactions` of the wrong type: unread count returns 0 and the
   like is not remembered (same visible result as Dart's caught `TypeError`).
 - `RelayClient` ignores frames with a foreign subscription id and ends a relay on `CLOSED`
@@ -105,6 +111,12 @@ Flutter has no Dart unit tests for this domain; the tests implement the spec §1
 
 ## Known gaps
 
+- Relay `NOTICE` frames during a like publish are not logged (Dart logs `NOTICE von <url>: <msg>`,
+  `news_reactions_service.dart:352-355`; spec 11 §6.7). `:core:nostr`'s `RelayClient.publish` returns
+  only `RelayPublishResult(status, message)` and does not surface NOTICEs, so a "keine Antwort" line
+  cannot be explained. Fix needs a hook in `:core:nostr` (e.g. `RelayPublishResult.notices` or
+  `RelayPublishOptions.onNotice`); then log `log.debug(TAG, "NOTICE von $url: $msg")` in
+  `DefaultNewsReactionsService.publishAndRemember`.
 - No `ConnectivityManager` offline distinction (Dart has none for news either).
 - The zap invoice is not validated against the request (amount / description hash), as in Dart
   (spec §14 risk 13).

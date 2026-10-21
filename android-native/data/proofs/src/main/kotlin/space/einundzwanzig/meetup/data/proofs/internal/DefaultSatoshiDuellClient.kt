@@ -22,6 +22,7 @@ import space.einundzwanzig.meetup.data.badges.text.DartString
 import space.einundzwanzig.meetup.data.proofs.satoshiduell.DuellStatus
 import space.einundzwanzig.meetup.data.proofs.satoshiduell.SatoshiDuellClient
 import space.einundzwanzig.meetup.data.proofs.satoshiduell.SatoshiDuellClient.Companion.BASE_URL
+import space.einundzwanzig.meetup.data.proofs.BuildConfig
 import space.einundzwanzig.meetup.data.proofs.satoshiduell.SatoshiDuellClient.Companion.CACHE_TTL
 import space.einundzwanzig.meetup.data.proofs.satoshiduell.SatoshiDuellClient.Companion.PUBLISHABLE_KEY
 import space.einundzwanzig.meetup.data.proofs.satoshiduell.SatoshiDuellClient.Companion.REQUEST_TIMEOUT
@@ -36,6 +37,7 @@ internal class DefaultSatoshiDuellClient(
     private val log: DiagnosticLog,
     private val dispatcher: CoroutineDispatcher,
     private val baseUrl: String,
+    apiKey: String = PUBLISHABLE_KEY,
 ) : SatoshiDuellClient {
 
     @Inject
@@ -45,7 +47,7 @@ internal class DefaultSatoshiDuellClient(
         time: TimeSource,
         log: DiagnosticLog,
         @DefaultDispatcher dispatcher: CoroutineDispatcher,
-    ) : this(http, identity, time, log, dispatcher, BASE_URL)
+    ) : this(http, identity, time, log, dispatcher, BASE_URL, configuredKey(BuildConfig.SATOSHIDUELL_PUBLISHABLE_KEY))
 
     private val mutex = Mutex()
 
@@ -56,8 +58,8 @@ internal class DefaultSatoshiDuellClient(
     private var cachedAtMillis: Long = 0
 
     private val headers = mapOf(
-        "apikey" to PUBLISHABLE_KEY,
-        "Authorization" to "Bearer $PUBLISHABLE_KEY",
+        "apikey" to apiKey,
+        "Authorization" to "Bearer $apiKey",
         "Accept" to "application/json",
     )
 
@@ -155,8 +157,14 @@ internal class DefaultSatoshiDuellClient(
     private fun objectsOf(r: HttpResult.Response): List<JsonObject> =
         (decode(r) as? JsonArray)?.filterIsInstance<JsonObject>().orEmpty()
 
-    private companion object {
-        const val TAG = "SatoshiDuell"
-        const val MAX_BODY_BYTES: Long = 1024L * 1024
+    internal companion object {
+        private const val TAG = "SatoshiDuell"
+        private const val MAX_BODY_BYTES: Long = 1024L * 1024
+
+        /**
+         * The key from the build (`-PsatoshiduellPublishableKey`, spec 06 §14 R16); blank means
+         * "not overridden" and gives [PUBLISHABLE_KEY].
+         */
+        fun configuredKey(buildConfigKey: String): String = buildConfigKey.trim().ifEmpty { PUBLISHABLE_KEY }
     }
 }

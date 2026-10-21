@@ -23,6 +23,17 @@ class DartStringTest {
     }
 
     @Test
+    fun `case table resolves by absolute path independent of the class package`() {
+        assertEquals(true, DartString.CASE_TABLE_RESOURCE.startsWith("/"))
+        // Looked up through a class in another package (as after R8 repackaging) and the classloader.
+        val viaOtherClass = DartStringTest::class.java.getResourceAsStream(DartString.CASE_TABLE_RESOURCE)!!.use { it.readBytes() }
+        val viaLoader = DartStringTest::class.java.classLoader!!
+            .getResourceAsStream(DartString.CASE_TABLE_RESOURCE.removePrefix("/"))!!.use { it.readBytes() }
+        assertEquals(DartString.caseTableBytes().toHex(), viaOtherClass.toHex())
+        assertEquals(viaLoader.toHex(), viaOtherClass.toHex())
+    }
+
+    @Test
     fun `lower and upper follow Dart`() {
         assertEquals("οδοσ", DartString.lower("ΟΔΟΣ"))
         assertEquals("istanbul", DartString.lower("İstanbul"))

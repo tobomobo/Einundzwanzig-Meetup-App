@@ -12,6 +12,7 @@ import space.einundzwanzig.meetup.data.meetups.model.Meetup
 import space.einundzwanzig.meetup.data.meetups.nearby.DateMode
 import space.einundzwanzig.meetup.data.meetups.nearby.MeetupEventInfo
 import space.einundzwanzig.meetup.data.meetups.nearby.MeetupEventsSource
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -114,7 +115,8 @@ class NearbySearchTest {
                 {"id":4,"city":"","latitude":1,"longitude":1}]"""
             server.respond = { _, _ -> json(body) }
             var eventLoads = 0
-            val source = MeetupEventsSource { eventLoads++; emptyList() }
+            val event = MeetupEventInfo(title = "Würzburg Stammtisch", location = "Würzburg", start = Instant.parse("2030-01-01T18:00:00Z"))
+            val source = MeetupEventsSource { eventLoads++; listOf(event) }
             val nearby = NearbyMeetupServiceImpl(MeetupServiceImpl(server.client, testLog()), Optional.of(source), FakeTime(), testLog())
             val r = nearby.search(49.79, 9.95, 100.0, DateMode.ANY)
             assertEquals(listOf("1"), r.map { it.meetup.id })
@@ -126,6 +128,37 @@ class NearbySearchTest {
             body = "[]"
             nearby.preload(forceReload = true)
             assertEquals(listOf("m_b"), nearby.search(52.52, 13.405, 10.0, DateMode.ANY).map { it.meetup.id })
+        }
+    }
+
+    @Test
+    fun `offline fallback and empty dates are retried on the next preload`() = runTest {
+        FakeServer().use { server ->
+            var online = false
+            server.respond = { _, _ ->
+                if (online) json("""[{"id":1,"city":"Würzburg","latitude":49.79,"longitude":9.95}]""") else status(503, "")
+            }
+            var eventLoads = 0
+            val event = MeetupEventInfo(title = "Würzburg Stammtisch", location = "Würzburg", start = Instant.parse("2030-01-01T18:00:00Z"))
+            val source = MeetupEventsSource { eventLoads++; if (online) listOf(event) else emptyList() }
+            val nearby = NearbyMeetupServiceImpl(MeetupServiceImpl(server.client, testLog()), Optional.of(source), FakeTime(), testLog())
+
+            // Offline: the bundled list (Berlin is m_b) and no dates.
+            assertEquals(listOf("m_b"), nearby.search(52.52, 13.405, 10.0, DateMode.ANY).map { it.meetup.id })
+            assertEquals(1, eventLoads)
+
+            // Connectivity returns: the next search retries both parts.
+            online = true
+            val r = nearby.search(49.79, 9.95, 100.0, DateMode.ANY)
+            assertEquals(listOf("1"), r.map { it.meetup.id })
+            assertEquals(event, r.single().nextEvent)
+            assertEquals(2, eventLoads)
+
+            // Both answers are real now: cached for the process.
+            val requests = server.seen.size
+            nearby.search(49.79, 9.95, 100.0, DateMode.ANY)
+            assertEquals(2, eventLoads)
+            assertEquals(requests, server.seen.size)
         }
     }
 }

@@ -23,6 +23,7 @@ import space.einundzwanzig.meetup.core.crypto.Sha256
 import space.einundzwanzig.meetup.data.badges.claim.BadgeClaims
 import space.einundzwanzig.meetup.data.badges.internal.DefaultBadgeClaimService
 import space.einundzwanzig.meetup.data.badges.model.MeetupBadge
+import space.einundzwanzig.meetup.data.badges.store.BadgeStoreKeys
 import space.einundzwanzig.meetup.core.nostr.NostrEvent
 import space.einundzwanzig.meetup.data.badges.security.BadgeSecurity
 import space.einundzwanzig.meetup.data.badges.security.BadgeSigner
@@ -164,6 +165,34 @@ class BadgeClaimTest {
     }
 
     @Test
+    fun `an unreadable store costs no signer prompt`() = runTest {
+        val h = StoreHarness()
+        assertTrue(h.repo.saveBadges(listOf(unclaimed("a"))))
+        val stale = h.repo.badges.value
+        // A fresh process (nothing loaded yet) whose keys no longer open the file.
+        val fresh = StoreHarness(h.prefs, h.secure, h.time)
+        assertTrue(h.secure.write(BadgeStoreKeys.KEY, "b".repeat(64)))
+        assertTrue(h.secure.write(BadgeStoreKeys.KEY_BACKUP, "b".repeat(64)))
+        val signer = TestSigner(attendee, h.time)
+        val result = DefaultBadgeClaimService(signer, fresh.repo, h.time).ensureBadgesClaimed(stale)
+        assertEquals(0, signer.calls)
+        assertEquals(0, result.claimedCount)
+        assertSame(stale, result.badges)
+        assertTrue(fresh.repo.badgesUnreadable.value)
+    }
+
+    @Test
+    fun `badges missing from the store cost no signer prompt`() = runTest {
+        val h = StoreHarness()
+        val signer = TestSigner(attendee, h.time)
+        val foreign = listOf(unclaimed("x"))
+        val result = DefaultBadgeClaimService(signer, h.repo, h.time).claimUnboundBadges(foreign)
+        assertEquals(0, signer.calls)
+        assertEquals(0, result.claimedCount)
+        assertTrue(h.repo.loaded.value)
+    }
+
+    @Test
     fun `failed save reports zero claims`() = runTest {
         val h = StoreHarness()
         assertTrue(h.repo.saveBadges(listOf(unclaimed("a"))))
@@ -215,6 +244,51 @@ class BadgeClaimTest {
         val result = DefaultBadgeClaimService(signer, h.repo, h.time).claimUnboundBadges(h.repo.badges.value)
         assertEquals(0, result.claimedCount)
         assertEquals(listOf("keep"), h.repo.loadBadges().map { it.id })
+    }
+
+    /** A signer that runs [during] (a sync/restore swapping the stored variant) while the user approves. */
+    private fun swappingSigner(h: StoreHarness, during: suspend () -> Unit) = object : BadgeSigner {
+        val inner = TestSigner(attendee, h.time)
+        override suspend fun canSign() = true
+        override suspend fun signEvent(kind: Int, tags: List<List<String>>, content: String, createdAt: Long?): NostrEvent {
+            during()
+            return inner.signEvent(kind, tags, content, createdAt)
+        }
+    }
+
+    @Test
+    fun `a claim is not applied to a variant with other org data swapped in meanwhile`() = runTest {
+        val h = StoreHarness()
+        assertTrue(h.repo.saveBadges(listOf(unclaimed("a"))))
+        val otherSig = "f".repeat(128)
+        val signer = swappingSigner(h) {
+            assertTrue(h.repo.update { current -> current.map { it.copyWith(sig = otherSig, lat = 48.2) } })
+        }
+        val result = DefaultBadgeClaimService(signer, h.repo, h.time).claimUnboundBadges(h.repo.badges.value)
+        assertEquals(0, result.claimedCount)
+        val stored = h.repo.loadBadges().single()
+        assertFalse(stored.isClaimed)
+        assertEquals(otherSig, stored.sig)
+        assertEquals(48.2, stored.lat, 0.0)
+    }
+
+    @Test
+    fun `a claim keeps the fields of a variant swapped in meanwhile`() = runTest {
+        val h = StoreHarness()
+        assertTrue(h.repo.saveBadges(listOf(unclaimed("a", presenceVerified = false))))
+        val signer = swappingSigner(h) {
+            assertTrue(h.repo.update { current -> current.map { it.copyWith(presenceVerified = true, lat = 48.2, lng = 16.4, coverUrl = "c") } })
+        }
+        val result = DefaultBadgeClaimService(signer, h.repo, h.time).claimUnboundBadges(h.repo.badges.value)
+        assertEquals(1, result.claimedCount)
+        val stored = h.repo.loadBadges().single()
+        assertTrue(stored.isClaimed)
+        assertTrue(stored.isRetroactive)
+        assertTrue(stored.presenceVerified)
+        assertEquals(48.2, stored.lat, 0.0)
+        assertEquals(16.4, stored.lng, 0.0)
+        assertEquals("c", stored.coverUrl)
+        assertTrue(BadgeClaims.verifyBadgeClaim(stored).isValid)
     }
 
     @Test

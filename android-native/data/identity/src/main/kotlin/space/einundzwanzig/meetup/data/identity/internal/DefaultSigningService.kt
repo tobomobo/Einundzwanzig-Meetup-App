@@ -68,7 +68,13 @@ internal class DefaultSigningService @Inject constructor(
 ) : SigningService {
 
     private val readyFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 8, onBufferOverflow = BufferOverflow.DROP_OLDEST)
-    private val authUrlFlow = MutableSharedFlow<String>(extraBufferCapacity = 8, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    // replay = 1: an approval that arrives without a collector waits for the UI (acknowledgeAuthUrl clears it).
+    private val authUrlFlow = MutableSharedFlow<String>(
+        replay = 1,
+        extraBufferCapacity = 7,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    private val authUrlLock = Any()
     private val authHandlers = ArrayList<(String) -> Unit>()
 
     /** The held NIP-46 session (process lifetime). */
@@ -96,12 +102,18 @@ internal class DefaultSigningService @Inject constructor(
             }
         }
         if (authUrlFlow.subscriptionCount.value == 0) {
-            AppLogger.warn(
+            AppLogger.info(
                 "Nip46",
-                "Freigabe-Aufforderung des Signers ohne Oberfläche (Host: ${SafeUrl.hostForLog(url)})",
+                "Freigabe-Aufforderung des Signers wartet auf die Oberfläche (Host: ${SafeUrl.hostForLog(url)})",
             )
         }
-        authUrlFlow.tryEmit(url)
+        synchronized(authUrlLock) { authUrlFlow.tryEmit(url) }
+    }
+
+    override fun acknowledgeAuthUrl(url: String) {
+        synchronized(authUrlLock) {
+            if (authUrlFlow.replayCache.lastOrNull() == url) authUrlFlow.resetReplayCache()
+        }
     }
 
     private fun noteSignerReady() {
@@ -418,6 +430,8 @@ internal class DefaultSigningService @Inject constructor(
         // Always stored as bunker:// — one restore path.
         val pointer = BunkerPointer(signerPubkey, pairing.relays)
         persistNip46Session(pairing.client, pairing.clientSecretKeyHex, userPubkeyHex, pointer.toBunkerUri())
+        // The client is the live session now: a later pairing.cancel() must not close it.
+        pairing.adopted.set(true)
         val npub = Nip19.encodeNpub(userPubkeyHex)
         AppLogger.security("SigningService", "Remote-Signer gekoppelt: ${short(npub)} — der Schlüssel bleibt im Signer.")
         noteSignerReady()
@@ -441,7 +455,12 @@ internal class DefaultSigningService @Inject constructor(
         if (nip46 !== client) closeQuietly(client)
     }
 
-    /** Stores key + prefs and adopts [client] as the live session in one locked step, then sets the mode. */
+    /**
+     * Stores key + prefs and adopts [client] as the live session in one locked step, then sets the
+     * mode. If the mode cannot be stored, the adopted session is torn down again (client closed,
+     * session key and `nip46_*` prefs removed), so a failure never leaves an orphan session behind
+     * a LOCAL/AMBER mode.
+     */
     private suspend fun persistNip46Session(
         client: Nip46Client,
         clientSecretKeyHex: String,
@@ -451,7 +470,20 @@ internal class DefaultSigningService @Inject constructor(
         replaceNip46Session(client) {
             writeNip46Session(clientSecretKeyHex, userPubkeyHex, bunkerUri)
         }
-        setMode(SigningMode.NIP46)
+        try {
+            // Not interruptible: a cancelled caller must not leave the mode half-switched.
+            withContext(NonCancellable) { setMode(SigningMode.NIP46) }
+        } catch (e: Exception) {
+            withContext(NonCancellable) {
+                try {
+                    clearNip46Artifacts()
+                } catch (cleanup: Exception) {
+                    e.addSuppressed(cleanup)
+                    AppLogger.warn("SigningService", "Signer-Sitzung konnte nach Fehler nicht entfernt werden", cleanup)
+                }
+            }
+            throw e
+        }
     }
 
     override suspend fun nip46PairingRelays(): List<String> {
