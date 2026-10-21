@@ -4,6 +4,8 @@ Shared **SwiftUI** app for **iOS 26+ / macOS 26+**, Swift 6, Xcode 26. Native iP
 
 This is an initial implementation. [All 57 source routes and security workflows are explicitly classified](Docs/PARITY.md); there is no full-parity or production-security claim.
 
+This standalone Apple branch targets the fork's `main`. Its checked-in [source navigation snapshot](Docs/SOURCE_ROUTES.md) keeps validation independent of the separate Kotlin implementation branch.
+
 ## Open and run on a Mac
 
 ```bash

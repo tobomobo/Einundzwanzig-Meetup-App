@@ -730,7 +730,7 @@ def code_cell(cell, label):
 
 
 def canonical_routes(repo):
-    path = repo / "android-native/core/navigation/ROUTES.md"
+    path = repo / "apple-native/Docs/SOURCE_ROUTES.md"
     text = read_text(path)
     section = re.search(r"^##\s+Destinations\s*\n(.*?)(?=^##\s|\Z)", text, flags=re.M | re.S)
     require(section is not None, f"{path}: missing ## Destinations section")

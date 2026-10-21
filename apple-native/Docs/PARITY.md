@@ -1,6 +1,6 @@
 # Apple prototype: route and protocol coverage
 
-Audit basis: current local commit `0d00c83`, Flutter `lib/`, `android-native/spec/00` through `15`, and the **57 destination keys** in `android-native/core/navigation/ROUTES.md`. Source behavior wins over stale spec comments. This is a substantial initial prototype, not feature parity or a security implementation.
+Audit basis: Flutter `lib/` and the Android specifications/navigation contract inspected at source commit `0d00c83`. The **57 destination keys** are preserved in [SOURCE_ROUTES.md](SOURCE_ROUTES.md), so Apple validation does not require the separate Kotlin branch. Source behavior wins over stale spec comments. This is a substantial initial prototype, not feature parity or a security implementation.
 
 **Implemented** means the named ordinary user flow exists in this prototype. **Partial** means only the stated subset exists. **Missing** means no working native equivalent; an explanation or external website link does not count as implementation. Native routes use identifiers and show a not-found view when data disappears. The table maps product behaviors rather than claiming every Kotlin navigation argument is reproduced.
 
