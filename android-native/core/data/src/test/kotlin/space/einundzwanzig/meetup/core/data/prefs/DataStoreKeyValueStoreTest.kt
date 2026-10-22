@@ -3,11 +3,15 @@ package space.einundzwanzig.meetup.core.data.prefs
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.emptyPreferences
 import app.cash.turbine.test
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -106,8 +110,16 @@ class DataStoreKeyValueStoreTest : KeyValueStoreContract() {
     }
 
     @Test
+    @OptIn(ExperimentalCoroutinesApi::class)
     fun observeSurvivesIoErrorsWithoutPublishingAnEmptyStore() = runTest {
-        val backing = stores.open(stores.newFile())
+        // Keep retry scheduling on this test's virtual clock. The persistence/contract tests
+        // cover real files separately; IO-dispatched file work races virtual retry advancement.
+        val preferences = MutableStateFlow(emptyPreferences())
+        val backing = object : DataStore<Preferences> {
+            override val data: Flow<Preferences> = preferences
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences =
+                transform(preferences.value).also { preferences.value = it }
+        }
         val writer = DataStoreKeyValueStore(backing)
         assertTrue(writer.setString("app_theme", "light"))
         val flaky = FlakyDataStore(backing)
@@ -116,9 +128,11 @@ class DataStoreKeyValueStoreTest : KeyValueStoreContract() {
         DataStoreKeyValueStore(flaky).observeString("app_theme").test {
             // Before the fix the flow emitted the default (null) and completed after the error.
             assertEquals("light", awaitItem())
+            advanceUntilIdle()
+            assertEquals("two failed collections + the retry that stays", 3, flaky.collections.get())
+            expectNoEvents() // Retrying the same snapshot must not publish a fake empty store.
             assertTrue(writer.setString("app_theme", "dark"))
             assertEquals("dark", awaitItem())
-            assertEquals("two failed collections + the retry that stays", 3, flaky.collections.get())
             assertTrue(writer.setString("app_theme", "system"))
             assertEquals("system", awaitItem())
             expectNoEvents()
