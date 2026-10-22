@@ -131,7 +131,7 @@ public actor CalendarChatService {
         let event = try await signed(kind: draft.allDay ? 31922 : 31923, tags: tags, content: draft.description, signer: signer, after: existing?.event.createdAt)
         guard event.pubkey == key else { throw CalendarChatError.identityMismatch }
         let result = try NostrCalendarEntry(event: event)
-        try await relay.publish(event, relays: Self.calendarWriteTargets(relays), signer: signer)
+        try await relay.publish(event, relays: Self.eventTargets(relays), signer: signer)
         return result
     }
     public func cancel(_ entry: NostrCalendarEntry, signer: any NostrSigner, relays: [URL]) async throws {
@@ -144,11 +144,11 @@ public actor CalendarChatService {
         let replacement = try await signed(kind: entry.event.kind, tags: tags, content: entry.event.content,
                                            signer: signer, after: entry.event.createdAt)
         guard replacement.pubkey == key else { throw CalendarChatError.identityMismatch }
-        try await relay.publish(replacement, relays: Self.calendarWriteTargets(relays), signer: signer)
+        try await relay.publish(replacement, relays: Self.eventTargets(relays), signer: signer)
         do {
             let deletion = try await signed(kind: 5, tags: [["a", entry.id], ["e", entry.event.id], ["k", String(entry.event.kind)]], content: "cancelled", signer: signer)
             guard deletion.pubkey == key else { throw CalendarChatError.identityMismatch }
-            try await relay.publish(deletion, relays: Self.calendarWriteTargets(relays), signer: signer)
+            try await relay.publish(deletion, relays: Self.eventTargets(relays), signer: signer)
         } catch is CancellationError { throw CancellationError() }
         catch { /* The accepted replacement already records the cancellation. */ }
     }
@@ -166,9 +166,10 @@ public actor CalendarChatService {
             _ = try NostrHex.decode(parts[1], byteCount: 32, field: "calendar author")
             authors.insert(parts[1]); identifiers.insert(parts[2]); kinds.insert(kind)
         }
+        let targets = Self.eventTargets(relays)
         let requested = Set(addresses)
         let filter = NostrFilter(authors: authors.sorted(), kinds: kinds.sorted(), limit: 1000, tags: ["d": identifiers.sorted()])
-        let raw = try await relay.query(filter, relays: relays, timeout: 10)
+        let raw = try await relay.query(filter, relays: targets, timeout: 10)
         var latest: [String: NostrCalendarEntry] = [:]
         for event in await verified(raw, filter: filter).sorted(by: Self.newer) {
             guard let entry = try? NostrCalendarEntry(event: event), requested.contains(entry.id), latest[entry.id] == nil else { continue }
@@ -176,7 +177,7 @@ public actor CalendarChatService {
         }
         guard !latest.isEmpty else { return [] }
         let deletionFilter = NostrFilter(authors: authors.sorted(), kinds: [5], limit: 1000)
-        let rawDeletions = try await relay.query(deletionFilter, relays: relays, timeout: 8)
+        let rawDeletions = try await relay.query(deletionFilter, relays: targets, timeout: 8)
         for deletion in await verified(rawDeletions, filter: deletionFilter) {
             for (address, entry) in latest where deletion.pubkey == entry.event.pubkey && deletion.createdAt >= entry.event.createdAt {
                 if deletion.tags.contains(["a", address]) || deletion.tags.contains(["e", entry.event.id]) { latest.removeValue(forKey: address) }
@@ -197,11 +198,11 @@ public actor CalendarChatService {
     public func rsvp(_ entry: NostrCalendarEntry, status: String, signer: any NostrSigner, relays: [URL]) async throws {
         guard ["accepted", "declined", "tentative"].contains(status) else { throw CalendarChatError.invalidEvent }
         let event = try await signed(kind: 31925, tags: [["d", Self.rsvpIdentifier(address: entry.id)], ["a", entry.id], ["e", entry.event.id], ["p", entry.event.pubkey], ["status", status]], content: "", signer: signer)
-        try await relay.publish(event, relays: relays, signer: signer)
+        try await relay.publish(event, relays: Self.eventTargets(relays), signer: signer)
     }
     public func rsvps(_ entry: NostrCalendarEntry, relays: [URL]) async throws -> [NostrEvent] {
         let filter = NostrFilter(kinds: [31925], limit: 1000, tags: ["a": [entry.id]])
-        let events = try await relay.query(filter, relays: relays, timeout: 10)
+        let events = try await relay.query(filter, relays: Self.eventTargets(relays), timeout: 10)
         var newest: [String: NostrEvent] = [:]
         for event in events where filter.matches(event) && event.createdAt <= Int(Date().timeIntervalSince1970) + 600 {
             guard await crypto.verify(event), Self.rsvpStatus(event) != nil else { continue }
@@ -214,7 +215,7 @@ public actor CalendarChatService {
     public func myRSVPs(publicKey: String, relays: [URL]) async throws -> [String: NostrEvent] {
         _ = try NostrHex.decode(publicKey, byteCount: 32, field: "RSVP author")
         let filter = NostrFilter(authors: [publicKey], kinds: [31925], limit: 300)
-        let raw = try await relay.query(filter, relays: relays, timeout: 10)
+        let raw = try await relay.query(filter, relays: Self.eventTargets(relays), timeout: 10)
         var newest: [String: NostrEvent] = [:]
         for event in await verified(raw, filter: filter).sorted(by: Self.newer) {
             guard Self.rsvpStatus(event) != nil,
@@ -248,7 +249,7 @@ public actor CalendarChatService {
         try await unread(keys: rooms, kind: 9, tag: "h", lastRead: lastRead, publicKey: publicKey, relays: [Self.groupRelay])
     }
     public func unreadEventCounts(addresses: [String], lastRead: [String: Int], publicKey: String?, relays: [URL]) async throws -> [String: Int] {
-        try await unread(keys: addresses, kind: 1111, tag: "A", lastRead: lastRead, publicKey: publicKey, relays: relays)
+        try await unread(keys: addresses, kind: 1111, tag: "A", lastRead: lastRead, publicKey: publicKey, relays: Self.eventTargets(relays))
     }
     private func unread(keys: [String], kind: Int, tag: String, lastRead: [String: Int], publicKey: String?, relays: [URL]) async throws -> [String: Int] {
         guard !keys.isEmpty else { return [:] }
@@ -267,7 +268,7 @@ public actor CalendarChatService {
         let filter: NostrFilter
         let targets: [URL]
         if let room { filter = NostrFilter(kinds: [9], limit: 200, tags: ["h": [room]]); targets = [Self.groupRelay] }
-        else if let eventAddress { filter = NostrFilter(kinds: [1111], limit: 200, tags: ["A": [eventAddress]]); targets = relays }
+        else if let eventAddress { filter = NostrFilter(kinds: [1111], limit: 200, tags: ["A": [eventAddress]]); targets = Self.eventTargets(relays) }
         else { throw CalendarChatError.invalidEvent }
         let events = try await relay.query(filter, relays: targets, timeout: 10)
         return await verified(events, filter: filter).sorted { $0.createdAt < $1.createdAt }
@@ -294,7 +295,7 @@ public actor CalendarChatService {
         else if let entry {
             let root = String(entry.event.kind)
             tags = [["A", entry.id], ["K", root], ["P", entry.event.pubkey], ["a", entry.id], ["k", root], ["p", entry.event.pubkey]]
-            kind = 1111; targets = relays
+            kind = 1111; targets = Self.eventTargets(relays)
         } else { throw CalendarChatError.invalidEvent }
         guard key == (try await signer.publicKey()) else { throw CalendarChatError.identityMismatch }
         let event = try await signed(kind: kind, tags: tags, content: text, signer: signer)
@@ -308,9 +309,9 @@ public actor CalendarChatService {
         }
         return Array(result.values)
     }
-    private static func calendarWriteTargets(_ relays: [URL]) -> [URL] {
-        var targets = relays
-        if !targets.contains(Self.communityRelay) { targets.append(Self.communityRelay) }
+    private static func eventTargets(_ relays: [URL]) -> [URL] {
+        var targets: [URL] = []
+        for relay in relays + [Self.communityRelay] where !targets.contains(relay) { targets.append(relay) }
         return targets
     }
     private static func newer(_ lhs: NostrEvent, _ rhs: NostrEvent) -> Bool {

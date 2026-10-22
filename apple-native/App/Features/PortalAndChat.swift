@@ -305,8 +305,8 @@ struct NativeChatDirectoryView: View {
     @Environment(WorkflowStore.self) private var workflow
     var body: some View {
         List {
-            Section { WorkflowNotice(); if workflow.signer == nil { NavigationLink("Signing identity") { IdentitySetupView() } } }
-            ForEach(workflow.rooms, id: \.id) { event in
+            Section { WorkflowNotice(); if workflow.roomsAreLoading(for: meetupID) { ProgressView() }; if workflow.signer == nil { NavigationLink("Signing identity") { IdentitySetupView() } } }
+            ForEach(workflow.rooms(for: meetupID), id: \.id) { event in
                 if let room = event.tags.first(where: { $0.count > 1 && $0[0] == "d" })?[1] {
                     NavigationLink {
                         NativeChatView(room: room, roomName: event.tags.first { $0.count > 1 && $0[0] == "name" }?[1])
@@ -322,7 +322,7 @@ struct NativeChatDirectoryView: View {
                     }
                 }
             }
-            if workflow.rooms.isEmpty && !workflow.busy { Text("No meetup chat room was returned.").foregroundStyle(.secondary) }
+            if workflow.rooms(for: meetupID).isEmpty && !workflow.roomsAreLoading(for: meetupID) && !workflow.busy { Text("No meetup chat room was returned.").foregroundStyle(.secondary) }
         }.navigationTitle("Meetup chat").task(id: meetupID) { await workflow.loadRooms(meetupID: meetupID) }.refreshable { await workflow.loadRooms(meetupID: meetupID) }
     }
 }

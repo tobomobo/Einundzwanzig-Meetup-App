@@ -13,8 +13,9 @@ private actor PortalParityRelay: NostrRelayTransport {
     var queriedRelays: [[URL]] = []
     var publishRelays: [[URL]] = []
     let rejectedKinds: Set<Int>
-    init(_ events: [NostrEvent] = [], rejectedKinds: Set<Int> = []) { self.events = events; self.rejectedKinds = rejectedKinds }
-    func query(_ filter: NostrFilter, relays: [URL], timeout: TimeInterval) -> [NostrEvent] { queries.append(filter); queriedRelays.append(relays); return events }
+    let requiredReadRelay: URL?
+    init(_ events: [NostrEvent] = [], rejectedKinds: Set<Int> = [], requiredReadRelay: URL? = nil) { self.events = events; self.rejectedKinds = rejectedKinds; self.requiredReadRelay = requiredReadRelay }
+    func query(_ filter: NostrFilter, relays: [URL], timeout: TimeInterval) -> [NostrEvent] { queries.append(filter); queriedRelays.append(relays); return requiredReadRelay.map { relays.contains($0) } == false ? [] : events }
     func publish(_ event: NostrEvent, relays: [URL], signer: (any NostrSigner)?) throws {
         published.append(event); publishRelays.append(relays)
         if rejectedKinds.contains(event.kind) { throw PortalParityFailure.rejected }
@@ -241,5 +242,64 @@ extension PortalWorkflowParityTests {
         let http = PortalParityHTTP { _ in ProductHTTPResponse(status: 200, data: try JSONEncoder().encode(response)) }
         #expect(try await PortalAPIClient(transport: http).rsvpSummary(eventID: 42, session: nil).attendees.isEmpty)
         #expect(await http.requests.count == 1)
+    }
+}
+
+extension PortalWorkflowParityTests {
+    @Test func customRelaySettingsPreserveCommunityEventParticipationAcrossEveryEventPath() async throws {
+        let signer = try signer(), participant = try self.signer(2), original = try await entry(signer), now = Int(Date().timeIntervalSince1970)
+        let response = try await participant.sign(kind: 31925, tags: [["d", "fixture-rsvp"], ["a", original.id], ["status", "accepted"]], content: "", createdAt: now)
+        let comment = try await participant.sign(kind: 1111, tags: [["A", original.id], ["a", original.id]], content: "Community comment", createdAt: now)
+        let relay = PortalParityRelay([original.event, response, comment], requiredReadRelay: CalendarChatService.communityRelay)
+        let service = CalendarChatService(relay: relay), targets = [relayURL, CalendarChatService.communityRelay]
+        #expect(try await service.rsvps(original, relays: [relayURL]) == [response])
+        #expect(try await service.myRSVPs(publicKey: participant.publicKey(), relays: [relayURL]) == [original.id: response])
+        #expect(try await service.messages(eventAddress: original.id, relays: [relayURL]) == [comment])
+        #expect(try await service.unreadEventCounts(addresses: [original.id], lastRead: [original.id: now - 1], publicKey: signer.publicKey(), relays: [relayURL]) == [original.id: 1])
+        #expect(try await service.calendarEntry(address: original.id, relays: [relayURL]) == original)
+        let queries = await relay.queries
+        #expect(queries[0].kinds == [31925] && queries[0].tags == ["a": [original.id]])
+        #expect(queries[1].authors == [try await participant.publicKey()] && queries[1].kinds == [31925])
+        #expect(queries[2].kinds == [1111] && queries[2].tags == ["A": [original.id]])
+        #expect(queries[3].kinds == [1111] && queries[3].tags == ["A": [original.id]] && queries[3].since == now - 1)
+        #expect(queries[4].authors == [original.event.pubkey] && queries[4].tags == ["d": [original.identifier]])
+        #expect(queries[5].authors == [original.event.pubkey] && queries[5].kinds == [5])
+        #expect(await relay.queriedRelays.allSatisfy { $0 == targets })
+        try await service.rsvp(original, status: "tentative", signer: signer, relays: [relayURL])
+        try await service.send(text: "Community reply", entry: original, signer: signer, relays: [relayURL])
+        #expect(await relay.publishRelays == [targets, targets])
+        let writes = await relay.published
+        #expect(writes[0].kind == 31925 && writes[0].tags.contains(["a", original.id]))
+        #expect(writes[1].kind == 1111 && writes[1].tags.contains(["A", original.id]) && writes[1].tags.contains(["a", original.id]))
+        #expect(await NostrCrypto().verify(writes[0]))
+        #expect(await NostrCrypto().verify(writes[1]))
+    }
+    @Test func eventTargetsDeduplicateConfiguredCommunityAndWorkWithNoConfiguredRelays() async throws {
+        let signer = try signer(), original = try await entry(signer), community = CalendarChatService.communityRelay
+        let relay = PortalParityRelay([original.event]), service = CalendarChatService(relay: relay)
+        _ = try await service.rsvps(original, relays: [community, relayURL, community, relayURL])
+        #expect(await relay.queriedRelays.last == [community, relayURL])
+        #expect(try await service.calendarEntries(addresses: [original.id], relays: []) == [original])
+        #expect(await relay.queriedRelays.suffix(2).allSatisfy { $0 == [community] })
+        try await service.rsvp(original, status: "accepted", signer: signer, relays: [])
+        try await service.send(text: "Only community configured", entry: original, signer: signer, relays: [community, community])
+        #expect(await relay.publishRelays == [[community], [community]])
+    }
+    @Test func eventParticipationTargetsDoNotAddCommunityToNIP29RoomOperations() async throws {
+        let signer = try signer(), key = try await signer.publicKey(), group = CalendarChatService.groupRelay
+        let room = try await signer.sign(kind: 39000, tags: [["d", "room"], ["t", "meetup"], ["i", "meetup:7"]], content: "", createdAt: 100)
+        let member = try await signer.sign(kind: 39002, tags: [["d", "room"], ["p", key]], content: "", createdAt: 100)
+        let message = try await signer.sign(kind: 9, tags: [["h", "room"]], content: "Group only", createdAt: Int(Date().timeIntervalSince1970))
+        let relay = PortalParityRelay([room, member, message]), service = CalendarChatService(relay: relay)
+        #expect(try await service.rooms(meetupID: "7") == [room])
+        #expect(try await service.messages(room: "room", relays: [relayURL]) == [message])
+        #expect(try await service.isMember(room: "room", publicKey: key))
+        _ = try await service.unreadCounts(rooms: ["room"], lastRead: [:], publicKey: nil)
+        try await service.membership(room: "room", join: true, signer: signer)
+        try await service.membership(room: "room", join: false, signer: signer)
+        try await service.send(text: "Still group only", room: "room", signer: signer, relays: [relayURL])
+        #expect(await relay.queriedRelays.allSatisfy { $0 == [group] })
+        #expect(await relay.publishRelays == [[group], [group], [group]])
+        #expect(await relay.published.map(\.kind) == [9021, 9022, 9])
     }
 }

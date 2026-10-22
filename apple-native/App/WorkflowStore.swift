@@ -34,6 +34,13 @@ struct KeychainBadgeWalletPersistence: BadgeWalletPersistence {
     private(set) var leaders: [JSONValue] = []
     private(set) var entries: [NostrCalendarEntry] = []
     private(set) var rooms: [NostrEvent] = []
+    private enum RoomDirectoryContext: Equatable {
+        case all, meetup(String)
+        init(_ meetupID: String?) { self = meetupID.map(Self.meetup) ?? .all }
+    }
+    private var roomDirectoryContext: RoomDirectoryContext?
+    private var roomDirectoryRequest = UUID()
+    private var roomDirectoryLoading = false
     private(set) var messages: [NostrEvent] = []
     private(set) var rsvpEvents: [NostrEvent] = []
     private(set) var member = false
@@ -56,7 +63,7 @@ struct KeychainBadgeWalletPersistence: BadgeWalletPersistence {
     func configure(signer: (any NostrSigner)?) async {
         generation += 1
         let epoch = generation
-        chatRequest = UUID(); busy = false; error = nil; notice = nil
+        chatRequest = UUID(); invalidateRoomDirectory(); busy = false; error = nil; notice = nil
         self.signer = signer; publicKey = nil; activeChatKey = nil
         portalRSVPs = [:]; portalRSVPErrors = [:]; portalRSVPRequests = [:]; unreadCounts = [:]; eventUnreadCounts = [:]; myRSVPs = [:]
         session = nil; managedMeetups = []; managedEvents = []; leaders = []; entries = []; rooms = []; rsvpEvents = []; messages = []; member = false
@@ -74,6 +81,7 @@ struct KeychainBadgeWalletPersistence: BadgeWalletPersistence {
     }
     func clearIdentity() async throws {
         generation += 1
+        invalidateRoomDirectory()
         try KeychainStore.delete(account: "portal-session-v1")
         try KeychainStore.delete(account: readMarksKey)
         publicKey = nil; activeChatKey = nil; portalRSVPs = [:]; portalRSVPErrors = [:]; portalRSVPRequests = [:]; unreadCounts = [:]; eventUnreadCounts = [:]; myRSVPs = [:]
@@ -108,6 +116,7 @@ struct KeychainBadgeWalletPersistence: BadgeWalletPersistence {
     }
     func logout() async {
         generation += 1
+        invalidateRoomDirectory(keepRooms: true)
         busy = false
         let saved = session
         portalRSVPs = [:]; portalRSVPErrors = [:]; portalRSVPRequests = [:]
@@ -226,15 +235,38 @@ struct KeychainBadgeWalletPersistence: BadgeWalletPersistence {
             guard epoch == self.generation, request == self.rsvpRequest else { return }; self.rsvpEvents = result
         }
     }
+    func rooms(for meetupID: String?) -> [NostrEvent] {
+        roomDirectoryContext == RoomDirectoryContext(meetupID) ? rooms : []
+    }
+    func roomsAreLoading(for meetupID: String?) -> Bool {
+        roomDirectoryContext == RoomDirectoryContext(meetupID) && roomDirectoryLoading
+    }
     func loadRooms(meetupID: String? = nil) async {
-        await perform { epoch in
-            let result = try await self.calendar.rooms(meetupID: meetupID)
-            guard epoch == self.generation else { return }; self.rooms = result
-            let marks = try self.readMarks()
+        let context = RoomDirectoryContext(meetupID)
+        let epoch = generation, request = UUID()
+        if roomDirectoryContext != context { rooms = []; unreadCounts = [:] }
+        roomDirectoryContext = context; roomDirectoryRequest = request
+        roomDirectoryLoading = true; error = nil
+        defer { if epoch == generation, request == roomDirectoryRequest { roomDirectoryLoading = false } }
+        do {
+            // Directory reads can supersede each other without the global write lock
+            // silently dropping a request for the newly opened meetup.
+            let result = try await calendar.rooms(meetupID: meetupID)
+            guard epoch == generation, request == roomDirectoryRequest, roomDirectoryContext == context, !Task.isCancelled else { return }
+            rooms = result
+            let marks = try readMarks()
             let keys = result.compactMap { $0.tags.first(where: { $0.count > 1 && $0[0] == "d" })?[1] }
-            let unread = try await self.calendar.unreadCounts(rooms: keys, lastRead: marks, publicKey: self.publicKey)
-            guard epoch == self.generation else { return }; self.unreadCounts = unread
+            let unread = try await calendar.unreadCounts(rooms: keys, lastRead: marks, publicKey: publicKey)
+            guard epoch == generation, request == roomDirectoryRequest, roomDirectoryContext == context, !Task.isCancelled else { return }
+            unreadCounts = unread
+        } catch {
+            guard epoch == generation, request == roomDirectoryRequest, roomDirectoryContext == context, !Task.isCancelled else { return }
+            handleError(error, epoch: epoch)
         }
+    }
+    private func invalidateRoomDirectory(keepRooms: Bool = false) {
+        roomDirectoryRequest = UUID(); roomDirectoryLoading = false
+        if !keepRooms { roomDirectoryContext = nil; rooms = []; unreadCounts = [:] }
     }
     func loadMessages(room: String? = nil, entry: NostrCalendarEntry? = nil) async {
         let epoch = generation
@@ -278,7 +310,7 @@ struct KeychainBadgeWalletPersistence: BadgeWalletPersistence {
         if case PortalAPIError.http(401, _) = error {
             do { try KeychainStore.delete(account: "portal-session-v1") }
             catch { self.error = error.localizedDescription; return }
-            generation += 1; busy = false; session = nil; notice = nil
+            generation += 1; invalidateRoomDirectory(keepRooms: true); busy = false; session = nil; notice = nil
             managedMeetups = []; managedEvents = []; leaders = []
             portalRSVPs = [:]; portalRSVPErrors = [:]; portalRSVPRequests = [:]
         }

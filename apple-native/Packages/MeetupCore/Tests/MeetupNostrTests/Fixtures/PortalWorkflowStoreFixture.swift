@@ -181,3 +181,120 @@ extension PortalWorkflowStoreParityTests {
         #expect(workflow.error == nil)
     }
 }
+
+private actor WorkflowDirectoryGate {
+    private var counts: [String: Int] = [:]
+    private var waiters: [String: CheckedContinuation<[NostrEvent], any Error>] = [:]
+    private let auxiliaryEvents: [NostrEvent]
+    init(auxiliaryEvents: [NostrEvent] = []) { self.auxiliaryEvents = auxiliaryEvents }
+    func started(_ context: String) -> Int { counts[context, default: 0] }
+    func reply(_ data: Data) async throws -> [Data] {
+        let frame = try JSONSerialization.jsonObject(with: data) as! [Any]
+        guard frame[0] as? String == "REQ", let subscription = frame[1] as? String else { return [] }
+        // NostrFilter encodes tag constraints as #i on the actual REQ wire frame.
+        let filter = frame[2] as! [String: Any]
+        let events: [NostrEvent]
+        if filter["kinds"] as? [Int] == [39000] {
+            let context = (filter["#i"] as? [String])?.first ?? "all"
+            counts[context, default: 0] += 1
+            let key = context + "#" + String(counts[context]!)
+            events = try await withCheckedThrowingContinuation { waiters[key] = $0 }
+        } else { events = auxiliaryEvents }
+        return try events.map { event in
+            try JSONSerialization.data(withJSONObject: ["EVENT", subscription, JSONSerialization.jsonObject(with: JSONEncoder().encode(event))])
+        } + [try JSONSerialization.data(withJSONObject: ["EOSE", subscription])]
+    }
+    func finish(_ context: String, request: Int, events: [NostrEvent]) {
+        waiters.removeValue(forKey: context + "#" + String(request))?.resume(returning: events)
+    }
+    func fail(_ context: String, request: Int) {
+        waiters.removeValue(forKey: context + "#" + String(request))?.resume(throwing: URLError(.cannotConnectToHost))
+    }
+}
+private final class WorkflowDirectorySocket: NostrSocket, @unchecked Sendable {
+    private let stream: AsyncThrowingStream<Data, any Error>
+    private let continuation: AsyncThrowingStream<Data, any Error>.Continuation
+    private let gate: WorkflowDirectoryGate
+    init(_ gate: WorkflowDirectoryGate) {
+        let pair = AsyncThrowingStream<Data, any Error>.makeStream()
+        stream = pair.stream; continuation = pair.continuation; self.gate = gate
+    }
+    func send(_ data: Data) async throws { for frame in try await gate.reply(data) { continuation.yield(frame) } }
+    func receive() async throws -> Data { var iterator = stream.makeAsyncIterator(); guard let data = try await iterator.next() else { throw CancellationError() }; return data }
+    func close() { continuation.finish() }
+}
+extension PortalWorkflowStoreParityTests {
+    private func directoryStore(_ gate: WorkflowDirectoryGate) async throws -> WorkflowStore {
+        WorkflowParityStorage.values.reset()
+        let workflow = WorkflowStore(relay: NostrRelayClient { _ in WorkflowDirectorySocket(gate) }, transport: WorkflowParityHTTP())
+        await workflow.configure(signer: try LocalIdentitySigner(privateKey: Data(repeating: 1, count: 32)))
+        return workflow
+    }
+    private func directoryRoom(_ meetupID: Int) async throws -> NostrEvent {
+        try await LocalIdentitySigner(privateKey: Data(repeating: 1, count: 32)).sign(kind: 39000,
+            tags: [["d", "room-\(meetupID)"], ["i", "meetup:\(meetupID)"], ["t", "meetup"], ["name", "Meetup \(meetupID)"]], content: "", createdAt: 100)
+    }
+    private func waitForDirectory(_ context: String, request: Int, gate: WorkflowDirectoryGate) async throws {
+        for _ in 0..<1_000 {
+            if await gate.started(context) >= request { return }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        try #require(await gate.started(context) >= request, "Expected contextual directory query was not started")
+    }
+    @Test func directoryContextChangeHidesOldRoomsBeforeAwaitAndAfterFailure() async throws {
+        let room = try await directoryRoom(7), now = Int(Date().timeIntervalSince1970)
+        let incoming = try await LocalIdentitySigner(privateKey: Data(repeating: 2, count: 32)).sign(kind: 9, tags: [["h", "room-7"]], content: "Unread", createdAt: now)
+        let gate = WorkflowDirectoryGate(auxiliaryEvents: [incoming]), workflow = try await directoryStore(gate)
+        let first = Task { await workflow.loadRooms(meetupID: "7") }
+        try await waitForDirectory("meetup:7", request: 1, gate: gate)
+        await gate.finish("meetup:7", request: 1, events: [room]); await first.value
+        #expect(workflow.rooms(for: "7") == [room] && workflow.unreadCounts["room-7"] == 1)
+        // The view's accessor hides the previous context even before its task starts.
+        #expect(workflow.rooms(for: "8").isEmpty)
+        let second = Task { await workflow.loadRooms(meetupID: "8") }
+        try await waitForDirectory("meetup:8", request: 1, gate: gate)
+        #expect(workflow.rooms.isEmpty && workflow.unreadCounts.isEmpty && workflow.roomsAreLoading(for: "8"))
+        await gate.fail("meetup:8", request: 1); await second.value
+        #expect(workflow.rooms(for: "8").isEmpty && workflow.rooms(for: "7").isEmpty)
+        #expect(!workflow.roomsAreLoading(for: "8") && workflow.error != nil)
+    }
+    @Test func lateOtherMeetupSuccessOrFailureCannotReplaceCurrentDirectory() async throws {
+        let a = try await directoryRoom(7), b = try await directoryRoom(8)
+        let gate = WorkflowDirectoryGate(), workflow = try await directoryStore(gate)
+        let old = Task { await workflow.loadRooms(meetupID: "7") }
+        try await waitForDirectory("meetup:7", request: 1, gate: gate)
+        let current = Task { await workflow.loadRooms(meetupID: "8") }
+        try await waitForDirectory("meetup:8", request: 1, gate: gate)
+        await gate.finish("meetup:8", request: 1, events: [b]); await current.value
+        await gate.finish("meetup:7", request: 1, events: [a]); await old.value
+        #expect(workflow.rooms(for: "8") == [b] && workflow.rooms(for: "7").isEmpty && workflow.error == nil)
+        let oldFailure = Task { await workflow.loadRooms(meetupID: "7") }
+        try await waitForDirectory("meetup:7", request: 2, gate: gate)
+        let latest = Task { await workflow.loadRooms(meetupID: "8") }
+        try await waitForDirectory("meetup:8", request: 2, gate: gate)
+        await gate.finish("meetup:8", request: 2, events: [b]); await latest.value
+        await gate.fail("meetup:7", request: 2); await oldFailure.value
+        #expect(workflow.rooms(for: "8") == [b] && workflow.error == nil && !workflow.roomsAreLoading(for: "8"))
+    }
+    @Test func sameDirectoryFailedRefreshRetainsKnownRoomsForThatContextOnly() async throws {
+        let room = try await directoryRoom(7), gate = WorkflowDirectoryGate(), workflow = try await directoryStore(gate)
+        let first = Task { await workflow.loadRooms(meetupID: "7") }
+        try await waitForDirectory("meetup:7", request: 1, gate: gate)
+        await gate.finish("meetup:7", request: 1, events: [room]); await first.value
+        let refresh = Task { await workflow.loadRooms(meetupID: "7") }
+        try await waitForDirectory("meetup:7", request: 2, gate: gate)
+        #expect(workflow.rooms(for: "7") == [room] && workflow.roomsAreLoading(for: "7"))
+        await gate.fail("meetup:7", request: 2); await refresh.value
+        #expect(workflow.rooms(for: "7") == [room] && workflow.rooms(for: "8").isEmpty && workflow.rooms(for: nil).isEmpty)
+        #expect(!workflow.roomsAreLoading(for: "7") && workflow.error != nil)
+    }
+    @Test func identityChangeFencesPendingDirectoryAndReleasesLoadingState() async throws {
+        let room = try await directoryRoom(7), gate = WorkflowDirectoryGate(), workflow = try await directoryStore(gate)
+        let pending = Task { await workflow.loadRooms(meetupID: "7") }
+        try await waitForDirectory("meetup:7", request: 1, gate: gate)
+        await workflow.configure(signer: nil)
+        #expect(!workflow.roomsAreLoading(for: "7") && workflow.rooms.isEmpty)
+        await gate.finish("meetup:7", request: 1, events: [room]); await pending.value
+        #expect(workflow.rooms.isEmpty && workflow.unreadCounts.isEmpty && workflow.error == nil)
+    }
+}
