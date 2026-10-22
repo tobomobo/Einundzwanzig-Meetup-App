@@ -123,6 +123,7 @@ import MeetupNostr
         }
         var value = try JSONDecoder().decode(Wallet.self, from: plain)
         guard value.version == 1, value.owner == key else { throw BadgeStoreError.unreadableWallet }
+        value.pendingBackup = Self.safeProofMetadata(.object(value.pendingBackup)).object ?? [:]
         value.registry = await RegistryAuthority.resolve([], previous: value.registry, now: Self.now)
         // Cached humanity and platform flags are not authority. Platform
         // signatures can be checked locally; provider evidence is re-fetched.
@@ -516,7 +517,7 @@ import MeetupNostr
     /// finished loading durable ciphertext. Pending evidence grants no authority.
     func backupSnapshot(owner: String) throws -> [String: BackupValue] {
         try assertCurrent(generation, key: owner)
-        var fields = pendingBackup.mapValues(Self.safeProofMetadata)
+        var fields = Self.safeProofMetadata(.object(pendingBackup)).object ?? [:]
         fields["badges"] = .array(try backupBadges())
         var proofs = fields["platform_proofs"]?.array ?? []
         for proof in platformProofs {
@@ -560,6 +561,7 @@ import MeetupNostr
             incoming.append(badge)
         }
         var next = wallet
+        next.pendingBackup = Self.safeProofMetadata(.object(next.pendingBackup)).object ?? [:]
         next.badges = (decision == .fresh || decision == .replacesIdentity) ? CollectedBadge.merge(incoming, []) : CollectedBadge.merge(next.badges, incoming)
         // Restored registry/admin booleans are never promoted to authority.
         // Preserve raw evidence for a later explicit relay revalidation.
@@ -587,16 +589,7 @@ import MeetupNostr
         await recalculate(epoch: epoch, key: key); status = "Badge signatures restored; imported authority claims await revalidation."
     }
     private static func safeProofMetadata(_ value: BackupValue) -> BackupValue {
-        switch value {
-        case .object(let fields):
-            return .object(fields.filter { key, _ in
-                let name = key.lowercased().replacingOccurrences(of: "_", with: "")
-                return name != "nostr" && name != "nsec" && name != "privhex" && name != "password" && name != "key" &&
-                    !name.contains("private") && !name.contains("secret") && !name.contains("token") && !name.contains("encryptionkey")
-            }.mapValues(safeProofMetadata))
-        case .array(let values): return .array(values.map(safeProofMetadata))
-        default: return value
-        }
+        BackupDocument.redactedSecretMaterial(value)
     }
 }
 

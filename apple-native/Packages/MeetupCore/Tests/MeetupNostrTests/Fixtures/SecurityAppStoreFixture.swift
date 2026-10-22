@@ -422,4 +422,103 @@ extension IdentityAppStoreContinuityTests {
         try requirePending(try await exported(final).fields, id: newer.id, time: newer.createdAt, context: "durable meaningful replacement")
         #expect(final.badgeWallet.humanity == nil)
     }
+
+    @Test func roundFourActualRestoreRedactsNestedSecretsFromPublicStagingAndStaleExports() async throws {
+        let defaults = try fresh(), app = AppStore(legacyDefaults: defaults)
+        var document = try securityDocument()
+        let identitySecret = try #require(try document.localPrivateKey())
+        // Public synthetic fixture keys only. Failure assertions report a
+        // Boolean, never a key, token, password or serialized private payload.
+        let bogus = Data(repeating: 7, count: 32)
+        let bogusNsec = try NIP19.encodeSecretKey(bogus), bogusHex = IdentityKey.hex(bogus)
+        let publicKey = try IdentityKey.publicKey(bogus), publicNpub = try NIP19.encodePublicKey(publicKey)
+        let markers = [bogusNsec, bogusHex, "round-four-synthetic-token", "round-four-synthetic-password"]
+        let precise = BackupValue.decimal(try #require(Decimal(string: "9007199254740993")))
+        let nested: BackupValue = .object(["nsec": .string(bogusNsec), "priv_hex": .string(bogusHex),
+            "token": .string(markers[2]), "password": .string(markers[3]), "client_sk": .string(bogusHex),
+            "nostr_nsec_key": .string(bogusNsec), "nostr_priv_hex": .string(bogusHex),
+            "nip46_client_sk": .string(bogusHex), "privkey": .string(bogusHex),
+            "npub": .string(publicNpub), "publickey": .string(publicKey), "receipt_hash": .string(String(repeating: "c", count: 64)),
+            "public_text": .string("nsec1-public-example-label"),
+            "public_note": .string("kept public metadata"), "identifier": precise,
+            "children": .array([.object(["api-token": .string(markers[2]), "private key": .string(bogusHex),
+                "label": .string("nested array kept")])])])
+        document.fields["humanity_proof"] = .object(["receipt_event_id": .string(String(repeating: "a", count: 64)),
+            "first_zap_at": .number(1), "verified": .bool(true), "nested": nested])
+        document.fields["platform_proofs"] = .array([.object(["platform": .string("future-platform"),
+            "username": .string("synthetic"), "proof_sig": .string("unverified historical metadata"), "created_at": .number(1), "nested": nested])])
+        document.fields["reputation"] = .object(["nested": nested])
+        document.fields["social_graph"] = .object(["nodes": .array([nested])])
+        document.fields["future_public_section"] = .object(["nested": nested])
+        document.fields["auth_token"] = .string(markers[2])
+        var user = document.fields["user"]!.object!; user["futurePublic"] = nested; document.fields["user"] = .object(user)
+        func requireClean(_ fields: [String: BackupValue], context: String) throws {
+            let text = String(decoding: try JSONEncoder().encode(fields), as: UTF8.self)
+            let containsNoSecretMarkers = markers.allSatisfy { !text.contains($0) }
+            try #require(containsNoSecretMarkers, "Nested secret retained in \(context)")
+        }
+        func requireMetadata(_ fields: [String: BackupValue], context: String) throws {
+            for name in ["humanity_proof", "reputation", "future_public_section"] {
+                let metadata = fields[name]?.object?["nested"]?.object
+                try #require(metadata?["public_note"] == .string("kept public metadata"), "Public metadata missing: \(context)/\(name)")
+                #expect(metadata?["identifier"] == precise)
+                #expect(metadata?["npub"] == .string(publicNpub)); #expect(metadata?["publickey"] == .string(publicKey))
+                #expect(metadata?["receipt_hash"] == .string(String(repeating: "c", count: 64)))
+                #expect(metadata?["public_text"] == .string("nsec1-public-example-label"))
+                #expect(metadata?["children"]?.array?.first?.object?["label"] == .string("nested array kept"))
+            }
+            #expect(fields["platform_proofs"]?.array?.first?.object?["nested"]?.object?["identifier"] == precise)
+            #expect(fields["social_graph"]?.object?["nodes"]?.array?.first?.object?["identifier"] == precise)
+        }
+        // A failed public-stage write must leave the full original recoverable
+        // ONLY inside the password-encrypted restore journal.
+        KeychainStore.fixture.failWrites("pending-imported-proofs-v1")
+        await #expect(throws: IdentityStorageFailure.self) { try await restoreSecurity(document, into: app) }
+        KeychainStore.fixture.failWrites(nil)
+        let protected = try #require(try IdentityVault.pendingRestore())
+        let recovered = try BackupDocument.decode(BackupEncryption.decrypt(protected.payload, password: vaultPassword))
+        let recoveryIdentityMatches = try recovered.localPrivateKey() == identitySecret
+        let protectedPayloadMatches = recovered.fields["future_public_section"] == document.fields["future_public_section"]
+        #expect(recoveryIdentityMatches); #expect(protectedPayloadMatches)
+        try await app.identity.resumePendingRestore(password: vaultPassword, vaultPassword: vaultPassword)
+        let staged = try BackupDocument.decode(#require(try KeychainStore.read(account: "pending-imported-proofs-v1")))
+        try requireClean(staged.fields, context: "pending account")
+        try requireMetadata(staged.fields, context: "pending account")
+        #expect(staged.fields["nostr"] == nil)
+        try requireClean(app.badgeWallet.pendingBackup, context: "wallet staging")
+        #expect(app.badgeWallet.pendingBackup["humanity_proof"]?.object?["nested"]?.object?["identifier"] == precise)
+        #expect(app.badgeWallet.pendingBackup["platform_proofs"]?.array?.first?.object?["nested"]?.object?["identifier"] == precise)
+        let vault = try #require(try IdentityVault.read())
+        let vaultIdentityMatches = try NIP49.decrypt(vault.sealedSecret, password: vaultPassword) == identitySecret
+        #expect(vaultIdentityMatches); #expect(try !IdentityVault.hasPendingRestore())
+        // Existing versions may already have a dirty legacy public-stage copy.
+        // Reading it for export must redact both output and the stored copy.
+        var stale = document; stale.fields.removeValue(forKey: "nostr")
+        try KeychainStore.write(stale.encoded(), account: "pending-imported-proofs-v1")
+        let output = try await exported(app)
+        var publicExport = output.fields; publicExport.removeValue(forKey: "nostr")
+        try requireClean(publicExport, context: "complete export from stale staging")
+        try requireMetadata(publicExport, context: "complete export")
+        let exportIdentityMatches = try output.localPrivateKey() == identitySecret
+        #expect(exportIdentityMatches)
+        let cleaned = try BackupDocument.decode(#require(try KeychainStore.read(account: "pending-imported-proofs-v1")))
+        try requireClean(cleaned.fields, context: "stale account readback")
+        // A later additive import must sanitize the previous account before
+        // merging it and must retain safe unknown public sections.
+        try KeychainStore.write(stale.encoded(), account: "pending-imported-proofs-v1")
+        let thin = try BackupDocument(fields: ["version": .number(5), "user": .object(["nickname": .string("Synthetic")]),
+            "badges": .array([]), "nostr": document.fields["nostr"]!])
+        try await restoreSecurity(thin, into: app)
+        let merged = try BackupDocument.decode(#require(try KeychainStore.read(account: "pending-imported-proofs-v1")))
+        try requireClean(merged.fields, context: "merged stale account"); try requireMetadata(merged.fields, context: "merged stale account")
+        await app.identity.lock(); await app.synchronizeIdentity()
+        let relaunch = AppStore(legacyDefaults: defaults)
+        try await relaunch.identity.unlock(password: vaultPassword)
+        let durable = try await exported(relaunch)
+        var durablePublic = durable.fields; durablePublic.removeValue(forKey: "nostr")
+        try requireClean(durablePublic, context: "durable complete export"); try requireMetadata(durablePublic, context: "durable complete export")
+        try requireClean(relaunch.badgeWallet.pendingBackup, context: "durable wallet staging")
+        let durableIdentityMatches = try durable.localPrivateKey() == identitySecret
+        #expect(durableIdentityMatches); #expect(relaunch.badgeWallet.humanity == nil)
+    }
 }

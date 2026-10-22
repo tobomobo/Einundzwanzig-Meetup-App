@@ -123,10 +123,13 @@ final class AppStore {
             fields["version"] = .number(5); fields["exported_at"] = .string(ISO8601DateFormatter().string(from: .now))
             fields["user"] = .object(try UserContinuity.fields(for: profile, favoriteIDs: preferences.favoriteIDs, activeNpub: identity.npub))
             if let pending = try KeychainStore.read(account: "pending-imported-proofs-v1"),
-               let saved = try? BackupDocument.decode(pending) {
-                for key in ["reputation", "social_graph"] {
-                    if let value = saved.fields[key] { fields[key] = value }
-                }
+               let original = try? BackupDocument.decode(pending) {
+                let saved = original.publicPendingSnapshot()
+                if saved != original { try KeychainStore.write(saved.encoded(), account: "pending-imported-proofs-v1") }
+                // The loaded wallet owns these sections; a stale imported copy
+                // cannot resurrect removed proofs. Other public sections survive.
+                let owned: Set<String> = ["version", "exported_at", "user", "badges", "humanity_proof", "platform_proofs", "admin_registry", "my_vouches", "co_attendance"]
+                for (key, value) in saved.fields where !owned.contains(key) && fields[key] == nil { fields[key] = value }
             }
             return try BackupDocument(fields: fields)
         }
@@ -137,22 +140,23 @@ final class AppStore {
             guard epoch == identity.generation else { throw IdentityError.identityChanged }
             try await badgeWallet.restoreBackup(document, decision: decision)
             guard epoch == identity.generation else { throw IdentityError.identityChanged }
-            var safe = document.pendingRevalidation()
-            safe.fields.removeValue(forKey: "nostr")
+            var safe = document.publicPendingSnapshot()
             safe.fields["user"] = .object(UserContinuity.sanitize(safe.fields["user"]?.object ?? [:]))
             // Missing/empty proof sections in an additive import cannot erase
             // evidence staged by an earlier restore. Current wallet data wins.
             if decision == .sameIdentity || decision == .addToIdentity,
                let bytes = try KeychainStore.read(account: "pending-imported-proofs-v1") {
-                let previous = try BackupDocument.decode(bytes)
+                let previous = try BackupDocument.decode(bytes).publicPendingSnapshot()
                 safe.fields["humanity_proof"] = BackupDocument.mergePendingHumanity(previous.fields["humanity_proof"], incoming: safe.fields["humanity_proof"])
                 for key in ["platform_proofs", "reputation", "social_graph"] {
                     if safe.fields[key] == nil || safe.fields[key] == .null || safe.fields[key] == .array([]) {
                         safe.fields[key] = previous.fields[key]
                     }
                 }
+                let owned: Set<String> = ["version", "exported_at", "user", "badges", "humanity_proof", "platform_proofs", "admin_registry", "my_vouches", "co_attendance"]
+                for (key, value) in previous.fields where !owned.contains(key) && safe.fields[key] == nil { safe.fields[key] = value }
             }
-            try KeychainStore.write(safe.encoded(), account: "pending-imported-proofs-v1")
+            try KeychainStore.write(safe.publicPendingSnapshot().encoded(), account: "pending-imported-proofs-v1")
             let restored = try UserContinuity.restore(safe.fields["user"]?.object ?? [:], current: profile,
                 favoriteIDs: preferences.favoriteIDs, decision: decision, activeNpub: identity.npub)
             guard saveProfile(nickname: restored.nickname, npub: restored.npub, fullName: restored.fullName,

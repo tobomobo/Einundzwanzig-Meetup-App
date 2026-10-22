@@ -72,6 +72,30 @@ public struct BackupDocument: Sendable, Equatable {
         guard a == b, try NIP19.decodePublicKey(npub) == IdentityKey.publicKey(a) else { throw IdentityError.inconsistentBackup }
         return a
     }
+    /// Public staging only. Full encrypted backups and recovery journals keep
+    /// their original signing-key block; they must not use this projection.
+    public func publicPendingSnapshot() -> Self {
+        var copy = self
+        copy.fields = Self.redactedSecretMaterial(.object(fields)).object ?? [:]
+        return copy.pendingRevalidation()
+    }
+    /// One recursive secret-key policy for public proof/account staging. Keep
+    /// unknown public JSON and exact decimal values without decoding them again.
+    public static func redactedSecretMaterial(_ value: BackupValue) -> BackupValue {
+        switch value {
+        case .object(let fields):
+            var publicFields: [String: BackupValue] = [:]
+            for (key, item) in fields {
+                let name = key.lowercased().filter { $0.isLetter || $0.isNumber }
+                if ["nostr", "nsec", "nostrnseckey", "privhex", "nostrprivhex", "privkey", "nip46clientsk", "password", "key", "jwt", "bearer", "credential", "credentials", "session", "auth", "authentication", "authorization", "apikey", "badgependingkey", "clientsk", "clientsessionkey", "wrappedkey", "mnemonic", "seed", "passphrase", "recoveryphrase"].contains(name) ||
+                    name.contains("private") || name.contains("secret") || name.contains("token") || name.contains("encryptionkey") || name.contains("password") { continue }
+                publicFields[key] = redactedSecretMaterial(item)
+            }
+            return .object(publicFields)
+        case .array(let values): return .array(values.map(redactedSecretMaterial))
+        default: return value
+        }
+    }
     /// Keep imported proof material for relay revalidation, never its claims of
     /// authority. This also covers old backups with admin tokens in user data.
     public func pendingRevalidation() -> Self {
