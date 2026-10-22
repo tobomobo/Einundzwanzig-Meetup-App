@@ -15,6 +15,7 @@ private enum FixtureError: Error { case persistence }
 private actor FixtureBadgeRelay: NostrRelayTransport {
     var events: [NostrEvent] = []
     var published: [NostrEvent] = []
+    var queries = 0
     var holding = false
     var queryFailure = false
     var started = false
@@ -29,6 +30,7 @@ private actor FixtureBadgeRelay: NostrRelayTransport {
     }
     func release() { resume?.resume(); resume = nil; holding = false }
     func query(_ filter: NostrFilter, relays: [URL], timeout: TimeInterval) async throws -> [NostrEvent] {
+        queries += 1
         if queryFailure { throw FixtureError.persistence }
         started = true; for waiter in startWaiters { waiter.resume() }; startWaiters = []
         if holding { await withCheckedContinuation { resume = $0 } }
@@ -36,6 +38,8 @@ private actor FixtureBadgeRelay: NostrRelayTransport {
     }
     func publish(_ event: NostrEvent, relays: [URL], signer: (any NostrSigner)?) async throws { published.append(event) }
     func publishCount() -> Int { published.count }
+    func publications() -> [NostrEvent] { published }
+    func queryCount() -> Int { queries }
 }
 private let privateOne = Data(repeating: 0, count: 31) + Data([1])
 private let privateTwo = Data(repeating: 0, count: 31) + Data([2])
@@ -206,5 +210,118 @@ private func sealedChunk(_ env: BadgeSyncEnvelope, signer: any NostrSigner) asyn
         let writes = persistence.writes
         await #expect(throws: BadgeProtocolError.invalidClaim) { try await store.restoreBackup(invalid, decision: .sameIdentity) }
         #expect(persistence.writes == writes)
+    }
+}
+
+
+private struct PersonFixtureHTTP: ProofHTTPClient {
+    let publicKey: String
+    func get(_ url: URL) async throws -> BadgeJSON { .object(["names": .object(["alice": .string(publicKey)])]) }
+}
+
+@Suite(.serialized) @MainActor struct BadgeJourneyParityTests {
+    @Test func personNameAndDomainMappingUseSeparatePublicRelayWithoutPublishing() async throws {
+        let signer = try LocalIdentitySigner(privateKey: privateOne), person = try LocalIdentitySigner(privateKey: privateTwo)
+        let personKey = try await person.publicKey(), mainRelay = FixtureBadgeRelay(), publicRelay = FixtureBadgeRelay()
+        let now = Int(Date().timeIntervalSince1970)
+        let profile = try await person.sign(kind: 0, tags: [], content: #"{"display_name":"Alice","nip05":"alice@example.test"}"#, createdAt: now)
+        await publicRelay.setEvents([profile])
+        let store = BadgeStore(relay: mainRelay, persistence: MemoryBadgePersistence(), relays: [],
+                               proofHTTP: PersonFixtureHTTP(publicKey: personKey), publicRelay: publicRelay)
+        await store.configure(signer: signer)
+        let evidence = try await store.personIdentity("nostr:" + NIP19.encodePublicKey(personKey))
+        #expect(evidence.profile?.displayName == "Alice"); #expect(evidence.nip05Status == .verified)
+        #expect(await publicRelay.queryCount() > 0); #expect(await mainRelay.queryCount() == 0)
+        #expect(await publicRelay.publishCount() == 0); #expect(await mainRelay.publishCount() == 0)
+    }
+    @Test func delayedPublicPersonLookupCannotReturnAcrossIdentityChange() async throws {
+        let signer = try LocalIdentitySigner(privateKey: privateOne), person = try LocalIdentitySigner(privateKey: privateTwo)
+        let personKey = try await person.publicKey(), publicRelay = FixtureBadgeRelay()
+        let now = Int(Date().timeIntervalSince1970)
+        let profile = try await person.sign(kind: 0, tags: [], content: #"{"name":"Alice","nip05":"alice@example.test"}"#, createdAt: now)
+        await publicRelay.setEvents([profile]); await publicRelay.hold()
+        let store = BadgeStore(relay: FixtureBadgeRelay(), persistence: MemoryBadgePersistence(), relays: [],
+                               proofHTTP: PersonFixtureHTTP(publicKey: personKey), publicRelay: publicRelay)
+        await store.configure(signer: signer)
+        let loading = Task { try await store.personIdentity(personKey) }
+        await publicRelay.awaitQuery(); try await store.prepareIdentityChange(); await publicRelay.release()
+        await #expect(throws: BadgeStoreError.identityChanged) { try await loading.value }
+    }
+    @Test func organizerRecordSurvivesSessionAndJoinsCollectorsWithoutGainingReputation() async throws {
+        let issuer = try LocalIdentitySigner(privateKey: privateOne), collector = try LocalIdentitySigner(privateKey: privateTwo)
+        let memory = MemoryBadgePersistence(), relay = FixtureBadgeRelay()
+        let organizer = BadgeStore(relay: relay, persistence: memory, relays: [])
+        let wallet = BadgeStore(relay: relay, persistence: MemoryBadgePersistence(), relays: [])
+        let point = try BadgeCoordinate(latitude: 48.2, longitude: 16.37), key = try await issuer.publicKey()
+        organizer.meetupReference = { _ in point }; organizer.ownMeetupAuthority = { author, _ in author == key }
+        wallet.meetupReference = { _ in point }; wallet.portalAuthority = { $0.event.pubkey == key }
+        await organizer.configure(signer: issuer); await wallet.configure(signer: collector)
+        try await organizer.startSession(meetupID: "wien-at", blockHeight: 900001, deviceLocation: point)
+        let now = Int(Date().timeIntervalSince1970), session = try #require(organizer.session)
+        let marker = try #require(organizer.badges.first)
+        let badge = try await wallet.importBadge(session.qr(now: now), deviceLocation: point)
+        #expect(marker.isOrganizer); #expect(marker.delivery == "organizer")
+        #expect(await BadgeSecurity.verifyStored(marker, collector: key, now: now))
+        #expect(SocialNetwork.attendanceKey(marker) == SocialNetwork.attendanceKey(badge))
+        #expect(organizer.trust.badgeCount == 0); #expect(wallet.trust.badgeCount == 1)
+        #expect(await relay.publishCount() == 0)
+        try await organizer.publishAttendance(marker)
+        #expect(await relay.publishCount() == 1)
+        let mine = try await SocialNetwork.signedAttendance(marker, signer: issuer, now: now)
+        let theirs = try await SocialNetwork.signedAttendance(badge, signer: collector, now: now)
+        let observed = await SocialNetwork.ingest([mine, theirs], now: now)
+        #expect(observed.sharedMeetups(key, try await collector.publicKey()).count == 1)
+        try await organizer.endSession(); await organizer.configure(signer: issuer)
+        #expect(organizer.session == nil); #expect(organizer.badges == [marker])
+        #expect(organizer.trust.total == 0)
+        let claimedScore = await TrustEvaluator.evaluate([marker], collector: key,
+            registry: RegistrySnapshot(admins: [AdminRegistryEntry(npub: try NIP19.encodePublicKey(key), meetup: "Wien")]), now: now)
+        #expect(claimedScore.badgeCount == 0); #expect(claimedScore.verifiedBadges.isEmpty)
+    }
+    @Test func collectionExportPreservesCompleteCurrentProofAndCannotExportLockedWallet() async throws {
+        let issuer = try LocalIdentitySigner(privateKey: privateOne), signer = try LocalIdentitySigner(privateKey: privateTwo)
+        let store = BadgeStore(relay: FixtureBadgeRelay(), persistence: MemoryBadgePersistence(), relays: [])
+        #expect(throws: BadgeStoreError.noSigner) { try store.exportBadgeEvidence() }
+        await store.configure(signer: signer)
+        let badge = try await store.importBadge(badgePayload(signer: issuer), allowUnknownIssuer: true)
+        let exported = try BadgeWire.parse(store.exportBadgeEvidence())
+        let restored = try exported.array.map { try CollectedBadge(json: $0.object) }
+        #expect(restored == [badge]); #expect(!restored[0].sigContent.isEmpty); #expect(restored[0].claimTimestamp > 0)
+        #expect(await BadgeSecurity.verifyStored(restored[0], collector: try await signer.publicKey(), now: Int(Date().timeIntervalSince1970)))
+        #expect(store.trust.badgeCount == 0)
+        await store.configure(signer: nil)
+        #expect(throws: BadgeStoreError.noSigner) { try store.exportBadgeEvidence() }
+    }
+    @Test func platformRevocationCanImmediatelyReplacePublishedCardWithoutStaleQR() async throws {
+        let relay = FixtureBadgeRelay(), issuer = try LocalIdentitySigner(privateKey: privateOne), signer = try LocalIdentitySigner(privateKey: privateTwo)
+        let key = try await issuer.publicKey(), store = BadgeStore(relay: relay, persistence: MemoryBadgePersistence(), relays: [])
+        store.portalAuthority = { $0.event.pubkey == key }
+        await store.configure(signer: signer)
+        _ = try await store.importBadge(badgePayload(signer: issuer))
+        _ = try await store.createPlatformProof(platform: "robosats", username: "fixture-robot")
+        try await store.generateReputationQR(nickname: "Fixture")
+        #expect(!store.reputationQR.isEmpty)
+        try await store.publishReputation(nickname: "Fixture")
+        try await store.removePlatformProof("robosats")
+        #expect(store.reputationQR.isEmpty)
+        try await store.publishReputation(nickname: "Fixture", force: true)
+        let cards = await relay.publications()
+        #expect(cards.count == 2); #expect(cards[1].createdAt > cards[0].createdAt)
+        #expect(try BadgeWire.parse(cards[0].content).object["platform_proofs"]?.object["robosats"] != nil)
+        #expect(try BadgeWire.parse(cards[1].content).object["platform_proofs"] == nil)
+        #expect(await NostrCrypto().verify(cards[1]))
+    }
+    @Test func savedPlatformProofCanBeResharedAfterReloadAndStopsAfterRemovalOrIdentityChange() async throws {
+        let memory = MemoryBadgePersistence(), signer = try LocalIdentitySigner(privateKey: privateOne)
+        let store = BadgeStore(relay: FixtureBadgeRelay(), persistence: memory, relays: [])
+        await store.configure(signer: signer)
+        let text = try await store.createPlatformProof(platform: "telegram", username: "fixture_user")
+        await store.configure(signer: signer)
+        #expect(try store.platformProofString("telegram") == text)
+        try await store.removePlatformProof("telegram")
+        #expect(throws: BadgeProtocolError.malformed) { try store.platformProofString("telegram") }
+        _ = try await store.createPlatformProof(platform: "github", username: "fixture")
+        try await store.prepareIdentityChange()
+        #expect(throws: BadgeStoreError.noSigner) { try store.platformProofString("github") }
     }
 }

@@ -62,11 +62,42 @@ struct BadgeWalletView: View {
             }
             Section {
                 NavigationLink { BadgeMapView() } label: { Label("Badge map", systemImage: "map") }
+                NavigationLink { BadgeCollectionShareView() } label: { Label("Share badge collection", systemImage: "square.and.arrow.up") }
+                    .disabled(wallet.badges.isEmpty || !wallet.walletLoaded || wallet.walletUnreadable)
                 Text("Full badge proofs are encrypted on this device. Relay sync encrypts gzip wallet chunks to your own signing identity.").font(.caption).foregroundStyle(.secondary)
             }
         }
         .navigationTitle(collection ?? "Badges")
         .searchable(text: $query, prompt: "Search badges")
+    }
+}
+
+struct BadgeCollectionShareView: View {
+    @Environment(AppStore.self) private var app
+    @Environment(BadgeStore.self) private var wallet
+    @State private var evidence = ""
+    private var summary: String {
+        let visits = wallet.badges.sorted { $0.dateValue < $1.dateValue }.map { "• \($0.meetupName) · \(String($0.date.prefix(10)))" }.joined(separator: "\n")
+        let npub = (try? NIP19.encodePublicKey(wallet.publicKey)) ?? ""
+        let collected = AppLocalization.text("Collected records", language: app.preferences.language)
+        let verified = AppLocalization.text("Verified badges", language: app.preferences.language)
+        return "Einundzwanzig\n\(collected): \(wallet.badges.count) · \(verified): \(wallet.trust.badgeCount)\n\(npub)\n\n\(visits)"
+    }
+    var body: some View {
+        List {
+            Section("Attendance summary") {
+                Text(summary).textSelection(.enabled)
+                ShareLink(item: summary) { Label("Share attendance summary", systemImage: "square.and.arrow.up") }
+            }
+            Section("Full collection evidence") {
+                Text("The full collection includes meetup names, times, stored coordinates and complete source and collector proofs. Share it only with people you choose.").font(.caption).foregroundStyle(.secondary)
+                BadgeActionButton("Prepare full collection evidence", systemImage: "doc.badge.arrow.up") { evidence = try wallet.exportBadgeEvidence() }
+                if !evidence.isEmpty { ShareLink(item: evidence) { Label("Share full collection evidence", systemImage: "square.and.arrow.up") } }
+                Text("The JSON array can be used as full badge evidence when verifying a reputation card. Organizer records remain excluded from reputation.").font(.caption).foregroundStyle(.secondary)
+            }
+        }.navigationTitle("Share collection")
+        .onChange(of: wallet.badges) { evidence = "" }
+        .onChange(of: wallet.generation) { evidence = "" }
     }
 }
 
@@ -79,7 +110,7 @@ struct BadgeRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(badge.meetupName).font(.headline)
                 Text(badge.dateValue, format: .dateTime.day().month().year()).font(.caption)
-                Text(LocalizedStringKey(wallet.trust.trustedBadgeIDs.contains(badge.id) ? "Source, collector and authority verified" : "Not counted toward verified reputation"))
+                Text(LocalizedStringKey(badge.isOrganizer ? "Organizer record · excluded from reputation" : wallet.trust.trustedBadgeIDs.contains(badge.id) ? "Source, collector and authority verified" : "Not counted toward verified reputation"))
                     .font(.caption).foregroundStyle(.secondary)
             }
         }.padding(.vertical, 6)
@@ -99,7 +130,7 @@ struct CollectedBadgeDetailView: View {
                 VStack(spacing: 14) {
                     Image(systemName: badge.isEvent ? "ticket.fill" : "seal.fill").font(.system(size: 76)).foregroundStyle(Color.accentColor)
                     Text(badge.meetupName).font(.title.bold())
-                    Label(LocalizedStringKey(wallet.trust.trustedBadgeIDs.contains(badge.id) ? "Verified for this identity" : "Evidence not fully verified"), systemImage: wallet.trust.trustedBadgeIDs.contains(badge.id) ? "checkmark.shield" : "exclamationmark.shield")
+                    Label(LocalizedStringKey(badge.isOrganizer ? "Organizer record · excluded from reputation" : wallet.trust.trustedBadgeIDs.contains(badge.id) ? "Verified for this identity" : "Evidence not fully verified"), systemImage: wallet.trust.trustedBadgeIDs.contains(badge.id) ? "checkmark.shield" : "exclamationmark.shield")
                 }.frame(maxWidth: .infinity).padding(.vertical)
             }
             Section("Badge evidence") {

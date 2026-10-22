@@ -75,7 +75,27 @@ public struct HumanityReceipt: Codable, Equatable, Sendable {
     public var publicSummary: BadgeJSON { .object(["verified": .bool(true), "method": .string("lightning_zap"), "first_zap_at": .int(timestamp), "receipt_id": .string(receipt.id)]) }
 }
 
+public enum PersonNIP05Status: Sendable, Equatable { case absent, verified, mismatch, unavailable }
+public struct PersonIdentityEvidence: Sendable {
+    public let profile: NostrPublicProfile?
+    public let nip05Status: PersonNIP05Status
+}
+
 public enum ProofVerifier {
+    /// Public relay lookup and domain mapping are independent layers. A signed
+    /// profile authenticates its author; only HTTPS mapping verifies NIP-05.
+    public static func personIdentity(publicKey: String, relay: any NostrRelayTransport,
+                                      relays: [URL], http: any ProofHTTPClient, now: Int) async throws -> PersonIdentityEvidence {
+        _ = try NostrHex.decode(publicKey, byteCount: 32, field: "person")
+        let profile = await NostrPublicProfileLookup(relay: relay).load(publicKey: publicKey, relays: relays, now: now)
+        guard let identifier = profile?.nip05, !identifier.isEmpty else {
+            return PersonIdentityEvidence(profile: profile, nip05Status: .absent)
+        }
+        do {
+            let matches = try await verifyNIP05(identifier, publicKey: publicKey, http: http)
+            return PersonIdentityEvidence(profile: profile, nip05Status: matches ? .verified : .mismatch)
+        } catch { return PersonIdentityEvidence(profile: profile, nip05Status: .unavailable) }
+    }
     public static func verifyNIP05(_ identifier: String, publicKey: String, http: any ProofHTTPClient) async throws -> Bool {
         let parts = identifier.components(separatedBy: "@")
         guard parts.count == 2, !parts[0].isEmpty, validDomain(parts[1]) else { throw BadgeProtocolError.malformed }

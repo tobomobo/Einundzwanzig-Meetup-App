@@ -79,10 +79,14 @@ struct ReputationVerifyView: View {
                     Label("Author signature verified", systemImage: "checkmark.seal")
                     Text(LocalizedStringKey(result.badgeEvidenceVerified ? "Presented badge evidence independently verified." : "These counts are the author's signed statement. The underlying badge and issuer evidence has not been presented for independent verification.")).font(.caption).foregroundStyle(.secondary)
                     Text("Proof v\(result.proofVersion): \(result.badgeProof)").font(.caption.monospaced()).textSelection(.enabled)
+                    NavigationLink { TrustPersonView(target: result.event.pubkey) } label: { Label("Verify observed connection", systemImage: "person.2") }
                 }
             }
         }.navigationTitle("Verify reputation")
         .sheet(isPresented: $camera) { NavigationStack { NativeQRScanner { input = $0; camera = false } } }
+        .onChange(of: input) { result = nil }
+        .onChange(of: evidenceJSON) { result = nil }
+        .onChange(of: wallet.generation) { result = nil }
     }
 }
 
@@ -140,6 +144,9 @@ struct TrustRegistryView: View {
 struct TrustNetworkView: View {
     @Environment(BadgeStore.self) private var wallet
     @State private var target = ""
+    @State private var query = ""
+    @State private var degreeFilter = 0
+    @State private var camera = false
     private var network: SocialObservedNetwork { wallet.social.network() }
     var body: some View {
         List {
@@ -155,12 +162,20 @@ struct TrustNetworkView: View {
                 Text("Edges show matching signed self-attestations at local meetup sessions. Large-event coattendance stays in a separate category. Each badge's source and ownership evidence is verified separately.").font(.caption).foregroundStyle(.secondary)
             }
             Section("Look up a person") {
-                TextField("Public npub or hex key", text: $target).autocorrectionDisabled()
+                TextField("Public npub or signed reputation QR", text: $target).autocorrectionDisabled()
+                Button("Scan person QR") { camera = true }
                 NavigationLink { TrustPersonView(target: target) } label: { Label("Verify observed connection", systemImage: "person.crop.circle.badge.checkmark") }.disabled(target.isEmpty)
             }
-            ForEach(1...3, id: \.self) { degree in
+            Picker("Network degree", selection: $degreeFilter) {
+                Text("All degrees").tag(0)
+                ForEach(1...3, id: \.self) { Text("Degree \($0)").tag($0) }
+            }
+            ForEach((1...3).filter { degreeFilter == 0 || $0 == degreeFilter }, id: \.self) { degree in
                 Section("Degree \(degree)") {
-                    ForEach(network.byDegree[degree] ?? []) { contact in
+                    ForEach((network.byDegree[degree] ?? []).filter { contact in
+                        query.isEmpty || contact.publicKey.localizedCaseInsensitiveContains(query) ||
+                        ((try? NIP19.encodePublicKey(contact.publicKey)) ?? "").localizedCaseInsensitiveContains(query)
+                    }) { contact in
                         NavigationLink { TrustPersonView(target: contact.publicKey) } label: {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text((try? NIP19.encodePublicKey(contact.publicKey)) ?? contact.publicKey).font(.caption.monospaced()).lineLimit(1)
@@ -173,6 +188,9 @@ struct TrustNetworkView: View {
             }
             if !wallet.status.isEmpty { Text(LocalizedStringKey(wallet.status)).font(.caption) }
         }.navigationTitle("Trust network")
+        .searchable(text: $query, prompt: "Search public identities")
+        .sheet(isPresented: $camera) { NavigationStack { NativeQRScanner { target = $0; camera = false }.navigationTitle("Scan person QR") } }
+        .onChange(of: wallet.generation) { target = ""; camera = false }
     }
 }
 
@@ -180,6 +198,8 @@ struct TrustPersonView: View {
     @Environment(BadgeStore.self) private var wallet
     let target: String
     @State private var resolved = ""
+    @State private var lookupError: String?
+    @State private var identityEvidence: PersonIdentityEvidence?
     private var network: SocialObservedNetwork { wallet.social.network() }
     private var connection: SocialPersonConnection { network.verifyPerson(resolved) }
     var body: some View {
@@ -187,13 +207,32 @@ struct TrustPersonView: View {
             Section("Person lookup") {
                 Text(target).font(.caption.monospaced()).textSelection(.enabled)
                 BadgeActionButton("Load this person's observed network", systemImage: "person.crop.circle.badge.checkmark") {
-                    try await wallet.refreshSocial(target: target)
-                    resolved = target.hasPrefix("npub1") ? try NIP19.decodePublicKey(target) : target
+                    try await loadPerson()
                 }
                 Text("The search expands from both public identities through at most three stages of local meetup records.").font(.caption).foregroundStyle(.secondary)
+                if wallet.busy { ProgressView() }
+                if let lookupError { Text(LocalizedStringKey(lookupError)).foregroundStyle(.red) }
             }
             if !resolved.isEmpty {
+                if let identityEvidence {
+                    Section("Public identity") {
+                        if let name = identityEvidence.profile?.displayName { Text(name).font(.headline) }
+                        if let identifier = identityEvidence.profile?.nip05 { Text(identifier).textSelection(.enabled) }
+                        switch identityEvidence.nip05Status {
+                        case .verified: Label("NIP-05 domain mapping verified", systemImage: "checkmark.seal")
+                        case .mismatch: Label("NIP-05 domain maps to a different public key", systemImage: "exclamationmark.shield")
+                        case .unavailable: Label("NIP-05 domain could not be checked", systemImage: "wifi.exclamationmark")
+                        case .absent:
+                            Text(LocalizedStringKey(identityEvidence.profile?.profile == nil ? "No verified public profile was found." : "No NIP-05 identifier in the signed public profile.")).foregroundStyle(.secondary)
+                        }
+                        if identityEvidence.profile?.profile != nil { Text("Display name comes from this person's signed Nostr profile.").font(.caption).foregroundStyle(.secondary) }
+                    }
+                }
                 Section("Observed connection") {
+                    if let npub = try? NIP19.encodePublicKey(resolved), let url = URL(string: "https://njump.me/" + npub) {
+                        ShareLink(item: "nostr:" + npub) { Label("Share public identity", systemImage: "square.and.arrow.up") }
+                        Link(destination: url) { Label("Open Nostr profile", systemImage: "person.crop.circle") }
+                    }
                     if connection.degree >= 0 { LabeledContent("Degrees of separation", value: connection.degree.formatted()) }
                     else { Text("No path within three degrees was observed.") }
                     LabeledContent("Shared local sessions", value: connection.sharedMeetups.count.formatted())
@@ -221,15 +260,33 @@ struct TrustPersonView: View {
                 }
             }
         }.navigationTitle("Person connection")
-        .task { resolved = (try? NIP19.decodePublicKey(target)) ?? target }
+        .onChange(of: wallet.generation) { resolved = ""; identityEvidence = nil }
+        .task {
+            do { try await loadPerson() }
+            catch { lookupError = error.localizedDescription }
+        }
+    }
+    private func loadPerson() async throws {
+        lookupError = nil
+        let epoch = wallet.generation
+        let person = try await SocialNetwork.personPublicKey(target, now: Int(Date().timeIntervalSince1970))
+        let identity = try await wallet.personIdentity(person)
+        guard epoch == wallet.generation else { throw BadgeStoreError.identityChanged }
+        resolved = person; identityEvidence = identity
+        try await wallet.refreshSocial(target: person)
+        guard epoch == wallet.generation else { throw BadgeStoreError.identityChanged }
     }
 }
 
 struct TrustProofsView: View {
+    @Environment(AppStore.self) private var app
     @Environment(BadgeStore.self) private var wallet
     @State private var platform = "telegram"
+    @State private var customPlatform = ""
+    private var proofPlatform: String { platform == "other" ? customPlatform.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().replacingOccurrences(of: " ", with: "_") : platform }
     @State private var username = ""
-    @State private var proofString = ""
+    @State private var selectedProofID = ""
+    private var proofString: String { (try? wallet.platformProofString(selectedProofID)) ?? "" }
     @State private var verificationInput = ""
     @State private var verificationResult: PlatformIdentityProof?
     @State private var nip05 = ""
@@ -237,14 +294,35 @@ struct TrustProofsView: View {
     var body: some View {
         Form {
             Section("Platform identity proof") {
-                Picker("Platform", selection: $platform) { Text("Telegram").tag("telegram"); Text("X / Twitter").tag("twitter"); Text("GitHub").tag("github"); Text("Signal").tag("signal"); Text("Website").tag("website") }
+                Picker("Platform", selection: $platform) {
+                    Text("Satoshi-Kleinanzeigen").tag("satoshikleinanzeigen")
+                    Text("Telegram").tag("telegram"); Text("RoboSats").tag("robosats"); Text("Nostr").tag("nostr")
+                    Text("X / Twitter").tag("twitter"); Text("GitHub").tag("github"); Text("Signal").tag("signal"); Text("Website").tag("website")
+                    Text("Other platform").tag("other")
+                }
+                if platform == "other" { TextField("Platform name", text: $customPlatform).autocorrectionDisabled() }
                 TextField("Username", text: $username).autocorrectionDisabled()
-                BadgeActionButton("Sign platform proof", systemImage: "signature") { proofString = try await wallet.createPlatformProof(platform: platform, username: username) }.disabled(username.isEmpty)
+                BadgeActionButton("Sign platform proof", systemImage: "signature") {
+                    let selected = proofPlatform
+                    _ = try await wallet.createPlatformProof(platform: selected, username: username); selectedProofID = selected
+                }.disabled(username.isEmpty || proofPlatform.isEmpty)
                 if !proofString.isEmpty { Text(proofString).font(.caption.monospaced()).textSelection(.enabled); ShareLink(item: proofString) { Label("Share verification string", systemImage: "square.and.arrow.up") } }
                 Text("Place the string on that platform and publish your reputation card so another client can verify the nested signature and username.").font(.caption).foregroundStyle(.secondary)
                 ForEach(wallet.platformProofs) { proof in
-                    VStack(alignment: .leading) { Text("\(proof.platform): \(proof.username)"); BadgeActionButton("Remove proof locally", systemImage: "minus.circle") { try await wallet.removePlatformProof(proof.id) } }
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("\(proof.platform): \(proof.username)")
+                        if let text = try? wallet.platformProofString(proof.id) {
+                            ShareLink(item: text) { Label("Share verification string", systemImage: "square.and.arrow.up") }
+                        }
+                        BadgeActionButton("Remove proof locally", systemImage: "minus.circle") { try await wallet.removePlatformProof(proof.id) }
+                    }
                 }
+            }
+            Section {
+                BadgeActionButton("Publish current identity proofs", systemImage: "antenna.radiowaves.left.and.right") {
+                    try await wallet.publishReputation(nickname: app.profile.nickname, force: true)
+                }
+                Text("Publish after adding or removing a proof to update your public reputation card. This also removes revoked platform bindings from the replacement card.").font(.caption).foregroundStyle(.secondary)
             }
             Section("Verify a platform string") {
                 TextEditor(text: $verificationInput).frame(minHeight: 90).font(.caption.monospaced())

@@ -151,6 +151,24 @@ public struct BadgeOrganizerSession: Codable, Equatable, Sendable {
     public init(owner: String, meetupID: String, expiresAt: Int, payload: [String: BadgeJSON], seed: String = UUID().uuidString + UUID().uuidString) {
         self.owner = owner; self.meetupID = meetupID; self.expiresAt = expiresAt; self.payload = payload; self.seed = seed
     }
+    /// Organizer participation uses the same source and collector checks as a
+    /// collected badge. The separate marker flag excludes it from reputation.
+    public func attendanceMarker(signer: any NostrSigner, location: BadgeCoordinate?, now: Int) async throws -> CollectedBadge {
+        let key = try await signer.publicKey()
+        let source = try await BadgeSecurity.verify(payload, now: now, checkRolling: false)
+        guard key == owner, source.event.pubkey == key, (source.payload["m"]?.string ?? source.payload["meetup_id"]?.string) == meetupID else { throw BadgeProtocolError.invalidClaim }
+        let day = String(BadgeWire.isoDate(Date(timeIntervalSince1970: Double(source.event.createdAt))).prefix(10))
+        var badge = CollectedBadge(id: "org-" + source.event.id, meetupName: source.meetupName,
+                                   date: BadgeWire.isoDate(Date(timeIntervalSince1970: Double(now))))
+        badge.meetupEventId = source.identityMeetupID + "-" + day
+        badge.sig = source.event.sig; badge.sigId = source.event.id; badge.adminPubkey = key
+        badge.signerNpub = try NIP19.encodePublicKey(key); badge.sigVersion = 2
+        badge.sigContent = BadgeWire.canonical(payload); badge.blockHeight = source.blockHeight
+        badge.isOrganizer = true; badge.isEvent = source.eventAddress != nil; badge.delivery = "organizer"
+        badge.presenceVerified = location != nil
+        badge.lat = location?.latitude ?? 0; badge.lng = location?.longitude ?? 0
+        return try await BadgeClaim.bind(badge, signer: signer, timestamp: now)
+    }
     public func qr(now: Int) throws -> String {
         guard now <= expiresAt else { throw BadgeProtocolError.expired }
         let step = now / 10

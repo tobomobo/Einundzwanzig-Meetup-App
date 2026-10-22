@@ -40,6 +40,10 @@ struct OrganizerHubView: View {
                     }
                     ShareLink(item: BadgeWire.canonical(session.payload)) { Label("Export static NFC payload", systemImage: "wave.3.right") }
                     Text("The base badge has a Schnorr signature. Rolling nonce timing is an additional proximity check; it does not authenticate a scanner's location.").font(.caption).foregroundStyle(.secondary)
+                    if let marker = wallet.badges.first(where: { $0.isOrganizer && $0.sig == session.payload["s"]?.string }) {
+                        NavigationLink { CollectedBadgeDetailView(badge: marker) } label: { Label("Organizer participation", systemImage: "person.crop.circle.badge.checkmark") }
+                        Text("Your organizer record stays in your wallet after this session ends. Open it to share attendance with your network. It does not increase your reputation.").font(.caption).foregroundStyle(.secondary)
+                    }
                     BadgeActionButton("End session", systemImage: "stop.circle") { try await wallet.endSession() }
                 }
             }

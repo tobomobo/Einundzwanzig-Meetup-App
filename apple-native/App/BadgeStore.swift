@@ -13,6 +13,8 @@ import MeetupNostr
     private let relay: any NostrRelayTransport
     private let persistence: any BadgeWalletPersistence
     private let proofHTTP: any ProofHTTPClient
+    /// Never receives the wallet signer, including for NIP-42 relay AUTH.
+    private let publicRelay: any NostrRelayTransport
     var relays: [URL]
     private(set) var signer: (any NostrSigner)?
     private(set) var publicKey = ""
@@ -44,8 +46,9 @@ import MeetupNostr
 
     init(relay: any NostrRelayTransport, persistence: any BadgeWalletPersistence,
          relays: [URL] = [URL(string: "wss://relay.damus.io")!, URL(string: "wss://nos.lol")!],
-         proofHTTP: any ProofHTTPClient = ProofURLSessionClient()) {
-        self.relay = relay; self.persistence = persistence; self.relays = relays; self.proofHTTP = proofHTTP
+         proofHTTP: any ProofHTTPClient = ProofURLSessionClient(),
+         publicRelay: any NostrRelayTransport = NostrRelayClient()) {
+        self.relay = relay; self.persistence = persistence; self.relays = relays; self.proofHTTP = proofHTTP; self.publicRelay = publicRelay
     }
 
     func configure(signer: (any NostrSigner)?) async {
@@ -314,7 +317,10 @@ import MeetupNostr
         let now = Self.now
         let payload = try await BadgeSecurity.signCompact(meetupID: id, blockHeight: blockHeight, expiresAt: now + hours * 3600, signer: signer, createdAt: now)
         var next = wallet
-        next.session = BadgeOrganizerSession(owner: key, meetupID: id, expiresAt: now + hours * 3600, payload: payload)
+        let session = BadgeOrganizerSession(owner: key, meetupID: id, expiresAt: now + hours * 3600, payload: payload)
+        let marker = try await session.attendanceMarker(signer: signer, location: deviceLocation, now: now)
+        try assertCurrent(epoch, key: key)
+        next.session = session; next.badges = CollectedBadge.merge(next.badges, [marker])
         try await persist(next, signer: signer, epoch: epoch)
         status = "Signed organizer session created."
     }
@@ -338,8 +344,12 @@ import MeetupNostr
         let id = "evt:" + address + ":" + slug
         let expiry = Int(until.timeIntervalSince1970)
         let payload = try await BadgeSecurity.signCompact(meetupID: id, blockHeight: blockHeight, expiresAt: expiry, signer: signer, createdAt: now)
-        var next = wallet; next.session = BadgeOrganizerSession(owner: key, meetupID: id, expiresAt: expiry, payload: payload)
+        let session = BadgeOrganizerSession(owner: key, meetupID: id, expiresAt: expiry, payload: payload)
+        let marker = try await session.attendanceMarker(signer: signer, location: deviceLocation, now: now)
+        try assertCurrent(epoch, key: key)
+        var next = wallet; next.session = session; next.badges = CollectedBadge.merge(next.badges, [marker])
         next.eventEvidence.append(event); try await persist(next, signer: signer, epoch: epoch)
+        status = "Signed organizer session created."
     }
     func endSession() async throws {
         let (signer, _, epoch) = try begin(); defer { finish(epoch) }
@@ -406,7 +416,8 @@ import MeetupNostr
     func refreshSocial(target: String = "", forceFull: Bool = false) async throws {
         let (signer, key, epoch) = try begin(); defer { finish(epoch) }
         let trimmed = target.trimmingCharacters(in: .whitespacesAndNewlines)
-        let other: String? = trimmed.isEmpty ? nil : (trimmed.hasPrefix("npub1") ? try NIP19.decodePublicKey(trimmed) : trimmed)
+        let other: String? = trimmed.isEmpty ? nil : try await SocialNetwork.personPublicKey(trimmed, now: Self.now)
+        try assertCurrent(epoch, key: key)
         socialLoadingDepth = 0
         let result = try await SocialGraphLoader(relay: relay).load(owner: key, target: other, organizers: registry.publicKeys,
             previous: social, forceFull: forceFull, relays: relays, now: Self.now) { [weak self] snapshot, depth in
@@ -425,6 +436,7 @@ import MeetupNostr
         var next = wallet; next.platformProofs.removeAll { $0.platform == platform }; next.platformProofs.append(proof)
         Self.removePendingPlatform(platform, from: &next.pendingBackup)
         try await persist(next, signer: signer, epoch: epoch)
+        reputationQR = ""
         return try proof.verifyString(publicKey: key)
     }
     func removePlatformProof(_ id: String) async throws {
@@ -432,6 +444,7 @@ import MeetupNostr
         var next = wallet; next.platformProofs.removeAll { $0.id == id }
         Self.removePendingPlatform(id, from: &next.pendingBackup)
         try await persist(next, signer: signer, epoch: epoch)
+        reputationQR = ""
     }
     func verifyPlatformProof(_ text: String, expectedUsername: String?) async throws -> PlatformIdentityProof {
         let (_, key, epoch) = try begin(); defer { finish(epoch) }
@@ -443,9 +456,17 @@ import MeetupNostr
         let proof = try await PlatformIdentityProof.verify(text, reputation: event, expectedUsername: expectedUsername, now: Self.now)
         try assertCurrent(epoch, key: key); return proof
     }
+    func personIdentity(_ target: String) async throws -> PersonIdentityEvidence {
+        let (_, key, epoch) = try begin(); defer { finish(epoch) }
+        let person = try await SocialNetwork.personPublicKey(target, now: Self.now)
+        try assertCurrent(epoch, key: key)
+        let result = try await ProofVerifier.personIdentity(publicKey: person, relay: publicRelay, relays: relays, http: proofHTTP, now: Self.now)
+        try assertCurrent(epoch, key: key)
+        return result
+    }
     func checkNIP05(_ identifier: String, author: String? = nil) async throws -> Bool {
         let (_, key, epoch) = try begin(); defer { finish(epoch) }
-        let result = try await ProofVerifier.verifyNIP05(identifier, publicKey: author ?? key, http: ProofURLSessionClient())
+        let result = try await ProofVerifier.verifyNIP05(identifier, publicKey: author ?? key, http: proofHTTP)
         try assertCurrent(epoch, key: key); return result
     }
     func checkHumanity() async throws {
@@ -466,12 +487,12 @@ import MeetupNostr
         try await persist(next, signer: signer, epoch: epoch)
         status = "No verified provider receipt was found."
     }
-    func publishReputation(nickname: String) async throws {
+    func publishReputation(nickname: String, force: Bool = false) async throws {
         let (signer, key, epoch) = try begin(); defer { finish(epoch) }
-        guard Self.now - lastPublishAt >= 300 else { status = "Reputation was published less than five minutes ago."; return }
+        guard force || Self.now - lastPublishAt >= 300 else { status = "Reputation was published less than five minutes ago."; return }
         let trusted = trust.verifiedBadges
         guard !trusted.isEmpty else { throw BadgeProtocolError.invalidClaim }
-        let now = Self.now, tags = [["d", ReputationCard.dTag], ["t", "einundzwanzig"], ["t", "reputation"]]
+        let now = max(Self.now, lastPublishAt + 1), tags = [["d", ReputationCard.dTag], ["t", "einundzwanzig"], ["t", "reputation"]]
         let content = ReputationCard.relayContent(badges: trusted, score: trust, nickname: nickname, platformProofs: platformProofs, humanity: humanity, now: now)
         let event = try await signer.sign(kind: 30078, tags: tags, content: content, createdAt: now)
         try await BadgeSecurity.requireSigned(event, signer: signer, kind: 30078, tags: tags, content: content, createdAt: now)
@@ -508,6 +529,18 @@ import MeetupNostr
         try assertCurrent(epoch, key: key); return result
     }
 
+    /// Full evidence is deliberately exported only by an explicit user action.
+    /// This array can also be presented to the reputation verifier.
+    func exportBadgeEvidence() throws -> String {
+        _ = try backupBadges()
+        return "[" + badges.map(\.wireJSON).joined(separator: ",") + "]"
+    }
+    func platformProofString(_ id: String) throws -> String {
+        guard !walletUnreadable else { throw BadgeStoreError.unreadableWallet }
+        guard walletLoaded, signer != nil, !publicKey.isEmpty else { throw BadgeStoreError.noSigner }
+        guard let proof = platformProofs.first(where: { $0.id == id }) else { throw BadgeProtocolError.malformed }
+        return try proof.verifyString(publicKey: publicKey)
+    }
     func backupBadges() throws -> [BackupValue] {
         guard !walletUnreadable else { throw BadgeStoreError.unreadableWallet }
         guard walletLoaded, signer != nil, !publicKey.isEmpty else { throw BadgeStoreError.noSigner }

@@ -37,6 +37,16 @@ public struct SocialGraphSnapshot: Codable, Sendable, Equatable {
 }
 
 public enum SocialNetwork {
+    /// Resolve an address for a person lookup. A signed reputation QR must
+    /// authenticate its embedded identity before it can select a person.
+    public static func personPublicKey(_ input: String, now: Int) async throws -> String {
+        var text = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.hasPrefix("21v3:") { return try await ReputationCard.verifyQR(text, now: now).event.pubkey }
+        if text.lowercased().hasPrefix("nostr:") { text = String(text.dropFirst(6)) }
+        if text.lowercased().hasPrefix("npub1") { return try NIP19.decodePublicKey(text.lowercased()) }
+        _ = try NostrHex.decode(text, byteCount: 32, field: "person")
+        return text.lowercased()
+    }
     public static func attendanceKey(_ badge: CollectedBadge) -> String {
         if badge.isEvent { return "ev|" + badge.meetupEventId }
         let npub = badge.signerNpub.trimmingCharacters(in: .whitespacesAndNewlines)
