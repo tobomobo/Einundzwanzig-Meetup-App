@@ -83,11 +83,44 @@ public struct BackupDocument: Sendable, Equatable {
         }
         copy.fields.removeValue(forKey: "admin_registry")
         copy.fields.removeValue(forKey: "my_vouches")
-        if var human = copy.fields["humanity_proof"]?.object {
-            human["verified"] = .bool(false); human["needs_reverification"] = .bool(true)
-            copy.fields["humanity_proof"] = .object(human)
-        }
+        copy.fields["humanity_proof"] = Self.mergePendingHumanity(nil, incoming: copy.fields["humanity_proof"])
         return copy
+    }
+    /// Revalidation flags are not receipt evidence. A summary without a receipt
+    /// ID cannot replace a receipt-bearing record, even after normalization.
+    public static func mergePendingHumanity(_ previous: BackupValue?, incoming: BackupValue?) -> BackupValue? {
+        let old = previous?.object ?? [:], new = incoming?.object ?? [:]
+        let flags: Set<String> = ["verified", "needs_reverification"]
+        let receiptFields = flags.union(["receipt_id", "receipt_event_id", "first_zap_at", "checked_at", "method"])
+        func hasReceipt(_ fields: [String: BackupValue]) -> Bool {
+            ["receipt_id", "receipt_event_id"].contains { !(fields[$0]?.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "").isEmpty }
+        }
+        func hasContent(_ value: BackupValue) -> Bool {
+            switch value {
+            case .null: false
+            case .string(let text): !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            case .number(let number): number > 0
+            case .decimal(let number): number > 0
+            case .array(let values): !values.isEmpty
+            case .object(let fields): !fields.isEmpty
+            case .bool(let value): value
+            }
+        }
+        func hasEvidence(_ fields: [String: BackupValue]) -> Bool {
+            fields.contains { !flags.contains($0.key) && hasContent($0.value) }
+        }
+        var merged = hasEvidence(new) ? new : old
+        if hasReceipt(old), !hasReceipt(new) {
+            merged = old
+            // Preserve additional public evidence without replacing the known
+            // receipt's identity/time with defaults or unrelated metadata.
+            for (key, value) in new where !receiptFields.contains(key) && merged[key] == nil && hasContent(value) {
+                merged[key] = value
+            }
+        }
+        guard hasEvidence(merged) else { return nil }
+        merged["verified"] = .bool(false); merged["needs_reverification"] = .bool(true)
+        return .object(merged)
     }
     public enum RestoreDecision: String, Codable, Sendable { case fresh, sameIdentity, addToIdentity, replacesIdentity }
     public func decision(existingNpub: String) -> RestoreDecision {

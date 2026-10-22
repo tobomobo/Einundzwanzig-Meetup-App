@@ -347,4 +347,79 @@ extension IdentityAppStoreContinuityTests {
         try await final.identity.unlock(password: vaultPassword)
         expectPending(try await exported(final).fields); #expect(final.badgeWallet.humanity == nil)
     }
+
+    @Test func roundThreeNormalizedEmptyHumanityImportPreservesNativeReceiptThroughActualAppStore() async throws {
+        let defaults = try fresh(), app = AppStore(legacyDefaults: defaults)
+        try await app.identity.importKey(String(repeating: "01", count: 32), vaultPassword: vaultPassword)
+        await app.synchronizeIdentity()
+        let signer = try #require(app.identity.signer), owner = app.identity.publicKey
+        let recipient = try LocalIdentitySigner(privateKey: Data(repeating: 5, count: 32))
+        let provider = try LocalIdentitySigner(privateKey: Data(repeating: 6, count: 32))
+        let recipientKey = try await recipient.publicKey(), providerKey = try await provider.publicKey()
+        let timestamp = Int(Date().timeIntervalSince1970) - 10
+        let request = try await signer.sign(kind: 9734, tags: [["p", recipientKey]], content: "synthetic normalized import", createdAt: timestamp - 1)
+        let description = String(decoding: try JSONEncoder().encode(request), as: UTF8.self)
+        let tags = [["p", recipientKey], ["P", owner], ["description", description], ["bolt11", securityHumanityInvoice(description: description)]]
+        let receipt = try await provider.sign(kind: 9735, tags: tags, content: "", createdAt: timestamp)
+        let metadata = try await recipient.sign(kind: 0, tags: [], content: #"{"lud16":"recipient@humanity.invalid"}"#, createdAt: timestamp - 2)
+        let native = BadgeStore(relay: SecurityHumanityRelay(events: [receipt, metadata]), persistence: KeychainBadgeWalletPersistence(),
+                                relays: [], proofHTTP: SecurityHumanityHTTP(provider: providerKey))
+        await native.configure(signer: signer); try await native.checkHumanity()
+        #expect(native.humanity?.receipt.id == receipt.id)
+        #expect(try KeychainStore.read(account: "pending-imported-proofs-v1") == nil)
+        func requirePending(_ fields: [String: BackupValue], id: String, time: Int, context: String) throws {
+            let summary = fields["humanity_proof"]?.object
+            try #require(summary?["receipt_event_id"] == .string(id), "Receipt event ID lost: \(context)")
+            try #require(summary?["receipt_id"] == .string(id), "Receipt ID lost: \(context)")
+            try #require(summary?["first_zap_at"] == .number(Double(time)), "Receipt time lost: \(context)")
+            #expect(summary?["verified"] == .bool(false)); #expect(summary?["needs_reverification"] == .bool(true))
+        }
+        await app.identity.lock(); await app.synchronizeIdentity()
+        let current = AppStore(legacyDefaults: defaults)
+        try await current.identity.unlock(password: vaultPassword)
+        let baseline = try await exported(current)
+        try requirePending(baseline.fields, id: receipt.id, time: timestamp, context: "native reload")
+        #expect(current.badgeWallet.humanity == nil)
+        // Seed the separate imported-proof account through the actual restore
+        // callback too, so wallet and legacy staging must agree on empty merges.
+        try await restoreSecurity(baseline, into: current)
+        let cases: [(String, BackupValue?)] = [
+            ("empty object", .object([:])), ("absent", nil), ("null", .null), ("empty array", .array([])),
+            ("flags only", .object(["verified": .bool(true), "needs_reverification": .bool(false)])),
+            ("empty receipt fields", .object(["receipt_id": .string(""), "receipt_event_id": .string("  "), "first_zap_at": .number(0)])),
+            ("timestamp without receipt", .object(["receipt_event_id": .string(""), "first_zap_at": .number(Double(timestamp + 1))])),
+            ("unknown safe evidence", .object(["future_public_evidence": .object(["source": .string("retained")])]))
+        ]
+        for (name, section) in cases {
+            var incoming = baseline; incoming.fields["humanity_proof"] = section
+            // This route includes IdentityStore.pendingRevalidation and the
+            // real AppStore callback. No raw BadgeStore restore is used here.
+            try await restoreSecurity(incoming, into: current)
+            try requirePending(try await exported(current).fields, id: receipt.id, time: timestamp, context: name)
+            let staged = try BackupDocument.decode(#require(try KeychainStore.read(account: "pending-imported-proofs-v1")))
+            try requirePending(staged.fields, id: receipt.id, time: timestamp, context: "import staging: " + name)
+            #expect(current.badgeWallet.humanity == nil); #expect(try !IdentityVault.hasPendingRestore())
+        }
+        let afterEmpty = try await exported(current)
+        #expect(afterEmpty.fields["humanity_proof"]?.object?["future_public_evidence"] == .object(["source": .string("retained")]))
+        await current.identity.lock(); await current.synchronizeIdentity()
+        let relaunch = AppStore(legacyDefaults: defaults)
+        try await relaunch.identity.unlock(password: vaultPassword)
+        try requirePending(try await exported(relaunch).fields, id: receipt.id, time: timestamp, context: "durable empty merges")
+        #expect(relaunch.badgeWallet.humanity == nil)
+        // Receipt-bearing incoming evidence may replace a pending summary,
+        // but its restored verified flag still cannot grant provider authority.
+        let newer = try await provider.sign(kind: 9735, tags: tags, content: "", createdAt: timestamp + 1)
+        var incoming = baseline
+        incoming.fields["humanity_proof"] = .object(["receipt_id": .string(newer.id), "receipt_event_id": .string(newer.id),
+            "first_zap_at": .number(Double(newer.createdAt)), "verified": .bool(true), "needs_reverification": .bool(false)])
+        try await restoreSecurity(incoming, into: relaunch)
+        try requirePending(try await exported(relaunch).fields, id: newer.id, time: newer.createdAt, context: "meaningful receipt replacement")
+        #expect(relaunch.badgeWallet.humanity == nil)
+        await relaunch.identity.lock(); await relaunch.synchronizeIdentity()
+        let final = AppStore(legacyDefaults: defaults)
+        try await final.identity.unlock(password: vaultPassword)
+        try requirePending(try await exported(final).fields, id: newer.id, time: newer.createdAt, context: "durable meaningful replacement")
+        #expect(final.badgeWallet.humanity == nil)
+    }
 }

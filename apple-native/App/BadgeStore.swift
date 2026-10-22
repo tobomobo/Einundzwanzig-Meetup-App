@@ -566,8 +566,10 @@ import MeetupNostr
         for name in ["humanity_proof", "platform_proofs", "admin_registry", "my_vouches", "co_attendance"] {
             if let value = document.fields[name] {
                 let safe = Self.safeProofMetadata(value)
-                // Empty additive sections cannot erase an earlier receipt.
-                if name == "humanity_proof", safe.object?.isEmpty != false { continue }
+                if name == "humanity_proof" {
+                    next.pendingBackup[name] = BackupDocument.mergePendingHumanity(next.pendingBackup[name], incoming: safe)
+                    continue
+                }
                 if let old = next.pendingBackup[name]?.array, let incoming = safe.array {
                     next.pendingBackup[name] = .array(old + incoming.filter { !old.contains($0) })
                 } else if safe != .null { next.pendingBackup[name] = safe }

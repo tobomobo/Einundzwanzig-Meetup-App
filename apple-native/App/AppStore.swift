@@ -145,7 +145,8 @@ final class AppStore {
             if decision == .sameIdentity || decision == .addToIdentity,
                let bytes = try KeychainStore.read(account: "pending-imported-proofs-v1") {
                 let previous = try BackupDocument.decode(bytes)
-                for key in ["humanity_proof", "platform_proofs", "reputation", "social_graph"] {
+                safe.fields["humanity_proof"] = BackupDocument.mergePendingHumanity(previous.fields["humanity_proof"], incoming: safe.fields["humanity_proof"])
+                for key in ["platform_proofs", "reputation", "social_graph"] {
                     if safe.fields[key] == nil || safe.fields[key] == .null || safe.fields[key] == .array([]) {
                         safe.fields[key] = previous.fields[key]
                     }
