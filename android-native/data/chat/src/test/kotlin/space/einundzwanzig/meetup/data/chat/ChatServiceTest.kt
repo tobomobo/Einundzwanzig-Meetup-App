@@ -397,6 +397,13 @@ class ChatServiceTest {
     }
 
     @Test
+    fun `an event sent twice in one answer is loaded once`() = runTest {
+        val twice = relayEvent(other, 9, listOf(listOf("h", "r1")), "eins", createdAt = NOW_SECONDS - 20)
+        answer(twice, twice)
+        assertEquals(listOf("eins"), service().loadMessages("r1").map { it.content })
+    }
+
+    @Test
     fun `send, join and leave publish the exact events and map the outcome`() = runTest {
         val svc = service()
         assertNull(svc.send("r1", "  Servus  "))

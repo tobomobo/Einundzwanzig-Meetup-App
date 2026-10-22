@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- args: count:int -->
+    <string name="native_network_graph_description">Netzwerkgraph mit %1$d direkten Kontakten</string>
+    <string name="native_network_copied">Kopiert</string>
+    <string name="native_network_retrying">Wird erneut gesendet</string>
+    <string name="native_network_open_details">Details öffnen</string>
+</resources>

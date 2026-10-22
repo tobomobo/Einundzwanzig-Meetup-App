@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Native-only strings of :feature:bitcoin (accessibility). -->
+    <string name="native_bitcoin_status_unknown">Noch keine Daten</string>
+    <string name="native_bitcoin_status_live">Alle Quellen geladen</string>
+    <string name="native_bitcoin_status_partial">Teilweise geladen</string>
+    <string name="native_bitcoin_status_dead">Keine Quelle erreichbar</string>
+    <string name="native_bitcoin_toggle_unit">Einheit wechseln</string>
+    <string name="native_bitcoin_toggle_sign">Vorzeichen wechseln (Auf-/Abschlag)</string>
+</resources>

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_backupItemProfile">Perfil</string>
+    <!-- args: count:int -->
+    <plurals name="native_backupItemBadges">
+        <item quantity="one">%1$d insignia</item>
+        <item quantity="many">%1$d insignias</item>
+        <item quantity="other">%1$d insignias</item>
+    </plurals>
+    <string name="native_backupItemNostrKey">clave Nostr</string>
+    <!-- args: count:int -->
+    <plurals name="native_backupItemPlatformProofs">
+        <item quantity="one">%1$d prueba de plataforma</item>
+        <item quantity="many">%1$d pruebas de plataforma</item>
+        <item quantity="other">%1$d pruebas de plataforma</item>
+    </plurals>
+    <string name="native_backupItemHumanity">prueba de humanidad</string>
+    <string name="native_backupErrSwitchPending">Un cambio de identidad aún no ha terminado. Vuelve a cargar la copia de seguridad de la nueva identidad.</string>
+    <string name="native_backupErrStageFailed">No se pudieron preparar %1$d insignias de la copia de seguridad.</string>
+    <string name="native_backupErrKeyUnreadable">La clave de la copia de seguridad no se puede leer ahora. Tu colección no cambia.</string>
+    <string name="native_backupErrKeyNotTaken">La clave de la copia de seguridad no se aplicó. Tu colección no cambia.</string>
+    <string name="native_backupErrBadgesNotSaved">No se pudieron guardar %1$d insignias de la copia de seguridad. Todo lo demás se restauró.</string>
+    <string name="native_backupErrHoldNotPersisted">No se pudo registrar el cambio.</string>
+    <string name="native_backupErrClearNotMarked">No se pudo marcar la colección vacía.</string>
+    <string name="native_backupErrProofsNotCleared">No se pudieron eliminar las pruebas de la identidad anterior.</string>
+    <string name="native_backupErrUnreadable">No se pudo leer el archivo.</string>
+    <string name="native_backupWorking">Procesando copia de seguridad …</string>
+</resources>

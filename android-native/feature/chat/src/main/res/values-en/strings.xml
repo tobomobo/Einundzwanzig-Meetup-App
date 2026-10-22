@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_chat_send">Send message</string>
+    <string name="native_chat_author_open">Show profile of %1$s</string>
+</resources>

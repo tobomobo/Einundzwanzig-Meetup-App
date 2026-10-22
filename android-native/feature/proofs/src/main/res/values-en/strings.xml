@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_ppNameOther">Other platform</string>
+    <string name="native_ppHintSka">Your username on Satoshi-Kleinanzeigen</string>
+    <string name="native_ppHintTelegram">Your Telegram @username (without @)</string>
+    <string name="native_ppHintRobosats">Your RoboSats robot name</string>
+    <string name="native_ppHintNostr">Your Nostr profile name (NIP-05 or display name)</string>
+    <string name="native_ppHintOther">Your username on the platform</string>
+    <string name="native_proofErrNoKey">No key available</string>
+    <string name="native_ppErrEmptyUsername">Username must not be empty</string>
+    <string name="native_proofErrGeneric">Error: %1$s</string>
+    <string name="native_ppRevokeFailed">The link could not be deleted.</string>
+    <string name="native_ppRevokeFor">Revoke link with %1$s (%2$s)</string>
+    <string name="native_ppCreating">Signing proof …</string>
+    <string name="native_ppEmbeddedInQr">Embedded in your reputation QR</string>
+    <string name="native_ppAlreadyLinked">Already linked</string>
+    <string name="native_humFound">Lightning payment found — you are verified!</string>
+    <string name="native_humNotFound">No zap receipt found. Have you ever zapped someone on Nostr? Zap anyone (any amount of sats) and come back.</string>
+    <string name="native_humNoKey">No key available</string>
+    <string name="native_humInvalidNpub">Invalid npub</string>
+    <string name="native_humError">Check failed — please try again.</string>
+    <string name="native_humLastJustNow">Just now</string>
+    <string name="native_humLastMinutes">%1$d min ago</string>
+    <string name="native_humLastHours">%1$d h ago</string>
+</resources>

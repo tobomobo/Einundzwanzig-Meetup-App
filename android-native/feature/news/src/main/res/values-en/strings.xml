@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_news_read_on_website">Read on the website</string>
+    <string name="native_news_zap_amount">%1$s sat</string>
+    <string name="native_news_article_not_found_title">Article not found</string>
+    <string name="native_news_article_not_found_body">This article is no longer in the list. Open the news again.</string>
+    <string name="native_news_author_description">Author</string>
+    <string name="native_news_date_description">Published on %1$s</string>
+    <string name="native_news_liked">You like this</string>
+</resources>

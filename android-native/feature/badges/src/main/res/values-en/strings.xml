@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_expiry_expired_hm">Expired %1$dh %2$dmin ago</string>
+    <string name="native_expiry_expired_m">Expired %1$dmin ago</string>
+    <string name="native_expiry_valid_hm">Valid for %1$dh %2$dmin</string>
+    <string name="native_expiry_valid_m">Valid for %1$dmin</string>
+    <string name="native_remaining_expired">Expired</string>
+    <string name="native_remaining_hm">%1$dh %2$dmin</string>
+    <string name="native_remaining_m">%1$dmin</string>
+    <string name="native_nonce_expired">QR code expired (%1$ds old). Please scan directly from the screen.</string>
+    <string name="native_rq_block">⛓️ Block %1$s</string>
+    <string name="native_rq_qr_description">Rolling meetup QR code</string>
+    <string name="native_scanner_checking">Checking badge …</string>
+    <string name="native_scanner_locating">Checking location …</string>
+    <string name="native_writer_writing">Writing NFC tag</string>
+</resources>

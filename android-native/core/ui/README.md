@@ -38,7 +38,7 @@ Provide one app-wide instance, for example from a Hilt module in `:app`.
 |---|---|
 | `EinundzwanzigTheme(themeMode = ThemeMode.DARK, dynamicColor = false) { }` | `MaterialExpressiveTheme` with brand colours, `MotionScheme.expressive()`, brand shapes (6/10/14/20/28) |
 | `ThemeMode { DARK, LIGHT, SYSTEM }` | Dark is the brand default because the Flutter app was dark-only |
-| `MaterialTheme.extendedColors` → `ExtendedColors` | `success/onSuccess/successContainer/onSuccessContainer`, `community` (gold `cCyan`) + `communityContainer`, `nostr`, `nostrOnTile`, `course`, `textTertiary`, `bitcoin` |
+| `MaterialTheme.extendedColors` → `ExtendedColors` | `success/onSuccess/successContainer/onSuccessContainer`, `community` (gold `cCyan`) + `communityContainer`, `nostr`, `nostrOnTile`, `course`, `textTertiary`, `bitcoin`, `purple` (`cPurple`, Podcast), `duellGold` (SatoshiDuell `#FFC93C`) |
 | `BrandColors` | Raw Flutter palette (`cOrange`, `cCard`, …). Use it only where a colour must not follow the theme, such as a scrim. Features should use the colour scheme |
 | Colour mapping | `primary` = cOrange, `background/surface` = cDark, `surfaceContainerLow` = cSurface, `surfaceContainer` = cCard, `surfaceContainerHigh` = cCardHover, `onSurfaceVariant` = cTextSecondary, `outlineVariant` = cTileBorder, `tertiary` = gold |
 | Typography | Flutter slots exact: displayLarge 34, displayMedium 26, titleLarge 18 (w700), titleMedium 15 (w600), bodyLarge 15/1.5, bodyMedium 13/1.5, bodySmall 11/1.4, labelSmall 10 (w600, ls 1). The other slots use the M3 baseline in Rajdhani. The styles carry no colours |

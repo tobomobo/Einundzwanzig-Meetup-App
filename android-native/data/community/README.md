@@ -68,6 +68,11 @@ Behaviour:
 | `object CommunityLinks` | `NOSTR_PROFILE` (njump), `SHOUTOUT`, `PODCAST`, `SATOSHI_DUELL`, `PLEBRAP_V4V`, `satoshiDuell(npub)` (adds `?npub=` when the npub is non-empty). Open these externally through `SafeUrl` |
 | `object PortalFields` | Dart portal helpers. `pv(e, key)`, `pImg(e)`, `extractLinks(text)` (the Dart `\s` regex, deduplicated, keeps order), `intId(e): Int?` (`id is int`; typed `Int` to match `PortalApiService.getCourse/getLecturer(id: Int)` and the `CourseDetails`/`LecturerDetails` routes, so a JSON integer outside 32 bits gives `null` and the list falls back to the bottom sheet rather than wrapping to a wrong id; `PortalCourse.lecturerId: Int?` follows the same rule), `listName(e)`, `listDescription(e)`. `course(e, zone)` returns a `PortalCourse`, `courseEvent(ev, zone)` a `PortalCourseEvent` (`whenLabel` = `dd.MM.yyyy · HH:mm` from Dart `DateTime.tryParse` fields), `lecturer(e)` a `PortalLecturer` (with `links: List<PortalLink>`). Also `lecturerLinkUrl(key, value)` and `calendarTitle(ev)` (`title`, then `loc`, then `"Termin"`). Calendar end = start + 2 h |
 
+`PortalEntityCache` (`@Singleton`, injectable): process-lifetime map id → last seen course / lecturer
+JSON, the replacement of Flutter's `fallback` argument (ROUTES.md). `rememberCourses/rememberLecturers`
+(lists), `rememberCourse/rememberLecturer` (detail responses; nested `lecturer` / `courses` fill the other
+map without overwriting), `course(id)`, `lecturer(id)`. Added for `:feature:community`.
+
 Not in this module: the portal courses/lecturers API (`:data:meetups`, portal API), SatoshiDuell status
 (`:data:proofs`) and tour progress (`:data:settings`).
 
@@ -77,12 +82,12 @@ Not in this module: the portal courses/lecturers API (`:data:meetups`, portal AP
 tools/gradlew-locked :data:community:testDebugUnitTest
 ```
 
-65 tests:
+68 tests:
 - `V4vServiceTest` (MockWebServer): the full LNURL sequence and every error code, plus the comment vector of §10.4.
 - `LnurlCallbackUrlTest`: the §10.4 URL builder vectors and amount parsing.
 - `LightningInvoiceLauncherTest` (Robolectric).
 - `GlossaryTest`: 55 entries, category sizes, strings resolve, search (Dart `toLowerCase` semantics, resolution #12: no final sigma, `İ`→`i`) and grouping.
-- `PortalFieldsTest`.
+- `PortalFieldsTest`, `PortalEntityCacheTest`.
 - `PlebSongsTest`: the catalog copied verbatim, the album order and the covers.
 - `PlebrapControllerTest`: the player logic against a fake player and cache. Covers toggle, playIndex, next/prev without wrap-around, skipping broken tracks, the reload after download, cancelling a download on track change, already-cached tracks, retrying a failed download, and `seekable`.
 - `Media3AudioCacheTest` (Robolectric + MockWebServer, a chunked server that ignores Range): the download ends fully cached with its length stored, and the player source reports that length and seeks without network. Also covers resuming a cancelled download (skipping the `200` prefix) the writer waiting for a locked span, and span files deleted behind the index (re-downloaded).

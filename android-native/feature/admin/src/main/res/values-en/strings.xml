@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_admin_own_meetup">Your meetup</string>
+    <string name="native_admin_has_location">Location on file</string>
+    <string name="native_admin_no_location">No location on file</string>
+    <string name="native_admin_clear_search">Clear search</string>
+</resources>

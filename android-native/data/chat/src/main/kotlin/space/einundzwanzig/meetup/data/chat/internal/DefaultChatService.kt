@@ -257,6 +257,8 @@ internal class DefaultChatService @Inject constructor(
     override suspend fun loadMessages(h: String, limit: Int): List<ChatMessage> =
         query(jsonObjectOf("kinds" to listOf(ChatKinds.MESSAGE), "#h" to listOf(h), "limit" to limit))
             .mapNotNull(ChatMessage::fromEvent)
+            // A relay may send the same EVENT twice in one REQ; the UI keys rows by id.
+            .distinctBy { it.id }
             .sortedBy { it.createdAt }
 
     override fun subscribe(h: String, since: Instant?): Flow<ChatMessage> = flow {

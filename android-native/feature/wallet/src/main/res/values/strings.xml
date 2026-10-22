@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_wallet_collapsed">Eingeklappt</string>
+    <string name="native_wallet_expanded">Ausgeklappt</string>
+    <string name="native_wallet_clear_search">Suche löschen</string>
+    <string name="native_wallet_badge_not_found">Badge nicht gefunden</string>
+    <string name="native_wallet_badge_not_found_sub">Dieses Badge ist nicht mehr in deiner Wallet.</string>
+    <string name="native_wallet_close_info">Info schließen</string>
+</resources>

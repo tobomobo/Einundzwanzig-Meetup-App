@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_network_graph_description">Gráfico de red con %1$d contactos directos</string>
+    <string name="native_network_copied">Copiado</string>
+    <string name="native_network_retrying">Reenviando</string>
+    <string name="native_network_open_details">Abrir detalles</string>
+</resources>

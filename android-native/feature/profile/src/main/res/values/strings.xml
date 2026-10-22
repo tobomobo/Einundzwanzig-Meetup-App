@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Native-only strings of :feature:profile (spec 07 §14 item 11: hard-coded Flutter texts). -->
+<resources>
+    <plurals name="native_relays_active">
+        <item quantity="one">%1$d aktive Relays</item>
+        <item quantity="other">%1$d aktive Relays</item>
+    </plurals>
+    <string name="native_relay_remove">Entfernen</string>
+    <string name="native_relay_enabled">Relay aktiviert</string>
+    <string name="native_relay_disabled">Relay deaktiviert</string>
+    <string name="native_nostr_label">Nostr</string>
+    <string name="native_npub_button">NPUB</string>
+    <string name="native_nsec_button">NSEC</string>
+    <string name="native_nsec_hint">nsec1...</string>
+    <plurals name="native_platforms_active">
+        <item quantity="one">%1$d Plattform aktiv</item>
+        <item quantity="other">%1$d Plattformen aktiv</item>
+    </plurals>
+    <string name="native_list_joiner">" und "</string>
+    <string name="native_auth_show_key">Bitte Identität bestätigen, um den Schlüssel anzuzeigen</string>
+    <string name="native_auth_export_key">Bitte Identität bestätigen, um den Schlüssel zu exportieren</string>
+    <string name="native_meetup_favorite">Favorit</string>
+    <string name="native_meetup_not_favorite">Kein Favorit</string>
+    <string name="native_bunker_qr">QR-Code zum Koppeln mit dem Signer</string>
+    <string name="native_profile_avatar">Profilbild</string>
+    <string name="native_more_favorites">+%1$d ★</string>
+    <plurals name="native_more_favorites_a11y">
+        <item quantity="one">%1$d weiterer Favorit</item>
+        <item quantity="other">%1$d weitere Favoriten</item>
+    </plurals>
+</resources>

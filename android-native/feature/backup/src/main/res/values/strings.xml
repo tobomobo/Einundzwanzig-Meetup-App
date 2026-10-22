@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_backupItemProfile">Profil</string>
+    <!-- args: count:int -->
+    <plurals name="native_backupItemBadges">
+        <item quantity="one">%1$d Badge</item>
+        <item quantity="other">%1$d Badges</item>
+    </plurals>
+    <string name="native_backupItemNostrKey">Nostr-Key</string>
+    <!-- args: count:int -->
+    <plurals name="native_backupItemPlatformProofs">
+        <item quantity="one">%1$d Plattform-Proof</item>
+        <item quantity="other">%1$d Plattform-Proofs</item>
+    </plurals>
+    <string name="native_backupItemHumanity">Humanity-Proof</string>
+    <string name="native_backupErrSwitchPending">Ein Identitätswechsel ist noch nicht abgeschlossen. Lade das Backup der neuen Identität noch einmal.</string>
+    <!-- args: count:int -->
+    <string name="native_backupErrStageFailed">%1$d Badges aus dem Backup konnten nicht vorbereitet werden.</string>
+    <string name="native_backupErrKeyUnreadable">Der Schlüssel aus dem Backup ist gerade nicht lesbar, die Sammlung bleibt unverändert.</string>
+    <string name="native_backupErrKeyNotTaken">Der Schlüssel aus dem Backup wurde nicht übernommen, die Sammlung bleibt unverändert.</string>
+    <!-- args: count:int -->
+    <string name="native_backupErrBadgesNotSaved">%1$d Badges aus dem Backup konnten nicht gespeichert werden, der Rest wurde übernommen.</string>
+    <string name="native_backupErrHoldNotPersisted">Der Wechsel konnte nicht festgehalten werden.</string>
+    <string name="native_backupErrClearNotMarked">Die leere Sammlung konnte nicht vorgemerkt werden.</string>
+    <string name="native_backupErrProofsNotCleared">Die Nachweise der bisherigen Identität konnten nicht abgeräumt werden.</string>
+    <string name="native_backupErrUnreadable">Die Datei konnte nicht gelesen werden.</string>
+    <string name="native_backupWorking">Backup wird verarbeitet …</string>
+</resources>

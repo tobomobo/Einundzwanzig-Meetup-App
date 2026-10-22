@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Native-only strings of :feature:community (ARB strings live in :core:l10n). -->
+<resources>
+    <string name="native_community_not_found">No encontrado.</string>
+    <string name="native_community_play">Reproducir</string>
+    <string name="native_community_pause">Pausa</string>
+    <string name="native_community_next">Siguiente canción</string>
+    <string name="native_community_previous">Canción anterior</string>
+    <string name="native_community_clear_search">Borrar búsqueda</string>
+    <string name="native_community_add_to_calendar">Añadir al calendario</string>
+    <string name="native_community_open_link">Abrir enlace</string>
+    <string name="native_community_now_playing">Reproduciendo</string>
+    <string name="native_community_seek">Posición en la canción</string>
+</resources>

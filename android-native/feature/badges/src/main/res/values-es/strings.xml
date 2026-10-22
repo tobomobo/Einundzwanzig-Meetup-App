@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_expiry_expired_hm">Caducó hace %1$dh %2$dmin</string>
+    <string name="native_expiry_expired_m">Caducó hace %1$dmin</string>
+    <string name="native_expiry_valid_hm">Válido %1$dh %2$dmin más</string>
+    <string name="native_expiry_valid_m">Válido %1$dmin más</string>
+    <string name="native_remaining_expired">Caducado</string>
+    <string name="native_remaining_hm">%1$dh %2$dmin</string>
+    <string name="native_remaining_m">%1$dmin</string>
+    <string name="native_nonce_expired">Código QR caducado (%1$ds de antigüedad). Escanéalo directamente en la pantalla.</string>
+    <string name="native_rq_block">⛓️ Bloque %1$s</string>
+    <string name="native_rq_qr_description">Código QR rotativo del meetup</string>
+    <string name="native_scanner_checking">Comprobando insignia …</string>
+    <string name="native_scanner_locating">Comprobando ubicación …</string>
+    <string name="native_writer_writing">Escribiendo etiqueta NFC</string>
+</resources>

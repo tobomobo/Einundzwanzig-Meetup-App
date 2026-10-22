@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_repPublishNoKey">No hay clave disponible</string>
+    <string name="native_repPublishNoBadges">No hay insignias</string>
+    <string name="native_repPublishUpToDate">La reputación está al día — no hace falta actualizar</string>
+    <string name="native_repPublishOk">Reputación actualizada en %1$d relays</string>
+    <string name="native_repPublishNoRelay">No se pudo enviar a ningún relay</string>
+    <string name="native_repPublishError">Error al publicar: %1$s</string>
+    <string name="native_repSignFailed">No se pudo firmar el código QR. Los escáneres rechazan códigos sin firma — revisa tu firmante.</string>
+    <string name="native_repLoadError">No se pudo cargar la reputación.</string>
+    <string name="native_retry">Reintentar</string>
+    <string name="native_repQrDescription">Código QR de reputación</string>
+    <string name="native_rcNoDataHint">Escanea tu primera insignia en un meetup para hacer visible tu reputación.</string>
+    <string name="native_qrStatsLine">%1$d insignias · %2$d meetups · %3$d firmantes</string>
+    <string name="native_qrProofLine">%1$d de %2$d insignias verificadas criptográficamente</string>
+    <string name="native_qrSignedBy">Firmado: %1$s</string>
+    <plurals name="native_qrHopsAway">
+        <item quantity="one">a %1$d salto</item>
+        <item quantity="many">a %1$d saltos</item>
+        <item quantity="other">a %1$d saltos</item>
+    </plurals>
+    <string name="native_qrVerifyOk">Firma Schnorr verificada ✓</string>
+    <string name="native_qrVerifyMissing">Faltan datos de firma</string>
+    <string name="native_qrVerifyBadPubkey">Formato de pubkey no válido</string>
+    <string name="native_qrVerifyBadSig">Formato de firma no válido</string>
+    <string name="native_qrVerifyInvalid">¡Firma Schnorr NO VÁLIDA!</string>
+    <string name="native_qrVerifyLegacy">El QR antiguo (v1) ya no se acepta. Pide al organizador una nueva etiqueta v2.</string>
+    <string name="native_qrIdentityMismatch">Atención: este código QR indica un npub distinto de la clave que lo firmó. La identidad no está confirmada; los datos de red de abajo pertenecen al firmante.</string>
+    <string name="native_qrLinkedUnconfirmed">Vinculado (sin confirmar)</string>
+    <string name="native_rvInputHint">21rep::npub1...::plataforma::usuario::sig=...\no npub1...</string>
+    <string name="native_rvPaste">Pegar del portapapeles y verificar</string>
+    <string name="native_rvMsgBadFormat">Formato no válido. Se espera: 21rep::npub::plataforma::usuario::sig=...</string>
+    <string name="native_rvMsgBadSignature">ADVERTENCIA: ¡Firma no válida! Este verify string ha sido manipulado.</string>
+    <string name="native_rvMsgUsernameMismatch">ADVERTENCIA: ¡El usuario no coincide! El string dice «%1$s», la cuenta es «%2$s».</string>
+    <string name="native_rvMsgNoReputation">Firma válida ✓ — pero no se encontró reputación en los relays.</string>
+    <string name="native_rvMsgFull">Identidad y reputación totalmente confirmadas ✓</string>
+    <string name="native_rvMsgPartialWithProof">Reputación confirmada parcialmente — %1$d de %2$d insignias vinculadas.</string>
+    <string name="native_rvMsgPartialNoProof">Reputación verificada, pero la prueba de plataforma no está en el evento.</string>
+    <string name="native_rvMsgSignatureOnlyNoBindings">Firma válida, pero sin insignias vinculadas.</string>
+    <string name="native_rvMsgNpubNoReputation">No se encontró reputación en los relays para este npub.</string>
+    <string name="native_rvMsgNpubWithBindings">Reputación encontrada — pero sin prueba de plataforma. Vínculo de identidad no confirmado.</string>
+    <string name="native_rvMsgNpubNoBindings">Reputación encontrada, pero sin insignias vinculadas.</string>
+    <string name="native_rvMsgError">Error de verificación: %1$s</string>
+    <string name="native_openInNostr">Abrir en una app de Nostr</string>
+    <string name="native_layerShowDetails">Mostrar detalles</string>
+    <string name="native_layerHideDetails">Ocultar detalles</string>
+    <string name="native_tnHubVerifyTitle">Verificar reputación</string>
+    <string name="native_tnHubVerifySub">Verificar el verify string o npub de una persona en todas las capas de prueba</string>
+</resources>

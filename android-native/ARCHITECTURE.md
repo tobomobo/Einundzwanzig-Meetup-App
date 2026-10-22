@@ -83,6 +83,13 @@ feature/<domain>     screens + ViewModels per domain
 | `:data:backup` | 08 | `.21bkp` export/import, restore policy | identity, badges, admin, proofs, profile |
 | `:data:badgesync` | 08 | NIP-44 relay badge sync | identity, badges, proofs |
 
+Shared UI infrastructure: `:core:camera` (CameraX + ML Kit QR scanner composable, permission
+handling) and `:core:map` (osmdroid map composable with markers, snapshot), used by several features.
+
+Component features: `:feature:backup` (export/import dialogs, overlays, SAF launchers) and
+`:feature:settings` (settings sheet, diagnostic log) expose composables that `:feature:home` and
+`:feature:onboarding` may depend on. These are the only allowed feature → feature dependencies.
+
 Feature modules (`:feature:*`): onboarding, wallet, badges (scan/issue/NFC), reputation, network, admin,
 proofs, profile, backup, meetups, events, chat, news, community, bitcoin, home, settings.
 

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Hard-coded German in Flutter (news_screen.dart, ArticleDetail fallback button). -->
+    <string name="native_news_read_on_website">Auf der Webseite lesen</string>
+    <!-- Zap amount button; %1$s = amount in sats. Flutter literal "$sats sat". -->
+    <string name="native_news_zap_amount">%1$s sat</string>
+    <string name="native_news_article_not_found_title">Artikel nicht gefunden</string>
+    <string name="native_news_article_not_found_body">Der Artikel ist nicht mehr in der Liste. Öffne die News erneut.</string>
+    <string name="native_news_author_description">Autor</string>
+    <string name="native_news_date_description">Veröffentlicht am %1$s</string>
+    <string name="native_news_liked">Gefällt dir</string>
+</resources>

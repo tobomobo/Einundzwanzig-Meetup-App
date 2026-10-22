@@ -86,6 +86,13 @@ interface PortalApiService {
     suspend fun getMyMeetupEvents(): List<PortalMeetupEvent>
 
     /**
+     * The result of the last [getMyMeetupEvents] call of this process (in memory, `[]` before the
+     * first call). The portal event editor resolves the edited date from it without a second
+     * request (ROUTES.md, `PortalEventEditor`).
+     */
+    val lastMyMeetupEvents: List<PortalMeetupEvent> get() = emptyList()
+
+    /**
      * `POST /api/meetup-events`. [start]/[recurrenceEndDate] in RFC 3339 UTC
      * ([PortalTime.toPortalIso]). Empty location/description/link and every `null` are omitted
      * (the portal rejects explicit `null` recurrence values). Recurrence type + end date → series.

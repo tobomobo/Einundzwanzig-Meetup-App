@@ -19,6 +19,7 @@ object BrandColors {
     val Purple = Color(0xFF9B45E8)
     val Nostr = Color(0xFF8B5CF6)
     val PurpleLight = Color(0xFFBE96F2)
+    val DuellGold = Color(0xFFFFC93C)
     val Green = Color(0xFF22C55E)
     val Red = Color(0xFFE53935)
 
@@ -50,6 +51,10 @@ data class ExtendedColors(
     val course: Color,
     val textTertiary: Color,
     val bitcoin: Color,
+    /** Flutter `cPurple` accent (Podcast tiles). */
+    val purple: Color,
+    /** SatoshiDuell logo gold (`0xFFFFC93C`). */
+    val duellGold: Color,
 )
 
 internal val DarkExtendedColors = ExtendedColors(
@@ -64,6 +69,8 @@ internal val DarkExtendedColors = ExtendedColors(
     course = BrandColors.Course,
     textTertiary = BrandColors.TextTertiary,
     bitcoin = BrandColors.Orange,
+    purple = BrandColors.Purple,
+    duellGold = BrandColors.DuellGold,
 )
 
 internal val LightExtendedColors = ExtendedColors(
@@ -78,6 +85,8 @@ internal val LightExtendedColors = ExtendedColors(
     course = Color(0xFF5F646D),
     textTertiary = Color(0xFF5E626B),
     bitcoin = Color(0xFFB85F00),
+    purple = Color(0xFF7B2CBF),
+    duellGold = Color(0xFF8F6A00),
 )
 
 val LocalExtendedColors = staticCompositionLocalOf { DarkExtendedColors }

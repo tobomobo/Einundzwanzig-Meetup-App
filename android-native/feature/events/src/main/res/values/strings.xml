@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_events_label_detail">%1$s: %2$s</string>
+    <string name="native_events_time_suffix">%1$s Uhr</string>
+    <string name="native_events_favorite_add">Zu Favoriten hinzufügen</string>
+    <string name="native_events_favorite_remove">Aus Favoriten entfernen</string>
+    <string name="native_events_show_attendees">Zusagen anzeigen</string>
+    <string name="native_events_hide_attendees">Zusagen ausblenden</string>
+    <string name="native_events_refresh">Aktualisieren</string>
+    <string name="native_events_prev_month">Vorheriger Monat</string>
+    <string name="native_events_next_month">Nächster Monat</string>
+    <string name="native_events_prev_year">Vorheriges Jahr</string>
+    <string name="native_events_next_year">Nächstes Jahr</string>
+    <string name="native_events_badge">Mit Badge</string>
+    <string name="native_events_rsvp_not_accepted">Kein Relay hat die Antwort angenommen</string>
+    <string name="native_events_add_issuer_row">Helfer-Zeile hinzufügen</string>
+    <string name="native_events_remove_issuer_row">Helfer-Zeile entfernen</string>
+    <string name="native_events_add_helper">Helfer hinzufügen</string>
+    <string name="native_events_remove_helper">Helfer entfernen</string>
+    <string name="native_events_clear_location">Ort entfernen</string>
+    <string name="native_events_pick_image">Bild aus der Galerie wählen</string>
+    <string name="native_events_unread">%1$s ungelesene Nachrichten</string>
+    <string name="native_events_open_meetup_chat">Meetup-Chat öffnen</string>
+    <string name="native_events_npub_hint">npub1…</string>
+    <string name="native_events_dash">–</string>
+    <string name="native_events_month_events">%1$s: %2$s Termine</string>
+    <string name="native_events_day_events">%1$s, %2$s Termine</string>
+    <string name="native_events_clear_filter">Filter zurücksetzen</string>
+</resources>

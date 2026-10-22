@@ -24,6 +24,7 @@ live in `:core:nostr` (transport/URL logic); this module injects `ProfileRelayQu
 | `NostrProfileLookup` | `fetchPicture(hex)` (coalesced, generation-guarded), `invalidate()`. Companion: `CACHE_DURATION` (12 h), `INDEX_RELAY` (`wss://purplepag.es`), `MAX_INITIAL_RELAYS` (8), `MAX_AUTHOR_RELAYS` (4), `pictureUrl(value)` (http/https + host, no user-info), `relayUrl(value, discovered)` |
 | `LightningAddressLookup` | `fetchLightningAddress(hex): String?` (trimmed `lud16` with `@`, or `LUD06_MARKER` = `"lud06:"` for lud06-only, or `null`), `readTargets()` (`NEWS_RELAYS` ∪ `READ_ONLY_RELAYS` ∪ active relays). `:data:news` should use `readTargets()` and `NEWS_RELAYS`/`READ_ONLY_RELAYS` from here instead of a copy; `:data:proofs` calls `fetchLightningAddress` for the zap-receipt provider check |
 | `blossom.BlossomUploadService` | `uploadImage(file: File)` / `uploadImage(path)` → `UploadResult(url, error)` (`ok`, `success(url)`, `failure(error)`). Constants `SERVERS`, `TIMEOUT` (45 s), `AUTH_KIND` (24242), `AUTH_CONTENT`, `AUTH_EXPIRATION`, `mimeFor(path)` |
+| `LocalPictureImporter` | `import(uri): String`: gallery URI → scaled copy (≤ `MAX_SIZE` 400 px, JPEG `QUALITY` 80, Flutter `pickImage` parameters) in `filesDir/<DIR>` (`profile_picture`) → `setLocalPicture(path)` → only then older pictures (that dir, and a previous path inside `filesDir`, e.g. the migrated copy) are deleted. Throws on unreadable images; the old picture stays. Used by `:feature:profile` and the Home header (spec 12 F14) |
 | `ProfileCacheKeys` | Flutter pref keys: `nostr_profile_metadata_v2_<hex>`, `nostr_profile_relays_v2_<hex>`, legacy `nostr_profile_picture_<hex>` / `_time_<hex>`, `nostr_display_names_v1`, `local_profile_picture` |
 | `core.ui.nostr.NostrProfileSource` (bound here) | Avatar / npub-chip seam of `:core:ui`: `activePubkeyHex()` = `SigningService.npub()` decoded, `pictureUrl(hex)` = `fetchProfilePicture`, `displayNameForNpub(npub)` = NIP-19 decode → `fetchDisplayName` |
 
@@ -38,7 +39,8 @@ CompositionLocalProvider(LocalNostrProfileSource provides profileSource) { … }
 
 **Home screen** (spec 07 §8.8): `getExistingLocalPicture()` non-empty → show the local file
 (`AvatarImage(model = File(path))`), never fetch; else `NostrAvatar(pubkeyHex = null, …)` or
-`fetchProfilePicture(activeHex)`. After a gallery pick call `setLocalPicture(path)`.
+`fetchProfilePicture(activeHex)`. After a gallery pick call `LocalPictureImporter.import(uri)`
+(it stores the path itself).
 
 **App reset** (`:data:settings` / reset use case): call `NostrProfileService.clearCache()`
 before clearing all prefs, so running lookups cannot refill the caches.
@@ -67,8 +69,12 @@ re-encode (≤1200 px, q85) to a temp file, then `uploadImage(file)`; show
 
 ## Tests
 
-`tools/gradlew-locked :data:profile:testDebugUnitTest` — 53 JVM tests (NostrProfileLookupTest 19, DisplayNamesTest 15,
-LightningAddressLookupTest 9, BlossomUploadServiceTest 7, ProfileSourceTest 3).
+`tools/gradlew-locked :data:profile:testDebugUnitTest` — 57 JVM tests (NostrProfileLookupTest 19, DisplayNamesTest 15,
+LightningAddressLookupTest 9, BlossomUploadServiceTest 7, LocalPictureImporterTest 4, ProfileSourceTest 3).
+
+- `LocalPictureImporterTest`: file handling and order (new file → pref → cleanup), failed decode /
+  failed pref write keep the old picture, migrated picture inside `filesDir` removed, foreign paths
+  kept. Bitmap decoding itself is not covered (needs Robolectric).
 
 - `NostrProfileLookupTest`: all 16 cases of `test/nostr_profile_lookup_test.dart` (spec 07 §10.7),
   including `clearCache` via the service, plus cache wire format and the non-int `fetchedAt` case.

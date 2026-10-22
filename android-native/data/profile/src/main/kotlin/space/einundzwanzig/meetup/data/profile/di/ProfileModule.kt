@@ -6,11 +6,13 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import space.einundzwanzig.meetup.core.ui.nostr.NostrProfileSource
 import space.einundzwanzig.meetup.data.profile.LightningAddressLookup
+import space.einundzwanzig.meetup.data.profile.LocalPictureImporter
 import space.einundzwanzig.meetup.data.profile.NostrProfileLookup
 import space.einundzwanzig.meetup.data.profile.NostrProfileService
 import space.einundzwanzig.meetup.data.profile.blossom.BlossomUploadService
 import space.einundzwanzig.meetup.data.profile.internal.DefaultBlossomUploadService
 import space.einundzwanzig.meetup.data.profile.internal.DefaultLightningAddressLookup
+import space.einundzwanzig.meetup.data.profile.internal.DefaultLocalPictureImporter
 import space.einundzwanzig.meetup.data.profile.internal.DefaultNostrProfileLookup
 import space.einundzwanzig.meetup.data.profile.internal.DefaultNostrProfileService
 import space.einundzwanzig.meetup.data.profile.internal.ProfileNostrProfileSource
@@ -40,6 +42,10 @@ internal abstract class ProfileModule {
     @Binds
     @Singleton
     abstract fun blossomUploadService(impl: DefaultBlossomUploadService): BlossomUploadService
+
+    @Binds
+    @Singleton
+    abstract fun localPictureImporter(impl: DefaultLocalPictureImporter): LocalPictureImporter
 
     @Binds
     @Singleton

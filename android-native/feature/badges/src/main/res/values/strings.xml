@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- BadgeSecurity.expiryInfo (spec 02 §2.9), localized. -->
+    <string name="native_expiry_expired_hm">Abgelaufen vor %1$dh %2$dmin</string>
+    <string name="native_expiry_expired_m">Abgelaufen vor %1$dmin</string>
+    <string name="native_expiry_valid_hm">Gültig noch %1$dh %2$dmin</string>
+    <string name="native_expiry_valid_m">Gültig noch %1$dmin</string>
+    <!-- MeetupSession.remainingTimeString (spec 02 §2.3), localized. -->
+    <string name="native_remaining_expired">Abgelaufen</string>
+    <string name="native_remaining_hm">%1$dh %2$dmin</string>
+    <string name="native_remaining_m">%1$dmin</string>
+    <!-- RollingQRService.validateNonce message for an expired code. -->
+    <string name="native_nonce_expired">QR-Code abgelaufen (%1$ds alt). Bitte direkt am Bildschirm scannen.</string>
+    <string name="native_rq_block">⛓️ Block %1$s</string>
+    <string name="native_rq_qr_description">Rollierender Meetup-QR-Code</string>
+    <string name="native_scanner_checking">Badge wird geprüft …</string>
+    <string name="native_scanner_locating">Standort wird geprüft …</string>
+    <string name="native_writer_writing">NFC-Tag wird beschrieben</string>
+</resources>

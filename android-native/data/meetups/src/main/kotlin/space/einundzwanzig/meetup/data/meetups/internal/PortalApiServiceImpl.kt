@@ -337,8 +337,14 @@ internal class PortalApiServiceImpl @Inject constructor(
     override suspend fun getMyMeetups(): List<PortalMeetup> =
         dataList("/my-meetups", "getMyMeetups").mapNotNull(PortalMeetup::fromJson)
 
+    @Volatile
+    private var lastMyEvents: List<PortalMeetupEvent> = emptyList()
+
+    override val lastMyMeetupEvents: List<PortalMeetupEvent> get() = lastMyEvents
+
     override suspend fun getMyMeetupEvents(): List<PortalMeetupEvent> =
         dataList("/my-meetup-events", "getMyMeetupEvents").mapNotNull(PortalMeetupEvent::fromJson)
+            .also { lastMyEvents = it }
 
     /** `body.data` objects of an authenticated GET; `[]` on any failure. */
     private suspend fun dataList(path: String, label: String): List<JsonObject> {
