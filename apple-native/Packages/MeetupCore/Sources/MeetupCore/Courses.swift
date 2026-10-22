@@ -7,13 +7,21 @@ public struct Course: Codable, Hashable, Sendable, Identifiable {
     public var shortDescription: String?
     public var imageURL: URL?
     public var url: URL?
+    public var descriptionLinks: [URL]?
+    public var descriptionURLs: [URL] {
+        var seen: Set<URL> = []
+        return (descriptionLinks ?? CourseDescriptionLinks.urls(in: description)).compactMap { value in
+            guard let url = SafeURL.web(value.absoluteString), seen.insert(url).inserted else { return nil }
+            return url
+        }
+    }
     public var lecturers: [LecturerSummary]
     public var events: [CourseDate]
 
     public init(id: Int, name: String = "", description: String = "", shortDescription: String? = nil,
-                imageURL: URL? = nil, url: URL? = nil, lecturers: [LecturerSummary] = [], events: [CourseDate] = []) {
+                imageURL: URL? = nil, url: URL? = nil, descriptionLinks: [URL]? = nil, lecturers: [LecturerSummary] = [], events: [CourseDate] = []) {
         self.id = id; self.name = name; self.description = description; self.shortDescription = shortDescription
-        self.imageURL = imageURL; self.url = url; self.lecturers = lecturers; self.events = events
+        self.imageURL = imageURL; self.url = url; self.descriptionLinks = descriptionLinks; self.lecturers = lecturers; self.events = events
     }
 
     public var summary: CourseSummary {
@@ -123,5 +131,20 @@ public struct PublicDetailResult<Value: Sendable>: Sendable {
 
     public init(value: Value?, source: PublicDetailSource, failure: PublicDetailFailure? = nil) {
         self.value = value; self.source = source; self.failure = failure
+    }
+}
+
+
+public enum CourseDescriptionLinks {
+    /// Flutter exposes HTTP(S) links found in the course description, including
+    /// those in HTML attributes before the display text is flattened.
+    public static func urls(in description: String) -> [URL] {
+        let text = HTMLText.entities(description)
+        guard let pattern = try? NSRegularExpression(pattern: #"https?://[^\s\)\]>,\"<']+"#, options: .caseInsensitive) else { return [] }
+        var seen: Set<URL> = []
+        return pattern.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { match in
+            guard let range = Range(match.range, in: text), let url = SafeURL.web(String(text[range])), seen.insert(url).inserted else { return nil }
+            return url
+        }
     }
 }

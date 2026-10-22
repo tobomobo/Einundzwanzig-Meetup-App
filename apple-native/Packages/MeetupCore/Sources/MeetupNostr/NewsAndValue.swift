@@ -113,11 +113,13 @@ public struct ExternalWalletInvoice: Sendable, Equatable {
     public var url: URL? { URL(string: "lightning:" + bolt11) }
 }
 public actor ValueForValueService {
+    public static let articleZapAmounts = [21, 210, 2_100, 21_000]
     public static let projectAddress = "wolpertinger1@timecatcher.lnbits.de"
     private let transport: any ProductHTTPTransport
     public init(transport: any ProductHTTPTransport = ProductURLSessionTransport()) { self.transport = transport }
     public func invoice(address: String = projectAddress, sats: Int, comment: String = "", article: String? = nil,
-                        signer: (any NostrSigner)? = nil, relays: [URL] = []) async throws -> ExternalWalletInvoice {
+                        signer: (any NostrSigner)? = nil, relays: [URL] = [],
+                        isCurrentIdentity: @Sendable (String) async -> Bool = { _ in true }) async throws -> ExternalWalletInvoice {
         let parts = address.split(separator: "@", omittingEmptySubsequences: false)
         guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty,
               !parts[1].contains(where: { "/:?#@".contains($0) }), parts[0].utf8.count <= 128 else { throw ValueForValueError.invalidAddress }
@@ -139,17 +141,24 @@ public actor ValueForValueService {
         var query = (callback.queryItems ?? []).filter { !["amount", "comment", "nostr"].contains($0.name) }
         query.append(URLQueryItem(name: "amount", value: String(msats)))
         let zap = metadata["allowsNostr"].boolean == true && article != nil
+        var signingKey: String?
         if zap {
             guard let signer, let article else { throw IdentityError.locked }
             guard let provider = metadata["nostrPubkey"].string,
                   let providerBytes = try? NostrHex.decode(provider, byteCount: 32, field: "zap provider"),
                   (try? P256K.KeyAgreement.PublicKey(dataRepresentation: Data([2]) + providerBytes)) != nil else { throw ValueForValueError.invalidMetadata }
+            let key = try await signer.publicKey()
+            try Task.checkCancellation()
+            guard await isCurrentIdentity(key) else { throw CalendarChatError.identityMismatch }
+            signingKey = key
             let target = try NostrArticleAddress(article)
             let lnurl = NIP19.encode(prefix: "lnurl", bytes: Data(url.absoluteString.utf8))
             let tags = [["relays"] + relays.map(\.absoluteString), ["amount", String(msats)], ["lnurl", lnurl], ["p", target.publicKey], ["a", article], ["k", "30023"]]
             let now = Int(Date().timeIntervalSince1970)
             let event = try await signer.sign(kind: 9734, tags: tags, content: comment, createdAt: now)
             try await BadgeSecurity.requireSigned(event, signer: signer, kind: 9734, tags: tags, content: comment, createdAt: now)
+            try Task.checkCancellation()
+            guard event.pubkey == key, await isCurrentIdentity(key) else { throw CalendarChatError.identityMismatch }
             query.append(URLQueryItem(name: "nostr", value: String(decoding: try JSONEncoder().encode(event), as: UTF8.self)))
             query.removeAll { $0.name == "lnurl" }; query.append(URLQueryItem(name: "lnurl", value: lnurl))
         } else if let allowed = metadata["commentAllowed"].integer, allowed > 0, !comment.isEmpty {
@@ -157,7 +166,12 @@ public actor ValueForValueService {
         }
         callback.queryItems = query
         guard let callbackURL = callback.url else { throw ValueForValueError.invalidMetadata }
+        try Task.checkCancellation()
         let response = try await get(callbackURL)
+        if let signingKey {
+            try Task.checkCancellation()
+            guard await isCurrentIdentity(signingKey) else { throw CalendarChatError.identityMismatch }
+        }
         guard response["status"].string?.uppercased() != "ERROR", let invoice = response["pr"].string,
               try Self.invoiceMillisats(invoice) == msats else { throw ValueForValueError.invalidInvoice }
         return ExternalWalletInvoice(bolt11: invoice, sats: sats, address: address, zapRequested: zap)

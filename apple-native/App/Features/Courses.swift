@@ -120,6 +120,11 @@ struct CourseDetailView: View {
                     }
                 }
                 if !course.description.isEmpty { Section("learning.about") { Text(course.description).textSelection(.enabled) } }
+                if !course.descriptionURLs.isEmpty {
+                    Section("resource.links") {
+                        ForEach(course.descriptionURLs, id: \.self) { url in Link(url.absoluteString, destination: url) }
+                    }
+                }
                 if !course.lecturers.isEmpty {
                     Section("learning.lecturers") {
                         ForEach(course.lecturers) { lecturer in

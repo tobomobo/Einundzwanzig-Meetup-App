@@ -146,7 +146,7 @@ private struct CourseRecord {
             value[keyPath: path] = incoming.value[keyPath: path]; ranks[key] = rank
         }
         take("name", \.name); take("description", \.description); take("shortDescription", \.shortDescription)
-        take("image", \.imageURL); take("url", \.url); take("lecturers", \.lecturers); take("events", \.events)
+        take("image", \.imageURL); take("url", \.url); take("description", \.descriptionLinks); take("lecturers", \.lecturers); take("events", \.events)
     }
 }
 
@@ -223,6 +223,7 @@ enum CourseParsing {
             id: id, name: plain(first(row, ["name", "title"])) ?? "",
             description: plain(first(row, ["description", "intro", "bio"])) ?? "",
             shortDescription: plain(first(row, ["intro"])), imageURL: image(row), url: portalURL(row),
+            descriptionLinks: CourseDescriptionLinks.urls(in: first(row, ["description", "intro", "bio"]) ?? ""),
             lecturers: unique(lecturers, id: \.id),
             events: unique(try eventRows.map { try event($0, courseID: id, courseName: first(row, ["name", "title"]) ?? "", timeZone: timeZone) }, id: \.id)
         )
