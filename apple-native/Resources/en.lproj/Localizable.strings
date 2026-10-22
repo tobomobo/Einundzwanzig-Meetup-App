@@ -1021,3 +1021,7 @@
 "The existing portal date is invalid. Saving is disabled to preserve it." = "The existing portal date is invalid. Saving is disabled to preserve it.";
 "Paste backup text" = "Paste backup text";
 "Review pasted backup" = "Review pasted backup";
+
+"When merging into an existing identity, enter its current vault password. A replacement identity uses the new password." = "When merging into an existing identity, enter its current vault password. A replacement identity uses the new password.";
+
+"Verified signed binding: %@ · %@" = "Verified signed binding: %@ · %@";

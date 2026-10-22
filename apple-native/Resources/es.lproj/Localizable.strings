@@ -1095,3 +1095,7 @@
 "The existing portal date is invalid. Saving is disabled to preserve it." = "La fecha existente del portal no es válida. Se desactiva guardar para conservarla.";
 "Paste backup text" = "Pegar texto de la copia";
 "Review pasted backup" = "Revisar copia pegada";
+
+"When merging into an existing identity, enter its current vault password. A replacement identity uses the new password." = "Al combinar con una identidad existente, introduce su contraseña actual de la bóveda. Una identidad de reemplazo usa la nueva contraseña.";
+
+"Verified signed binding: %@ · %@" = "Vinculación firmada verificada: %@ · %@";

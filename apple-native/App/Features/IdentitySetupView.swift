@@ -135,7 +135,8 @@ struct IdentitySetupView: View {
                 Section("Restore or migrate") {
                     Text("Open an encrypted .21bkp or a Flutter JSON backup. Review the identity before restoring. A password also protects the pending recovery copy when importing JSON.")
                     SecureField("Backup password", text: $backupPassword).accessibilityIdentifier("identity.backupPassword")
-                    SecureField("Password for the restored vault", text: $vaultPassword).accessibilityIdentifier("identity.restoreVaultPassword")
+                    SecureField(LocalizedStringKey(restorePasswordTitle), text: $vaultPassword).accessibilityIdentifier("identity.restoreVaultPassword")
+                    Text("When merging into an existing identity, enter its current vault password. A replacement identity uses the new password.").font(.caption).foregroundStyle(.secondary)
                     Button("Choose backup or Flutter JSON backup…") { importingLegacyKeys = false; importing = true }
                     DisclosureGroup("Paste backup text") {
                         TextEditor(text: $pastedBackup).font(.caption.monospaced()).frame(minHeight: 120).privacySensitive().autocorrectionDisabled().accessibilityIdentifier("identity.backupText")
@@ -262,6 +263,13 @@ struct IdentitySetupView: View {
         case .sameIdentity: "Merge with the same identity. Existing profile fields and collected badges remain."
         case .addToIdentity: "This backup has no identity. Add its data to the current identity after confirming."
         case .replacesIdentity: "This backup belongs to another identity. Restoring replaces the current identity and clears its proofs and portal access."
+        }
+    }
+    private var restorePasswordTitle: String {
+        guard let reviewed else { return "Password for the restored vault" }
+        return switch reviewed.decision(existingNpub: identity.npub) {
+        case .sameIdentity, .addToIdentity: "Current vault password"
+        default: "Password for the restored vault"
         }
     }
 }

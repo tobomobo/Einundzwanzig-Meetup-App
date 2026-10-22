@@ -1020,3 +1020,7 @@
 "The existing portal date is invalid. Saving is disabled to preserve it." = "Der vorhandene Portaltermin ist ungültig. Zum Schutz ist das Speichern deaktiviert.";
 "Paste backup text" = "Backup-Text einfügen";
 "Review pasted backup" = "Eingefügtes Backup prüfen";
+
+"When merging into an existing identity, enter its current vault password. A replacement identity uses the new password." = "Gib beim Zusammenführen mit einer vorhandenen Identität deren aktuelles Vault-Passwort ein. Für eine Ersatzidentität gilt das neue Passwort.";
+
+"Verified signed binding: %@ · %@" = "Signierte Zuordnung geprüft: %@ · %@";

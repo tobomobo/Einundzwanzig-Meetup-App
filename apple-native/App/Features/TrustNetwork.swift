@@ -231,7 +231,7 @@ struct TrustProofsView: View {
     @State private var username = ""
     @State private var proofString = ""
     @State private var verificationInput = ""
-    @State private var verificationResult = ""
+    @State private var verificationResult: PlatformIdentityProof?
     @State private var nip05 = ""
     @State private var nip05Result = ""
     var body: some View {
@@ -251,14 +251,14 @@ struct TrustProofsView: View {
                 TextField("Expected username", text: $username)
                 BadgeActionButton("Verify against signed relay reputation", systemImage: "checkmark.shield") {
                     let proof = try await wallet.verifyPlatformProof(verificationInput, expectedUsername: username.isEmpty ? nil : username)
-                    verificationResult = "Verified signed binding: \(proof.platform) · \(proof.username)"
+                    verificationResult = proof
                 }.disabled(verificationInput.isEmpty)
-                if !verificationResult.isEmpty { Text(verificationResult) }
+                if let verificationResult { Text("Verified signed binding: \(verificationResult.platform) · \(verificationResult.username)") }
             }
             Section("NIP-05") {
                 TextField("name@example.com", text: $nip05).autocorrectionDisabled()
                 BadgeActionButton("Check my public-key mapping", systemImage: "at") { nip05Result = try await wallet.checkNIP05(nip05) ? "Domain mapping matches your public key." : "Domain mapping does not match your public key." }.disabled(nip05.isEmpty)
-                if !nip05Result.isEmpty { Text(nip05Result) }
+                if !nip05Result.isEmpty { Text(LocalizedStringKey(nip05Result)) }
             }
             Section("Humanity receipt") {
                 if let humanity = wallet.humanity { Label("Recipient provider and signed zap receipt verified", systemImage: "checkmark.seal"); Text(humanity.receipt.id).font(.caption.monospaced()) }
