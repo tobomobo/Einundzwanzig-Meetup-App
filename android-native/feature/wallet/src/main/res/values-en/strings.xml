@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_wallet_collapsed">Collapsed</string>
+    <string name="native_wallet_expanded">Expanded</string>
+    <string name="native_wallet_clear_search">Clear search</string>
+    <string name="native_wallet_badge_not_found">Badge not found</string>
+    <string name="native_wallet_badge_not_found_sub">This badge is no longer in your wallet.</string>
+    <string name="native_wallet_close_info">Close info</string>
+    <string name="native_wallet_view_compact">Compact</string>
+    <string name="native_wallet_view_normal">Normal</string>
+    <string name="native_wallet_no_share_target">No app found to share with</string>
+</resources>

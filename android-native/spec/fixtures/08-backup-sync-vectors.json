@@ -1,0 +1,235 @@
+{
+  "_comment": "Test vectors for spec 08-backup-sync. PBKDF2 vectors are copied from test/pbkdf2_equality_test.dart and test/pbkdf2_web_equality_test.dart (generated there with pointycastle) and re-verified with Python hashlib. enc_v2/enc_v1/hash vectors were generated with Node WebCrypto using FIXED salt/iv (the app uses random ones) - they are an independent reference implementation; additionally verify against a real .21bkp written by the Flutter app before release.",
+  "pbkdf2": [
+    {
+      "password_utf8": "korrekt pferd batterie klammer",
+      "salt_utf8": "einundzwanzig-salt-32-bytes-lang!",
+      "salt_len": 33,
+      "iterations": 1,
+      "key_bytes": 32,
+      "expected_hex": "070375026d4efd90f55f8c596f9804c9d59e8b261c226982aea5b2076a95bb8a"
+    },
+    {
+      "password_utf8": "korrekt pferd batterie klammer",
+      "salt_utf8": "einundzwanzig-salt-32-bytes-lang!",
+      "salt_len": 33,
+      "iterations": 2,
+      "key_bytes": 32,
+      "expected_hex": "f92df020004a77d443c83df50dd1899ad67b97d28b7d21b9481a78e5cb86885a"
+    },
+    {
+      "password_utf8": "korrekt pferd batterie klammer",
+      "salt_utf8": "einundzwanzig-salt-32-bytes-lang!",
+      "salt_len": 33,
+      "iterations": 4096,
+      "key_bytes": 32,
+      "expected_hex": "730ecb5f9ff2ce548af5ef16149284b4b0e96be1a1c57f1192bafe12bae7b0c9"
+    },
+    {
+      "password_utf8": "korrekt pferd batterie klammer",
+      "salt_utf8": "einundzwanzig-salt-32-bytes-lang!",
+      "salt_len": 33,
+      "iterations": 100000,
+      "key_bytes": 32,
+      "expected_hex": "22772726dbae2cda50c4f036ecce698ad1def22782eaab08d439742d531e0166"
+    },
+    {
+      "password_utf8": "passwort",
+      "salt_utf8": "einundzwanzig-salt-32-bytes-lang!",
+      "salt_len": 33,
+      "iterations": 600000,
+      "key_bytes": 32,
+      "expected_hex": "c32f5c29f83c8c3a2250ecd4ca726a7766d74edfd8cb74d2cf95e7d4654ce58e"
+    },
+    {
+      "password_utf8": "Gruß-Ähre-müde-😀",
+      "salt_utf8": "einundzwanzig-salt-32-bytes-lang!",
+      "salt_len": 33,
+      "iterations": 1000,
+      "key_bytes": 32,
+      "expected_hex": "090f088c774831b951cdff271be383fe5c34b45a5e925f5cf465eda21affa3a1"
+    },
+    {
+      "password_utf8": "passwort",
+      "salt_utf8": "einundzwanzig-salt-32-bytes-lang!",
+      "salt_len": 33,
+      "iterations": 1000,
+      "key_bytes": 64,
+      "expected_hex": "546f47b1fbba44eb9b8f88a78a65a017911b0f1d744ad7aff4742981e7af99d8ca31938c361ececdd17b1f0eeefadfec9df608589f378a985dc1424b6b1481ba"
+    },
+    {
+      "password_utf8": "einundzwanzig-test-passwort",
+      "salt_utf8": "einundzwanzig-salt-32-bytes-lang!",
+      "salt_len": 33,
+      "iterations": 600000,
+      "key_bytes": 32,
+      "expected_hex": "e69c19ea83dcda0b6f2e010dfaa087359d3d4b5ad4ba925b012cbfa9b80e271c"
+    }
+  ],
+  "enc_v2": {
+    "password": "korrekt pferd batterie klammer",
+    "salt_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "iv_hex": "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf",
+    "derived_key_hex": "f7aca35c82775f0f96aa035ff53905b9fc45119fb3487033a40470c2e85c1a98",
+    "plaintext": "{\"version\":5,\"timestamp\":\"2026-10-20T12:00:00.000\",\"app\":\"Einundzwanzig Meetup App\",\"user\":{\"nickname\":\"Ada\",\"fullName\":\"\",\"homeMeetupId\":\"Aschaffenburg\",\"favoriteMeetupIds\":[\"Aschaffenburg\"],\"isAdmin\":false,\"isAdminVerified\":false,\"isNostrVerified\":false,\"nostrNpub\":\"\",\"telegramHandle\":\"\",\"twitterHandle\":\"\"},\"badges\":[{\"id\":\"aschaffenburg\",\"meetupName\":\"Aschaffenburg\",\"date\":\"2026-10-11T19:00:00.000Z\",\"iconPath\":\"assets/badge_icon.png\",\"coverUrl\":\"\",\"blockHeight\":918000,\"signerNpub\":\"\",\"meetupEventId\":\"aschaffenburg-2026-10-11\",\"delivery\":\"rolling_qr\",\"sig\":\"\",\"sigId\":\"\",\"adminPubkey\":\"\",\"sigVersion\":0,\"sigContent\":\"\",\"claimSig\":\"\",\"claimEventId\":\"\",\"claimPubkey\":\"\",\"claimTimestamp\":0,\"isRetroactive\":false,\"presenceVerified\":true,\"isOrganizer\":false,\"isEvent\":false,\"lat\":49.97,\"lng\":9.15}],\"nostr\":{\"nsec\":\"\",\"npub\":\"\",\"priv_hex\":\"\",\"has_key\":false,\"signing_mode\":\"local\",\"active_npub\":\"\",\"nip46_bunker_uri\":\"\"},\"admin_registry\":[],\"platform_proofs\":[],\"humanity_proof\":{\"verified\":false,\"first_zap_at\":0,\"receipt_event_id\":\"\",\"checked_at\":0}}",
+    "file_content": "enc_v2:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=:oKGio6SlpqeoqaqrrK2urw==:kbzpeX5fJDBfywwscv3K1tZI2hbbW8YMo0so+1IQVFZc04OWD3EtzQWMMvqRZyV26hqEleY0jVrGEG5OIthhzdy6VaW65w/5q8xdWK4vGdD6HjUD1QNOOycpGQg0CLaG/E8IJ6MNL9Ea/+eKWIBnFuMxiZq2H4y55VwXKEcxNH2ngNoIlpqvFtQVnIMzb830fXwj0BzHwQwvWNzEsuDfj3IjMTaCRY5td2O915267ncRgoSfbEb8/7TbVgPsdVAskc9n2Pbn3tOYP/M66UMbaEcOHRo/q98/ryx//uM3ySSn5JW8DKro9rq2lQ5k6bxaq+D3H3Bfw0lzqZVKjSCP9+ugx9V91gi3T1DkjHCQBX520HlmVe57LVnjknwpd7kvTHxUyitjRSgODwrDoYChLb0GWOclh+0kbIU8FV1hZ4XUe+48LTjvsm5GRnmDBStoAK/0Oo/q3YiwekyG1Ocujs1fJ30fVxhDCevJmqiJRL1pWn+aCnnfWBXLv5jaDwtyURkDvr6z5Ooj8puicxlkzAQbIo2fLwfq2bJNARFmRaB47pAi87XiVwZ8LASPbYeMQeBuTPKEgHVkFkb5r0tXqVI7abG0uMDe5aT8cWCmirqkB/FurRTnxLn9h3zKya4TOL4oaaHFcgAgxH9CiVCTCxftNckEU6UA8C/0gwLBMTvC9kznQl6w97wv3Mr6A9cZpdvrPYEBaVMcDzohAxZAbngySmeRpyM8la6QGVs/SSz06HlrQcyPjO+gZl6C7CkqcbIq+Vj840D2q9tK8sSq2TZnY8+hfNE1Wd4AcTEUIefSqcnEHGwiZv4I6Bc7nVkiUg/B3/tQAs63a3qlMhbghjdM3Q7aMqwL4G8Xg0zc64OkhbxnB/0HrLdqjJQaHlqIX/qReUhuNfqcgyDMTvePecMdA7nBmln/v+tc3fKJ6I9N2PIzjEfidG+q9f04H6nsbXLjc1y1/kcOLVGUFpPxwxK5dVcHK0CEbETfwB1TBptfMoyboXjEQQPDRSTrbSYeEI5VpuLMrsiGHtv8qME2CTliM8rIoQV2krT9lGK/+TSC+orqO8KbUTQszrQ/sMLFiM9B02hvefxT8ju1+1WpwclXw5BoIUFqG94epuEW/li1swRNLPkBPcFrPvZqYF3Tukpyaz/DUUgj3FZQT5tY0Xs5HaXRODh60DZ0d/Iu+XO1YFiK1PUlXNCaeEJKX0RvCORo3m3WqRLseedpfD+VXAMaugTF3YNh7le+zq2M0LHiDoXLB7voq+WzlW8kGzjBmf0ukgRxPSSCUju4ZeYfQkvwFznrXsrOoBpouHtyqvy4DhvJjM8bG36iL/+YMrgmcG0yfMShu9ubHl5qR8Kdxxezgiequ88IBVGnUufpR9dcjr88QqcW/Gw0u6sJGZJTnvZCDroVUvWIGwEPHBb9",
+    "note": "ciphertext part = base64(AES-256-GCM ciphertext || 16-byte tag), no AAD"
+  },
+  "enc_v1": {
+    "password": "korrekt pferd batterie klammer",
+    "key_hex_sha256_of_password": "f005f1351d30f32c05b38dcf8256f4606797d6cfe9abef01754edb82b6ef6e15",
+    "iv_hex": "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf",
+    "plaintext": "{\"version\":1,\"user\":{\"nickname\":\"Ada\"},\"badges\":[]}",
+    "file_content": "enc_v1:oKGio6SlpqeoqaqrrK2urw==:dkkdgl58A3PNdaGGbp6yhzBEddsRU/AXBq/nzhsUidZguAPHBoyytIRLjJyI6lziLkqo+uwCPiIQ6s0vOMyyDKsbFw==",
+    "note": "synthetic legacy vector (16-byte IV assumed); legacy decoder must accept any IV length"
+  },
+  "sync": {
+    "d_tags": [
+      "badges-0",
+      "badges-1",
+      "badges-2",
+      "badges-3",
+      "badges-4",
+      "badges-5",
+      "badges-6",
+      "badges-7",
+      "badges-8",
+      "badges-9",
+      "badges-10",
+      "badges-11",
+      "badges-12",
+      "badges-13",
+      "badges-14",
+      "badges-15"
+    ],
+    "envelope_plaintext": "{\"v\":1,\"i\":0,\"n\":1,\"gen\":1760961600,\"badges\":[{\"id\":\"aschaffenburg\",\"meetupName\":\"Aschaffenburg\",\"date\":\"2026-10-11T19:00:00.000Z\",\"iconPath\":\"assets/badge_icon.png\",\"coverUrl\":\"\",\"blockHeight\":918000,\"signerNpub\":\"\",\"meetupEventId\":\"aschaffenburg-2026-10-11\",\"delivery\":\"rolling_qr\",\"sig\":\"\",\"sigId\":\"\",\"adminPubkey\":\"\",\"sigVersion\":0,\"sigContent\":\"\",\"claimSig\":\"\",\"claimEventId\":\"\",\"claimPubkey\":\"\",\"claimTimestamp\":0,\"isRetroactive\":false,\"presenceVerified\":true,\"isOrganizer\":false,\"isEvent\":false,\"lat\":49.97,\"lng\":9.15}]}",
+    "chunk_hash_sha256_of_envelope": "76c395529b1ff32d9896eb0ae452009a17d53f3c531c2b913ebea1169fc1ec3a",
+    "content_hash_input": "{\"v\":1,\"badges\":[{\"id\":\"aschaffenburg\",\"meetupName\":\"Aschaffenburg\",\"date\":\"2026-10-11T19:00:00.000Z\",\"iconPath\":\"assets/badge_icon.png\",\"coverUrl\":\"\",\"blockHeight\":918000,\"signerNpub\":\"\",\"meetupEventId\":\"aschaffenburg-2026-10-11\",\"delivery\":\"rolling_qr\",\"sig\":\"\",\"sigId\":\"\",\"adminPubkey\":\"\",\"sigVersion\":0,\"sigContent\":\"\",\"claimSig\":\"\",\"claimEventId\":\"\",\"claimPubkey\":\"\",\"claimTimestamp\":0,\"isRetroactive\":false,\"presenceVerified\":true,\"isOrganizer\":false,\"isEvent\":false,\"lat\":49.97,\"lng\":9.15}]}",
+    "content_hash": "4643efcb79ba4c0d440bc78f2fbd5c65c77c981ec73da9567428e9ba6dca6b85",
+    "nip44_plaintext_is": "base64(gzip(utf8(envelope_plaintext))) - standard alphabet with '=' padding; gzip bytes are implementation-specific, only round-trip is testable"
+  },
+  "payloadCharsForGzip": [
+    {
+      "gzip_bytes": 0,
+      "pad_len": 32,
+      "payload_chars": 132
+    },
+    {
+      "gzip_bytes": 1,
+      "pad_len": 32,
+      "payload_chars": 132
+    },
+    {
+      "gzip_bytes": 32,
+      "pad_len": 32,
+      "payload_chars": 132
+    },
+    {
+      "gzip_bytes": 33,
+      "pad_len": 64,
+      "payload_chars": 172
+    },
+    {
+      "gzip_bytes": 37,
+      "pad_len": 64,
+      "payload_chars": 172
+    },
+    {
+      "gzip_bytes": 64,
+      "pad_len": 64,
+      "payload_chars": 172
+    },
+    {
+      "gzip_bytes": 65,
+      "pad_len": 96,
+      "payload_chars": 216
+    },
+    {
+      "gzip_bytes": 100,
+      "pad_len": 128,
+      "payload_chars": 260
+    },
+    {
+      "gzip_bytes": 256,
+      "pad_len": 256,
+      "payload_chars": 428
+    },
+    {
+      "gzip_bytes": 257,
+      "pad_len": 320,
+      "payload_chars": 516
+    },
+    {
+      "gzip_bytes": 300,
+      "pad_len": 320,
+      "payload_chars": 516
+    },
+    {
+      "gzip_bytes": 1000,
+      "pad_len": 1024,
+      "payload_chars": 1452
+    },
+    {
+      "gzip_bytes": 1025,
+      "pad_len": 1280,
+      "payload_chars": 1796
+    },
+    {
+      "gzip_bytes": 5000,
+      "pad_len": 5120,
+      "payload_chars": 6916
+    },
+    {
+      "gzip_bytes": 10000,
+      "pad_len": 10240,
+      "payload_chars": 13740
+    },
+    {
+      "gzip_bytes": 20000,
+      "pad_len": 20480,
+      "payload_chars": 27396
+    },
+    {
+      "gzip_bytes": 22000,
+      "pad_len": 24576,
+      "payload_chars": 32856
+    },
+    {
+      "gzip_bytes": 23000,
+      "pad_len": 24576,
+      "payload_chars": 32856
+    }
+  ],
+  "restoreDecision": [
+    {
+      "existing": "",
+      "backup": "npub1a",
+      "expected": "fresh"
+    },
+    {
+      "existing": "npub1a",
+      "backup": "npub1a",
+      "expected": "sameIdentity"
+    },
+    {
+      "existing": "NPUB1A",
+      "backup": " npub1a ",
+      "expected": "sameIdentity"
+    },
+    {
+      "existing": "npub1a",
+      "backup": "npub1b",
+      "expected": "replacesIdentity"
+    },
+    {
+      "existing": "npub1a",
+      "backup": "",
+      "expected": "addToIdentity"
+    },
+    {
+      "existing": "",
+      "backup": "",
+      "expected": "fresh"
+    }
+  ]
+}

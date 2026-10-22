@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_widget_label">21Meetup</string>
+    <string name="native_widget_description">Bitcoin network &amp; next meetup</string>
+    <string name="native_widget_logo">Einundzwanzig</string>
+    <string name="native_widget_refresh">Refresh</string>
+    <string name="native_widget_bitcoin">BITCOIN</string>
+    <string name="native_widget_block">BLOCK</string>
+    <string name="native_widget_price">PRICE</string>
+    <string name="native_widget_moscow">MOSCOW</string>
+    <string name="native_widget_fees">FEES L·M·H</string>
+    <string name="native_widget_hashrate">HASHRATE</string>
+    <string name="native_widget_supply">SUPPLY</string>
+    <string name="native_widget_difficulty">DIFFICULTY</string>
+    <string name="native_widget_next_meetup">NEXT MEETUP</string>
+    <string name="native_widget_no_meetup">No home meetup</string>
+    <string name="native_widget_choose_in_app">Choose in the app</string>
+    <string name="native_widget_today">Today</string>
+    <string name="native_widget_tomorrow">Tomorrow</string>
+    <plurals name="native_widget_in_days">
+        <item quantity="one">in %1$d day</item>
+        <item quantity="other">in %1$d days</item>
+    </plurals>
+    <string name="native_widget_news">NEWS</string>
+    <string name="native_widget_news_new">NEW</string>
+    <string name="native_widget_updated">As of %1$s</string>
+    <string name="native_shell_scan">Scan</string>
+    <!-- Flutter data import still running after the 20 s splash (spec 14 §4.7) -->
+    <string name="native_migration_wait_title">Moving your data…</string>
+    <string name="native_migration_wait_body">Your data from the previous app version is being moved over. This can take a while on older devices. Please keep the app open.</string>
+</resources>

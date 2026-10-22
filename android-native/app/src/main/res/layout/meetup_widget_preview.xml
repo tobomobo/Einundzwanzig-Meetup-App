@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Static RemoteViews preview for API 31+ widget pickers, using the real widget palette.
+     HardcodedText suppressions below apply only to non-linguistic refresh/placeholder glyphs. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="@drawable/widget_bg">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="16dp">
+        <ImageView
+            android:layout_width="0dp"
+            android:layout_height="18dp"
+            android:layout_weight="1"
+            android:scaleType="fitStart"
+            android:src="@drawable/widget_logo"
+            android:contentDescription="@string/native_widget_logo" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="⟳"
+            tools:ignore="HardcodedText"
+            android:textSize="22sp"
+            android:textColor="@color/widget_orange"
+            android:contentDescription="@string/native_widget_refresh" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:baselineAligned="false"
+        android:layout_marginBottom="12dp">
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/native_widget_block"
+                android:textColor="@color/widget_orange"
+                android:textSize="11sp" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="––"
+                tools:ignore="HardcodedText"
+                android:textColor="@color/widget_text"
+                android:textStyle="bold"
+                android:textSize="28sp" />
+        </LinearLayout>
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/native_widget_price"
+                android:textColor="@color/widget_orange"
+                android:textSize="11sp" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="––"
+                tools:ignore="HardcodedText"
+                android:textColor="@color/widget_text"
+                android:textStyle="bold"
+                android:textSize="28sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/widget_meetup_bg"
+        android:padding="10dp"
+        android:text="@string/native_widget_choose_in_app"
+        android:textColor="@color/widget_orange"
+        android:textSize="12sp" />
+</LinearLayout>

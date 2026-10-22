@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_bitcoin_status_unknown">No data yet</string>
+    <string name="native_bitcoin_status_live">All sources loaded</string>
+    <string name="native_bitcoin_status_partial">Partially loaded</string>
+    <string name="native_bitcoin_status_dead">No source reachable</string>
+    <string name="native_bitcoin_toggle_unit">Switch unit</string>
+    <string name="native_bitcoin_toggle_sign">Toggle sign (premium/discount)</string>
+</resources>

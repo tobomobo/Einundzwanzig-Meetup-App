@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Native-only strings of :feature:home (German default). -->
+<resources>
+    <string name="native_home_tile_trust_score">Trust Score</string>
+    <string name="native_home_tile_home_meetup">Home meetup</string>
+    <string name="native_home_tile_event_chats">My events</string>
+    <string name="native_home_tile_reputation">Reputation</string>
+    <string name="native_home_tile_community">Community</string>
+    <string name="native_home_tile_trust_network">Trust network</string>
+    <string name="native_home_tile_events">Events</string>
+    <string name="native_home_tile_shoutout">Shoutout</string>
+    <string name="native_home_tile_podcast">Podcast</string>
+    <string name="native_home_tile_satoshiduell">SatoshiDuell</string>
+    <string name="native_home_tile_portal_area">Portal</string>
+    <string name="native_home_tile_plebrap">PlebRap</string>
+    <string name="native_home_tile_nostr">Nostr</string>
+    <string name="native_home_tile_portal_connect">Portal</string>
+    <string name="native_home_tile_converter">Converter</string>
+    <string name="native_home_tile_btc_dashboard">Bitcoin</string>
+    <string name="native_home_tile_news">News</string>
+    <string name="native_home_tile_portal">My meetups</string>
+    <string name="native_home_tile_organisator">Organizer</string>
+    <string name="native_home_customize_title">CUSTOMIZE</string>
+    <string name="native_home_customize_done">DONE</string>
+    <string name="native_home_customize_hint">Hold &amp; drag to sort  ·  🔒 = required  ·  ✕ = hide</string>
+    <string name="native_home_customize_active">ACTIVE</string>
+    <string name="native_home_customize_active_sub">All tiles can be moved</string>
+    <string name="native_home_customize_available">AVAILABLE</string>
+    <string name="native_home_customize_available_sub">Turn on the switch to add</string>
+    <string name="native_home_customize_locked">%1$s is a required tile</string>
+    <string name="native_home_move_up">Move up</string>
+    <string name="native_home_move_down">Move down</string>
+    <string name="native_home_drag_handle">Drag to sort</string>
+    <string name="native_home_device_warning">This device shows signs of root/jailbreak. Cryptographic keys may be less protected. For maximum security, use an unmodified device.</string>
+    <string name="native_home_dismiss_warning">Dismiss warning</string>
+    <string name="native_home_btc_sub">Network &amp; price</string>
+    <string name="native_home_refresh">Refresh data</string>
+    <string name="native_home_refreshing">Refreshing</string>
+    <string name="native_home_glossary">Glossary</string>
+    <string name="native_home_settings">Settings</string>
+    <string name="native_home_avatar_pick">Pick a profile picture from the gallery</string>
+    <string name="native_home_score_cd">Trust score %1$s, open reputation card</string>
+    <string name="native_home_live_open">Open live session</string>
+    <string name="native_home_event_session">Event badge session</string>
+    <string name="native_home_pin">Pin</string>
+    <string name="native_home_unpin">Unpin</string>
+    <string name="native_home_edit_tile">Editing %1$s. Drag to move, tap again to cancel.</string>
+    <string name="native_home_move_before">Move before %1$s</string>
+    <string name="native_home_edit_done">Done</string>
+    <string name="native_home_edit_customize">Customize</string>
+    <string name="native_home_plebrap_play">Play</string>
+    <string name="native_home_plebrap_pause">Pause</string>
+    <string name="native_home_plebrap_next">Next track</string>
+    <string name="native_home_plebrap_library">PlebRap library</string>
+    <string name="native_home_reset_failed">Reset failed — nothing was deleted. Details in the diagnostic log.</string>
+    <string name="native_home_reset_running">Resetting the app …</string>
+    <string name="native_home_page">Meetup %1$d of %2$d</string>
+    <string name="native_home_expand">Expand</string>
+    <string name="native_home_collapse">Collapse</string>
+    <string name="native_home_unread_cd">%1$s unread</string>
+    <string name="native_home_nostr_new">New</string>
+    <string name="native_home_logo">Einundzwanzig</string>
+    <string name="native_home_token_not_stored">Could not save the token</string>
+</resources>

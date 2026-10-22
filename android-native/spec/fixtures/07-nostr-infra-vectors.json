@@ -1,0 +1,85 @@
+{
+ "_comment": "Vectors for spec 07-nostr-infra-profile. NIP-19 values are the official NIP-19 examples; signed events are BIP-340-verified; id vector computed with Dart-compatible JSON escaping (see spec section 7.1).",
+ "nip19": [
+  {
+   "hex": "7e7e9c42a91bfef19fa929e5fda1b72e0ebc1a4c1141673e2794234d86addf4e",
+   "bech32": "npub10elfcs4fr0l0r8af98jlmgdh9c8tcxjvz9qkw038js35mp4dma8qzvjptg"
+  },
+  {
+   "hex": "67dea2ed018072d675f5415ecfaed7d2597555e202d85b3d65ea4e58d2d92ffa",
+   "bech32": "nsec1vl029mgpspedva04g90vltkh6fvh240zqtv9k0t9af8935ke9laqsnlfe5"
+  },
+  {
+   "hex": "0000000000000000000000000000000000000000000000000000000000000001",
+   "bech32": "nsec1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqsmhltgl"
+  },
+  {
+   "hex": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+   "bech32": "npub10xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqpkge6d"
+  }
+ ],
+ "pubkey_from_privkey": [
+  {
+   "priv": "0000000000000000000000000000000000000000000000000000000000000001",
+   "pub": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+  },
+  {
+   "priv": "0000000000000000000000000000000000000000000000000000000000000002",
+   "pub": "c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"
+  }
+ ],
+ "valid_signed_events": [
+  {
+   "id": "4b697394206581b03ca5222b37449a9cdca1741b122d78defc177444e2536f49",
+   "pubkey": "981cc2078af05b62ee1f98cff325aac755bf5c5836a265c254447b5933c6223b",
+   "created_at": 1672175320,
+   "kind": 1,
+   "tags": [],
+   "content": "Ceci est une analyse du websocket",
+   "sig": "797c47bef50eff748b8af0f38edcb390facf664b2367d72eb71c50b5f37bc83c4ae9cc9007e8489f5f63c66a66e101fd1515d0a846385953f5f837efb9afe885"
+  },
+  {
+   "id": "67bd60e47d7fdddadebff890143167bcd7b5d28b2c3008eae40e0ac5ba0e6b34",
+   "pubkey": "36685fa5106b1bc03ae7bea82eded855d8f56c41db4c8bdef8099e1e0f2b2afa",
+   "created_at": 1674403511,
+   "kind": 1,
+   "tags": [],
+   "content": "Block 773103 was just confirmed. The total value of all the non-coinbase outputs was 61,549,183,849 sats, or $14,025,828",
+   "sig": "4912a6850a711a876fd2443771f69e094041f7e832df65646a75c2c77989480cce9b41aa5ea3d055c16fe5beb7d11d3d5fa29b4c4046c150b09393c4d3d16eb4"
+  }
+ ],
+ "event_id_escaping": {
+  "pubkey": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+  "created_at": 1700000000,
+  "kind": 30078,
+  "tags": [
+   [
+    "d",
+    "einundzwanzig-reputation"
+   ],
+   [
+    "t",
+    "\u00dcn\u00ef"
+   ]
+  ],
+  "content": "line1\nline2\t\"q\" \\ / \u0001\u007f \u00e4\u20ac\ud83d\ude00 \u2028 <&>",
+  "expected_serialization_utf8": "[0,\"79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798\",1700000000,30078,[[\"d\",\"einundzwanzig-reputation\"],[\"t\",\"\u00dcn\u00ef\"]],\"line1\\nline2\\t\\\"q\\\" \\\\ / \\u0001\u007f \u00e4\u20ac\ud83d\ude00 \u2028 <&>\"]",
+  "expected_id": "7152cbaa303fca438bcb1f1490f20614a7989caa620127eec874c909a9f7a275"
+ },
+ "shorten": [
+  {
+   "fn": "NpubChip.shorten(head=10,tail=8)",
+   "in": "npub10elfcs4fr0l0r8af98jlmgdh9c8tcxjvz9qkw038js35mp4dma8qzvjptg",
+   "out": "npub10elfc\u20268qzvjptg"
+  },
+  {
+   "fn": "NostrService.shortenNpub(chars=8)",
+   "in": "npub10elfcs4fr0l0r8af98jlmgdh9c8tcxjvz9qkw038js35mp4dma8qzvjptg",
+   "out": "npub10elfcs4...8qzvjptg"
+  }
+ ],
+ "nip44_fixture": {
+  "path": "test/fixtures/nip44.vectors.json",
+  "sha256": "269ed0f69e4c192512cc779e78c555090cebc7c785b609e338a62afc3ce25040"
+ }
+}

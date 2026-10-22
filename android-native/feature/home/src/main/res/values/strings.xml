@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Native-only strings of :feature:home (German default). -->
+<resources>
+    <string name="native_home_tile_trust_score">Trust Score</string>
+    <string name="native_home_tile_home_meetup">Home Meetup</string>
+    <string name="native_home_tile_event_chats">Meine Termine</string>
+    <string name="native_home_tile_reputation">Reputation</string>
+    <string name="native_home_tile_community">Community</string>
+    <string name="native_home_tile_trust_network">Vertrauensnetzwerk</string>
+    <string name="native_home_tile_events">Events</string>
+    <string name="native_home_tile_shoutout">Shoutout</string>
+    <string name="native_home_tile_podcast">Podcast</string>
+    <string name="native_home_tile_satoshiduell">SatoshiDuell</string>
+    <string name="native_home_tile_portal_area">Portal</string>
+    <string name="native_home_tile_plebrap">PlebRap</string>
+    <string name="native_home_tile_nostr">Nostr</string>
+    <string name="native_home_tile_portal_connect">Portal</string>
+    <string name="native_home_tile_converter">Rechner</string>
+    <string name="native_home_tile_btc_dashboard">Bitcoin</string>
+    <string name="native_home_tile_news">News</string>
+    <string name="native_home_tile_portal">Meine Meetups</string>
+    <string name="native_home_tile_organisator">Organisator</string>
+    <string name="native_home_customize_title">ANPASSEN</string>
+    <string name="native_home_customize_done">FERTIG</string>
+    <string name="native_home_customize_hint">Halten &amp; ziehen zum Sortieren  ·  🔒 = Pflicht  ·  ✕ = ausblenden</string>
+    <string name="native_home_customize_active">AKTIV</string>
+    <string name="native_home_customize_active_sub">Alle Kacheln können verschoben werden</string>
+    <string name="native_home_customize_available">VERFÜGBAR</string>
+    <string name="native_home_customize_available_sub">Schalter aktivieren zum Hinzufügen</string>
+    <string name="native_home_customize_locked">%1$s ist eine Pflichtkachel</string>
+    <string name="native_home_move_up">Nach oben</string>
+    <string name="native_home_move_down">Nach unten</string>
+    <string name="native_home_drag_handle">Ziehen zum Sortieren</string>
+    <string name="native_home_device_warning">Dieses Gerät zeigt Anzeichen von Root/Jailbreak. Kryptographische Schlüssel könnten weniger geschützt sein. Für maximale Sicherheit ein nicht modifiziertes Gerät verwenden.</string>
+    <string name="native_home_dismiss_warning">Hinweis schließen</string>
+    <string name="native_home_btc_sub">Netzwerk &amp; Kurs</string>
+    <string name="native_home_refresh">Daten aktualisieren</string>
+    <string name="native_home_refreshing">Aktualisierung läuft</string>
+    <string name="native_home_glossary">Glossar</string>
+    <string name="native_home_settings">Einstellungen</string>
+    <string name="native_home_avatar_pick">Profilbild aus der Galerie wählen</string>
+    <string name="native_home_score_cd">Trust Score %1$s, Reputationskarte öffnen</string>
+    <string name="native_home_live_open">Live-Session öffnen</string>
+    <string name="native_home_event_session">Event-Badge-Session</string>
+    <string name="native_home_pin">Anheften</string>
+    <string name="native_home_unpin">Lösen</string>
+    <string name="native_home_edit_tile">%1$s wird bearbeitet. Ziehen zum Verschieben, erneut tippen zum Abbrechen.</string>
+    <string name="native_home_move_before">Vor %1$s einsortieren</string>
+    <string name="native_home_edit_done">Fertig</string>
+    <string name="native_home_edit_customize">Anpassen</string>
+    <string name="native_home_plebrap_play">Abspielen</string>
+    <string name="native_home_plebrap_pause">Pause</string>
+    <string name="native_home_plebrap_next">Nächster Titel</string>
+    <string name="native_home_plebrap_library">PlebRap-Bibliothek</string>
+    <string name="native_home_reset_failed">Zurücksetzen fehlgeschlagen — es wurde nichts gelöscht. Details im Diagnose-Log.</string>
+    <string name="native_home_reset_running">App wird zurückgesetzt …</string>
+    <string name="native_home_page">Meetup %1$d von %2$d</string>
+    <string name="native_home_expand">Ausklappen</string>
+    <string name="native_home_collapse">Einklappen</string>
+    <string name="native_home_unread_cd">%1$s ungelesen</string>
+    <string name="native_home_nostr_new">Neu</string>
+    <string name="native_home_logo">Einundzwanzig</string>
+    <string name="native_home_token_not_stored">Token konnte nicht gespeichert werden</string>
+</resources>

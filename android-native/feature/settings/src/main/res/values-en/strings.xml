@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_settings_theme_title">Appearance</string>
+    <string name="native_settings_theme_dark">Dark</string>
+    <string name="native_settings_theme_light">Light</string>
+    <string name="native_settings_theme_system">System</string>
+    <string name="native_settings_version">21Meetup · Version %1$s</string>
+    <string name="native_settings_drag_handle">Drag handle</string>
+    <string name="native_settings_selected">Selected</string>
+
+    <!-- Log screen and version footer: hard-coded German in Flutter (spec 12 §2.8 F44, §2.6), kept
+         byte-identical in every language for parity. -->
+    <string name="native_log_title">Diagnose-Log</string>
+    <string name="native_log_probe_tooltip">NIP-44-Verbindung prüfen (Freigabe im Signer eventuell nötig)</string>
+    <string name="native_log_probe_running">NIP-44-Probe läuft</string>
+    <string name="native_log_probe_ok">NIP-44-Probe erfolgreich.</string>
+    <string name="native_log_probe_failed">NIP-44-Probe fehlgeschlagen — Ursache im Diagnose-Log.</string>
+    <string name="native_log_filter_tooltip">Nur Warnungen/Fehler</string>
+    <string name="native_log_verbose_on_tooltip">Ausführliches Log AN — tippen zum Ausschalten</string>
+    <string name="native_log_verbose_off_tooltip">Ausführliches Log einschalten (mehr Details für die Fehlersuche)</string>
+    <string name="native_log_verbose_enabled">Ausführliches Log an — Fehler jetzt nachstellen, dann Log teilen.</string>
+    <string name="native_log_verbose_disabled">Ausführliches Log aus.</string>
+    <string name="native_log_copy">Kopieren</string>
+    <string name="native_log_share">Teilen</string>
+    <string name="native_log_copied">Log kopiert</string>
+    <string name="native_log_empty">Keine Einträge</string>
+    <string name="native_log_count">%1$d Einträge</string>
+    <string name="native_log_clear">Log leeren</string>
+    <string name="native_log_copy_failed">Log konnte nicht kopiert werden</string>
+    <string name="native_migration_title">Flutter data import</string>
+    <string name="native_migration_not_started">Import has not finished yet.</string>
+    <string name="native_migration_not_needed">No legacy Flutter data found.</string>
+    <string name="native_migration_imported">Data import complete.</string>
+    <string name="native_migration_pending">Some legacy keys are still unreadable. Replacement keys require your explicit approval.</string>
+    <string name="native_migration_cleaned">Legacy Flutter data has been removed.</string>
+    <string name="native_migration_attempts">Attempts: %1$d</string>
+    <string name="native_migration_failed_keys">Still pending:
+%1$s</string>
+    <string name="native_migration_recovered">Saved copies (restore in Profile):
+%1$s</string>
+    <string name="native_migration_warnings">Diagnostic notices:
+%1$s</string>
+    <string name="native_migration_error">Data import unavailable. Please try again.</string>
+    <string name="native_migration_retry">Retry legacy data import</string>
+    <string name="native_migration_abandon">Give up pending legacy keys</string>
+    <string name="native_migration_abandon_confirm">Unreadable legacy keys will no longer be protected as pending. The app may then create new identities and keys. Old badges or identities may remain inaccessible without the original key. Legacy files are kept for a later manual retry. Continue?</string>
+    <string name="native_migration_cancel">Cancel</string>
+</resources>

@@ -1,0 +1,15 @@
+.gradle/
+.kotlin/
+build/
+local.properties
+keystore.properties
+migrationtest.properties
+*.jks
+*.keystore
+.idea/
+*.iml
+captures/
+.cxx/
+
+# Test-only key for the CI preview build (different applicationId). Not a release key.
+!app/preview.keystore

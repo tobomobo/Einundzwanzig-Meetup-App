@@ -1,0 +1,27 @@
+<resources>
+    <string name="native_identity_key_invalid">Invalid private key. Check the complete key.</string>
+    <string name="native_identity_key_prefix">The key must start with nsec1.</string>
+    <string name="native_identity_key_encrypted">Could not open the encrypted key. Check the key and password.</string>
+    <string name="native_identity_key_memory">Not enough memory to process the key. Close other apps and try again.</string>
+    <string name="native_identity_name_required">Please choose a name.</string>
+    <string name="native_identity_password_short">The password must have at least 8 characters.</string>
+    <string name="native_identity_no_local_key">No local private key is available.</string>
+    <string name="native_identity_no_saved_key">No saved key is available.</string>
+    <string name="native_identity_no_passkey">No saved passkey is available.</string>
+    <string name="native_identity_sign_cancelled">Signing request cancelled.</string>
+    <string name="native_identity_amber_missing">Amber is not installed.</string>
+    <string name="native_identity_wrong_account">The signer used a different account. Select the connected account.</string>
+    <string name="native_identity_signer_no_event">The signer did not return a signed event.</string>
+    <string name="native_identity_signer_kind">The signer changed the event kind. The response was rejected.</string>
+    <string name="native_identity_signer_content">The signer changed the content. The response was rejected.</string>
+    <string name="native_identity_signer_signature">The signer returned an invalid signature.</string>
+    <string name="native_identity_signer_unreadable">Could not read the signer response.</string>
+    <string name="native_identity_bunker_timeout">The signer did not respond. Open the signer app and try again.</string>
+    <string name="native_identity_bunker_rejected">The signing request was rejected. Check approval in the signer.</string>
+    <string name="native_identity_bunker_failure">Could not connect to the signer. Check the address, relay and approval.</string>
+    <string name="native_identity_signer_no_key">No key is connected for this signer. Please reconnect.</string>
+    <string name="native_identity_no_session">No signer session is saved. Please reconnect the signer.</string>
+    <string name="native_identity_web_only">Browser extensions are only available in the web app.</string>
+    <string name="native_identity_storage">Secure storage is unavailable. Try again; existing keys are preserved.</string>
+    <string name="native_identity_generic">The operation failed. Please try again.</string>
+</resources>

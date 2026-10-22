@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_camera_permission_title">Camera access needed</string>
+    <string name="native_camera_permission_body">To scan QR codes, the app needs access to your camera. No pictures are stored.</string>
+    <string name="native_camera_permission_rationale">Without camera access the app cannot scan QR codes. Please allow access when asked.</string>
+    <string name="native_camera_permission_denied_forever">Camera access is denied. You can allow it in the app settings under “Permissions”.</string>
+    <string name="native_camera_permission_grant">Allow camera</string>
+    <string name="native_camera_permission_ask_again">Ask again</string>
+    <string name="native_camera_open_settings">Open settings</string>
+    <string name="native_camera_unavailable_title">Camera unavailable</string>
+    <string name="native_camera_unavailable_body">The camera could not be started. Another app may be using it.</string>
+    <string name="native_camera_retry">Try again</string>
+    <string name="native_camera_preview_description">Camera preview for scanning QR codes</string>
+    <string name="native_torch">Flashlight</string>
+    <string name="native_torch_state_on">On</string>
+    <string name="native_torch_state_off">Off</string>
+</resources>

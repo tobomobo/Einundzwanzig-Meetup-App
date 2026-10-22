@@ -1,0 +1,5 @@
+<resources>
+    <string name="native_calendar_fallback_meetup">Encuentro</string>
+    <string name="native_calendar_unknown_location">Lugar desconocido</string>
+    <string name="native_calendar_fallback_course">Curso</string>
+</resources>

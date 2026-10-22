@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_expiry_expired_hm">Caducó hace %1$dh %2$dmin</string>
+    <string name="native_expiry_expired_m">Caducó hace %1$dmin</string>
+    <string name="native_expiry_valid_hm">Válido %1$dh %2$dmin más</string>
+    <string name="native_expiry_valid_m">Válido %1$dmin más</string>
+    <string name="native_remaining_expired">Caducado</string>
+    <string name="native_remaining_hm">%1$dh %2$dmin</string>
+    <string name="native_remaining_m">%1$dmin</string>
+    <string name="native_nonce_expired">Código QR caducado (%1$ds de antigüedad). Escanéalo directamente en la pantalla.</string>
+    <string name="native_rq_block">⛓️ Bloque %1$s</string>
+    <string name="native_rq_qr_description">Código QR rotativo del meetup</string>
+    <string name="native_scanner_checking">Comprobando insignia …</string>
+    <string name="native_scanner_locating">Comprobando ubicación …</string>
+    <string name="native_writer_writing">Escribiendo etiqueta NFC</string>
+    <!-- Typed scan/claim failures (spec 02 §2.9), busy labels, wizard steps. -->
+    <string name="native_verify_missing_data">Faltan datos de firma</string>
+    <string name="native_verify_bad_pubkey">Formato de pubkey no válido (se esperan 64 caracteres hex)</string>
+    <string name="native_verify_bad_sig_format">Formato de firma no válido (se esperan 128 caracteres hex)</string>
+    <string name="native_verify_expired">¡Tag caducado! %1$s. Pide al organizador un tag nuevo.</string>
+    <string name="native_verify_invalid_signature">¡Firma no válida!</string>
+    <string name="native_verify_legacy_rejected">Los badges antiguos (v1) ya no se aceptan. Pide al organizador un tag v2 nuevo (firmado con Schnorr).</string>
+    <string name="native_verify_error">Error de verificación: %1$s</string>
+    <string name="native_nonce_malformed">Formato de QR rotativo no válido.</string>
+    <string name="native_claim_failed">⚠ Vinculación: %1$s</string>
+    <string name="native_claim_no_key">No hay clave — no se puede reclamar</string>
+    <string name="native_claim_timestamp">Error de reclamación: la marca de tiempo del firmante no coincide</string>
+    <string name="native_claim_error">Error de reclamación: %1$s</string>
+    <string name="native_nfc_adapter_unavailable">Adaptador NFC no disponible</string>
+    <string name="native_wizard_step_nfc">NFC</string>
+    <string name="native_wizard_step_qr">QR</string>
+    <string name="native_wizard_step_description">Paso %1$d de %2$d: %3$s</string>
+    <string name="native_wizard_step_current">Paso actual</string>
+    <string name="native_wizard_step_pending">Aún no alcanzado</string>
+    <string name="native_meetup_pin">📍 %1$s</string>
+    <string name="native_meetup_pin_country">📍 %1$s, %2$s</string>
+    <string name="native_writer_home_not_found">Meetup: %1$s</string>
+</resources>

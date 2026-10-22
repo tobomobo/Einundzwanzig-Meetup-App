@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_meetups_not_found_title">Meetup not found</string>
+    <string name="native_meetups_not_found_sub">This meetup is not (or no longer) in the directory.</string>
+    <string name="native_meetups_open_community_link">Open community link</string>
+    <string name="native_meetups_directions">Open route in OpenStreetMap</string>
+    <string name="native_meetups_clear_search">Clear search</string>
+    <string name="native_meetups_favorite_on">Favorite</string>
+    <string name="native_meetups_favorite_off">Not a favorite</string>
+    <string name="native_meetups_open_app_settings">App settings</string>
+    <string name="native_meetups_open_location_settings">Turn on location</string>
+    <string name="native_meetups_load_failed">Meetups could not be loaded.</string>
+    <string name="native_loc_pick_no_fix">Location not available.</string>
+    <string name="native_portal_event_without_id">Error: date without ID</string>
+    <string name="native_portal_event_not_found">Date not found</string>
+    <string name="native_portal_error_generic">Error</string>
+    <string name="native_portal_error_not_logged_in">Not signed in. Please connect to the portal first.</string>
+    <string name="native_portal_error_network">Network error. Are you online?</string>
+    <string name="native_portal_error_unauthenticated">Not authenticated. Please sign in again.</string>
+    <string name="native_portal_error_forbidden">No permission (creator or admin only).</string>
+    <string name="native_portal_error_not_found">Not found.</string>
+    <string name="native_portal_error_validation">Validation error. Please check your input.</string>
+    <string name="native_portal_error_http">Error (HTTP %1$d).</string>
+    <string name="native_portal_error_no_token">The portal returned no token.</string>
+    <string name="native_portal_open_link">Open link</string>
+    <string name="native_weekday_short_1">Mon</string>
+    <string name="native_weekday_short_2">Tue</string>
+    <string name="native_weekday_short_3">Wed</string>
+    <string name="native_weekday_short_4">Thu</string>
+    <string name="native_weekday_short_5">Fri</string>
+    <string name="native_weekday_short_6">Sat</string>
+    <string name="native_weekday_short_7">Sun</string>
+    <string name="native_details_time_suffix">%1$s</string>
+    <string name="native_portal_qa_profile">Profile</string>
+    <string name="native_portal_qa_meetups">Meetups</string>
+    <string name="native_portal_qa_podcast">Podcast</string>
+    <string name="native_portal_qa_shoutout">Shoutout</string>
+    <string name="native_portal_qa_donate">Donate</string>
+    <string name="native_nearby_locating">Determining location …</string>
+    <string name="native_meetups_save_failed">Favorites could not be saved.</string>
+    <string name="native_meetups_load_failed_sub">Favorites cannot be saved without the directory. Please check your connection.</string>
+    <string name="native_portal_error_token_not_stored">Could not save the token</string>
+</resources>

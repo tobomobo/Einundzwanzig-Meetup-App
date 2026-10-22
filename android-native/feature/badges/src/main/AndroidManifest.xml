@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- No NFC capability while IssuanceFeatures.NFC_ENABLED = false (spec 14 rows 54/56/292,
+         Security Audit N4: no unused capability). When the flag flips, re-add together with it:
+           <uses-permission android:name="android.permission.NFC" />
+           <uses-feature android:name="android.hardware.nfc" android:required="false" />
+         The NFC code paths (NfcAdapter, reader mode) are only reached behind the flag. -->
+</manifest>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_camera_permission_title">Se necesita acceso a la cámara</string>
+    <string name="native_camera_permission_body">Para escanear códigos QR, la app necesita acceso a tu cámara. No se guarda ninguna imagen.</string>
+    <string name="native_camera_permission_rationale">Sin acceso a la cámara, la app no puede escanear códigos QR. Permite el acceso cuando se te pregunte.</string>
+    <string name="native_camera_permission_denied_forever">El acceso a la cámara está denegado. Puedes permitirlo en los ajustes de la app, en «Permisos».</string>
+    <string name="native_camera_permission_grant">Permitir cámara</string>
+    <string name="native_camera_permission_ask_again">Volver a preguntar</string>
+    <string name="native_camera_open_settings">Abrir ajustes</string>
+    <string name="native_camera_unavailable_title">Cámara no disponible</string>
+    <string name="native_camera_unavailable_body">No se pudo iniciar la cámara. Puede que otra app la esté usando.</string>
+    <string name="native_camera_retry">Reintentar</string>
+    <string name="native_camera_preview_description">Vista previa de la cámara para escanear códigos QR</string>
+    <string name="native_torch">Linterna</string>
+    <string name="native_torch_state_on">Encendida</string>
+    <string name="native_torch_state_off">Apagada</string>
+</resources>

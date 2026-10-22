@@ -1,0 +1,94 @@
+{
+  "apiLevel": 36,
+  "avd": "e21test",
+  "optimizedPreview": {
+    "tests": 9,
+    "failures": 0,
+    "apkSha256": "513110a0236734f370a599738ff91154cc69eb9fb28348cdbbc487246c5fe7ce",
+    "cases": [
+      "Activity creates/recreates with production graph",
+      "First-key and identity-switch proof fencing through actual Hilt/Keystore/repository",
+      "All 57 navigation keys serialize and restore",
+      "Actual osmdroid projection/draw",
+      "Pending identity can open diagnostics through real Activity within ten seconds",
+      "JNI Schnorr signing/verification",
+      "NIP-44 encryption roundtrip",
+      "NIP-49 default-cost roundtrip and wrong password",
+      "Bundled ML Kit decodes QR through production factory"
+    ],
+    "pendingIdentityFreshInstalls": {
+      "runs": 3,
+      "failures": 0,
+      "screenPixels": "320x640",
+      "densityDpi": 160,
+      "deadlineSeconds": 10,
+      "fixtureWrite": "distinct same-directory temporary file, fsync, atomic rename after ensureMigrated"
+    }
+  },
+  "flutterUpgrade": {
+    "sourceVersion": "1.7.2+31",
+    "targetVariant": "migrationTest",
+    "tests": 1,
+    "failures": 0,
+    "checks": [
+      "same public identity",
+      "same nickname/home/favorites",
+      "one original badge",
+      "widget headline retained",
+      "local signing/verification succeeds",
+      "zero pending secret names"
+    ],
+    "counts": {
+      "preferencesCopied": 45,
+      "secretsImported": 7,
+      "badgeCopiesOpened": 2,
+      "failedSecrets": 0
+    }
+  },
+  "ciMatrix": [
+    26,
+    29,
+    34,
+    36
+  ],
+  "ciMatrixStatus": "Configured; consult the workflow run for runtime results on each API",
+  "legacyStorage": {
+    "tests": 5,
+    "failures": 0,
+    "formats": [
+      "RSA PKCS1 + AES CBC",
+      "RSA OAEP + AES GCM",
+      "Interrupted backup cipher",
+      "Flutter vendored encrypted preferences with actual Keystore master",
+      "Missing ESP master is never regenerated"
+    ]
+  },
+  "followupValidation": {
+    "date": "2026-10-22",
+    "apis": {
+      "26": {
+        "optimizedAppTests": 9,
+        "legacyStorageTests": 5,
+        "failures": 0
+      },
+      "36": {
+        "optimizedAppTests": 9,
+        "legacyStorageTests": 5,
+        "failures": 0,
+        "apkSha256": "3a66513151267a74d6c551080222af9b5b32e33e327f7ea2f6770ebc620389ca"
+      }
+    },
+    "screenPixels": "320x640",
+    "densityDpi": 160,
+    "diagnosticsDeadlineSeconds": 10,
+    "fixtureChanges": "Confirm only the Android immersive-mode explanation, identified by system window or resource IDs. API 26 rootable AVD connectivity preparation restores original ADB mode and connectivity. App UID remains unchanged."
+  },
+  "priorCiEvidence": {
+    "run": 39769205740,
+    "head": "0bb4ed1acef1f7346fef1abe6a3802fd57de0f7e",
+    "api29": "passed",
+    "api34": "passed",
+    "api26": "Connectivity permission failure, reproduced and corrected in runner",
+    "api36": "System immersive-mode explanation covered the visible storage diagnostics; corrected in device fixture"
+  }
+}

@@ -1,0 +1,309 @@
+{
+  "command": "tools/gradlew-locked testDebugUnitTest --max-workers=3",
+  "result": "BUILD SUCCESSFUL",
+  "duration": "2m43s",
+  "totals": {
+    "tests": 3915,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 1
+  },
+  "modules": {
+    "app": {
+      "tests": 44,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "feature/proofs": {
+      "tests": 44,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "feature/backup": {
+      "tests": 61,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "feature/news": {
+      "tests": 56,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "feature/network": {
+      "tests": 58,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "feature/admin": {
+      "tests": 67,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "feature/chat": {
+      "tests": 36,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "feature/bitcoin": {
+      "tests": 88,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "feature/community": {
+      "tests": 73,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "feature/profile": {
+      "tests": 78,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "feature/events": {
+      "tests": 105,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "feature/reputation": {
+      "tests": 76,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "feature/badges": {
+      "tests": 104,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "feature/onboarding": {
+      "tests": 93,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "feature/settings": {
+      "tests": 62,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "feature/meetups": {
+      "tests": 113,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "feature/wallet": {
+      "tests": 92,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "feature/home": {
+      "tests": 92,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "data/settings": {
+      "tests": 48,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "data/mempool": {
+      "tests": 87,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "data/community": {
+      "tests": 68,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "data/identity": {
+      "tests": 213,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "data/meetups": {
+      "tests": 128,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1
+    },
+    "data/profile": {
+      "tests": 57,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "data/badges": {
+      "tests": 213,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "data/migration": {
+      "tests": 116,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "data/news": {
+      "tests": 62,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "data/chat": {
+      "tests": 61,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "data/calendar": {
+      "tests": 91,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "data/trust": {
+      "tests": 75,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "data/proofs": {
+      "tests": 136,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "data/admin": {
+      "tests": 60,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "data/badgesync": {
+      "tests": 63,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "data/socialgraph": {
+      "tests": 60,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "data/backup": {
+      "tests": 97,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "data/reputation": {
+      "tests": 81,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "data/issuance": {
+      "tests": 80,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "core/ui": {
+      "tests": 145,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "core/common": {
+      "tests": 122,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "core/navigation": {
+      "tests": 36,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "core/crypto": {
+      "tests": 101,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "core/data": {
+      "tests": 121,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "core/network": {
+      "tests": 29,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "core/nostr": {
+      "tests": 102,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "core/camera": {
+      "tests": 47,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "core/map": {
+      "tests": 74,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "followUpCommands": [
+    "tools/gradlew-locked :data:identity:testDebugUnitTest --max-workers=3 (complete suite after final barrier change)",
+    "tools/gradlew-locked :feature:onboarding:testDebugUnitTest :feature:meetups:testDebugUnitTest --max-workers=3 (passed after final insets/locale edits)"
+  ],
+  "followupValidation": {
+    "date": "2026-10-22",
+    "scope": "Reset secret-erasure failures, backup proof-write failures and actual Flutter backup interoperability",
+    "command": "tools/gradlew-locked :feature:home:testDebugUnitTest :data:backup:testDebugUnitTest :feature:backup:testDebugUnitTest --max-workers=3",
+    "result": "BUILD SUCCESSFUL",
+    "modules": {
+      "feature/home": 94,
+      "data/backup": 101,
+      "feature/backup": 63
+    },
+    "passed": 258,
+    "failures": 0,
+    "note": "Focused follow-up after the full-suite result above; eight additional cases. Unchanged modules are covered by the earlier full run, not claimed re-executed here.",
+    "flutterWidgetTests": 2,
+    "swiftExportToActualFlutterImporter": 1
+  }
+}

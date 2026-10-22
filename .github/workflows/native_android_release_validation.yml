@@ -1,0 +1,96 @@
+name: Native Android release validation
+
+# Manual infrastructure only: does not publish a GitHub release or enable production rollout.
+# Run on the fork branch to validate the real Flutter signing identity once secrets are supplied.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-android-release-validation-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: android-native
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: "platform-tools platforms;android-37.0 build-tools;37.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Validate verification tooling
+        run: python3 -m unittest discover -s tools/tests -v
+
+      - name: Unit tests and release lint
+        run: tools/gradlew-locked --no-configuration-cache testDebugUnitTest :app:lintRelease
+
+      - name: Restore the existing Flutter release signing identity
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          E21_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_STORE_PASSWORD }}
+          E21_KEY_ALIAS: ${{ secrets.KEYSTORE_KEY_ALIAS }}
+          E21_KEY_PASSWORD: ${{ secrets.KEYSTORE_KEY_PASSWORD }}
+          RELEASE_CERT_SHA256: ${{ vars.RELEASE_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          for name in KEYSTORE_BASE64 E21_KEYSTORE_PASSWORD E21_KEY_ALIAS E21_KEY_PASSWORD RELEASE_CERT_SHA256; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing $name; release validation requires the existing Flutter signing identity and certificate pin."
+              exit 1
+            fi
+          done
+          umask 077
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/native-release.jks"
+
+      - name: Build the signed release APK
+        env:
+          E21_KEYSTORE_FILE: ${{ runner.temp }}/native-release.jks
+          E21_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_STORE_PASSWORD }}
+          E21_KEY_ALIAS: ${{ secrets.KEYSTORE_KEY_ALIAS }}
+          E21_KEY_PASSWORD: ${{ secrets.KEYSTORE_KEY_PASSWORD }}
+        run: tools/gradlew-locked --no-configuration-cache :app:assembleRelease
+
+      - name: Verify certificate pin, exported allow-list and 16 KB alignment
+        env:
+          RELEASE_CERT_SHA256: ${{ vars.RELEASE_CERT_SHA256 }}
+        run: |
+          python3 tools/verify_native_android.py \
+            --variant release \
+            --apk app/build/outputs/apk/release/app-release.apk \
+            --manifest app/build/intermediates/merged_manifests/release/processReleaseManifest/AndroidManifest.xml \
+            --mapping app/build/outputs/mapping/release/mapping.txt \
+            --build-tools "$ANDROID_HOME/build-tools/37.0.0" \
+            --output-dir out
+
+      - name: Upload validated APK and R8 mapping
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-android-release-validation-${{ github.run_number }}
+          path: android-native/out/
+          if-no-files-found: error
+
+      - name: Upload test and lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-release-validation-reports
+          path: |
+            android-native/**/build/reports/tests/
+            android-native/app/build/reports/lint-results-release.html
+          if-no-files-found: ignore
+
+      - name: Remove signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/native-release.jks"

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_map_attribution">© OpenStreetMap contributors</string>
+    <string name="native_map_attribution_action">Open copyright notice</string>
+    <string name="native_map_description">Map</string>
+    <string name="native_map_zoom_in">Zoom in</string>
+    <string name="native_map_zoom_out">Zoom out</string>
+    <string name="native_map_picked_location_at">Selected location: %1$s</string>
+    <string name="native_map_pan_north">Pan map north</string>
+    <string name="native_map_pan_south">Pan map south</string>
+    <string name="native_map_pan_east">Pan map east</string>
+    <string name="native_map_pan_west">Pan map west</string>
+    <string name="native_map_pick_center">Pick the map centre</string>
+</resources>

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- BadgeSecurity.expiryInfo (spec 02 §2.9), localized. -->
+    <string name="native_expiry_expired_hm">Abgelaufen vor %1$dh %2$dmin</string>
+    <string name="native_expiry_expired_m">Abgelaufen vor %1$dmin</string>
+    <string name="native_expiry_valid_hm">Gültig noch %1$dh %2$dmin</string>
+    <string name="native_expiry_valid_m">Gültig noch %1$dmin</string>
+    <!-- MeetupSession.remainingTimeString (spec 02 §2.3), localized. -->
+    <string name="native_remaining_expired">Abgelaufen</string>
+    <string name="native_remaining_hm">%1$dh %2$dmin</string>
+    <string name="native_remaining_m">%1$dmin</string>
+    <!-- RollingQRService.validateNonce message for an expired code. -->
+    <string name="native_nonce_expired">QR-Code abgelaufen (%1$ds alt). Bitte direkt am Bildschirm scannen.</string>
+    <string name="native_rq_block">⛓️ Block %1$s</string>
+    <string name="native_rq_qr_description">Rollierender Meetup-QR-Code</string>
+    <string name="native_scanner_checking">Badge wird geprüft …</string>
+    <string name="native_scanner_locating">Standort wird geprüft …</string>
+    <string name="native_writer_writing">NFC-Tag wird beschrieben</string>
+    <!-- Typed scan/claim failures (spec 02 §2.9), busy labels, wizard steps. -->
+    <string name="native_verify_missing_data">Fehlende Signatur-Daten</string>
+    <string name="native_verify_bad_pubkey">Ungültiges Pubkey-Format (erwartet: 64 Hex-Zeichen)</string>
+    <string name="native_verify_bad_sig_format">Ungültiges Signatur-Format (erwartet: 128 Hex-Zeichen)</string>
+    <string name="native_verify_expired">Tag abgelaufen! %1$s. Bitte Organisator um neuen Tag.</string>
+    <string name="native_verify_invalid_signature">Signatur ungültig!</string>
+    <string name="native_verify_legacy_rejected">Legacy-Badges (v1) werden nicht mehr akzeptiert. Bitte Organisator um neuen v2-Tag (Schnorr-signiert).</string>
+    <string name="native_verify_error">Verifikations-Fehler: %1$s</string>
+    <string name="native_nonce_malformed">Ungültiges Rolling-QR-Format.</string>
+    <string name="native_claim_failed">⚠ Binding: %1$s</string>
+    <string name="native_claim_no_key">Kein Schlüssel vorhanden — Claim nicht möglich</string>
+    <string name="native_claim_timestamp">Claim-Fehler: Zeitstempel des Signers weicht ab</string>
+    <string name="native_claim_error">Claim-Fehler: %1$s</string>
+    <string name="native_nfc_adapter_unavailable">NFC-Adapter nicht verfügbar</string>
+    <string name="native_wizard_step_nfc">NFC</string>
+    <string name="native_wizard_step_qr">QR</string>
+    <string name="native_wizard_step_description">Schritt %1$d von %2$d: %3$s</string>
+    <string name="native_wizard_step_current">Aktueller Schritt</string>
+    <string name="native_wizard_step_pending">Noch nicht erreicht</string>
+    <string name="native_meetup_pin">📍 %1$s</string>
+    <string name="native_meetup_pin_country">📍 %1$s, %2$s</string>
+    <string name="native_writer_home_not_found">Meetup: %1$s</string>
+</resources>

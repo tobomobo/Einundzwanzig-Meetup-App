@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Portal REST API, meetup list and Nominatim geocoding. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+        Nearby meetups and badge presence checks (spec 09 §11). Both are requested; an Android 12+
+        user who grants only approximate location is fully supported (spec 09 §14 item 21).
+    -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+</manifest>

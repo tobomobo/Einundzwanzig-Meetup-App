@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_backupItemProfile">Profile</string>
+    <!-- args: count:int -->
+    <plurals name="native_backupItemBadges">
+        <item quantity="one">%1$d badge</item>
+        <item quantity="other">%1$d badges</item>
+    </plurals>
+    <string name="native_backupItemNostrKey">Nostr key</string>
+    <!-- args: count:int -->
+    <plurals name="native_backupItemPlatformProofs">
+        <item quantity="one">%1$d platform proof</item>
+        <item quantity="other">%1$d platform proofs</item>
+    </plurals>
+    <string name="native_backupItemHumanity">humanity proof</string>
+    <string name="native_backupErrSwitchPending">An identity switch is not finished yet. Load the backup of the new identity again.</string>
+    <!-- args: count:int -->
+    <plurals name="native_backupErrStageFailed">
+        <item quantity="one">%1$d badge from the backup could not be prepared.</item>
+        <item quantity="other">%1$d badges from the backup could not be prepared.</item>
+    </plurals>
+    <string name="native_backupErrKeyUnreadable">The key from the backup cannot be read right now. Your collection stays unchanged.</string>
+    <string name="native_backupErrKeyNotTaken">The key from the backup was not applied. Your collection stays unchanged.</string>
+    <!-- args: count:int -->
+    <plurals name="native_backupErrBadgesNotSaved">
+        <item quantity="one">%1$d badge from the backup could not be saved. Everything else was restored.</item>
+        <item quantity="other">%1$d badges from the backup could not be saved. Everything else was restored.</item>
+    </plurals>
+    <string name="native_backupErrHoldNotPersisted">The switch could not be recorded.</string>
+    <string name="native_backupErrClearNotMarked">The empty collection could not be marked.</string>
+    <string name="native_backupErrProofsNotCleared">The proofs of the previous identity could not be removed.</string>
+    <string name="native_backupErrProofsNotSaved">Some proofs from the backup could not be saved. Data already restored is retained. Load the backup again.</string>
+    <string name="native_backupErrUnreadable">The file could not be read.</string>
+    <string name="native_backupWorking">Processing backup …</string>
+    <string name="native_backupRuleMet">Met</string>
+    <string name="native_backupRuleNotMet">Not met</string>
+</resources>

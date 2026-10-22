@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_widget_label">21Meetup</string>
+    <string name="native_widget_description">Red Bitcoin y próximo meetup</string>
+    <string name="native_widget_logo">Einundzwanzig</string>
+    <string name="native_widget_refresh">Actualizar</string>
+    <string name="native_widget_bitcoin">BITCOIN</string>
+    <string name="native_widget_block">BLOQUE</string>
+    <string name="native_widget_price">PRECIO</string>
+    <string name="native_widget_moscow">MOSCOW</string>
+    <string name="native_widget_fees">FEES L·M·H</string>
+    <string name="native_widget_hashrate">HASHRATE</string>
+    <string name="native_widget_supply">SUPPLY</string>
+    <string name="native_widget_difficulty">DIFICULTAD</string>
+    <string name="native_widget_next_meetup">PRÓXIMO MEETUP</string>
+    <string name="native_widget_no_meetup">Sin meetup principal</string>
+    <string name="native_widget_choose_in_app">Elígelo en la app</string>
+    <string name="native_widget_today">Hoy</string>
+    <string name="native_widget_tomorrow">Mañana</string>
+    <plurals name="native_widget_in_days">
+        <item quantity="one">en %1$d día</item>
+        <item quantity="many">en %1$d días</item>
+        <item quantity="other">en %1$d días</item>
+    </plurals>
+    <string name="native_widget_news">NEWS</string>
+    <string name="native_widget_news_new">NUEVO</string>
+    <string name="native_widget_updated">Act. %1$s</string>
+    <string name="native_shell_scan">Escanear</string>
+    <!-- Flutter data import still running after the 20 s splash (spec 14 §4.7) -->
+    <string name="native_migration_wait_title">Transfiriendo datos…</string>
+    <string name="native_migration_wait_body">Se están transfiriendo tus datos de la versión anterior de la app. En dispositivos antiguos puede tardar un poco. No cierres la app.</string>
+</resources>

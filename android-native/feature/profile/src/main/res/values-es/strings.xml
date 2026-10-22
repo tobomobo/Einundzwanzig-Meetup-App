@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="native_relays_active">
+        <item quantity="one">%1$d relé activo</item>
+        <item quantity="many">%1$d relés activos</item>
+        <item quantity="other">%1$d relés activos</item>
+    </plurals>
+    <string name="native_relay_remove">Eliminar</string>
+    <string name="native_relay_remove_a11y">Eliminar %1$s</string>
+    <string name="native_relay_enabled">Relé activado</string>
+    <string name="native_relay_disabled">Relé desactivado</string>
+    <string name="native_nostr_label">Nostr</string>
+    <string name="native_npub_button">NPUB</string>
+    <string name="native_nsec_button">NSEC</string>
+    <string name="native_nsec_hint">nsec1...</string>
+    <plurals name="native_platforms_active">
+        <item quantity="one">%1$d plataforma activa</item>
+        <item quantity="many">%1$d plataformas activas</item>
+        <item quantity="other">%1$d plataformas activas</item>
+    </plurals>
+    <string name="native_list_joiner">" y "</string>
+    <string name="native_auth_show_key">Confirma tu identidad para mostrar la clave</string>
+    <string name="native_auth_export_key">Confirma tu identidad para exportar la clave</string>
+    <string name="native_auth_unavailable">La confirmación de identidad no está disponible aquí</string>
+    <string name="native_meetup_favorite">Favorito</string>
+    <string name="native_meetup_not_favorite">No es favorito</string>
+    <string name="native_bunker_qr">Código QR para vincular con el firmante</string>
+    <string name="native_profile_avatar">Foto de perfil</string>
+    <string name="native_more_favorites">+%1$d ★</string>
+    <plurals name="native_more_favorites_a11y">
+        <item quantity="one">%1$d favorito más</item>
+        <item quantity="other">%1$d favoritos más</item>
+    </plurals>
+    <string name="native_recovery_title">Identidad anterior encontrada</string>
+    <string name="native_recovery_body">Se guardaron claves adicionales al importar los datos de Flutter. Puedes restaurarlas, exportarlas o descartarlas.</string>
+    <string name="native_recovery_restore">Restaurar identidad</string>
+    <string name="native_recovery_export">Exportar clave</string>
+    <string name="native_recovery_discard">Descartar copia guardada</string>
+    <string name="native_recovery_restore_confirm">Se sustituirá la identidad local actual y se eliminarán sus pruebas. Guarda antes la clave actual si la necesitas. Se requiere la autenticación del dispositivo para continuar.</string>
+    <string name="native_recovery_export_confirm">Tras autenticarte en el dispositivo, la clave privada se mostrará en una vista protegida. Compártela solo con aplicaciones de confianza. Se conserva la copia guardada.</string>
+    <string name="native_recovery_discard_confirm">Tras autenticarte en el dispositivo, esta copia se eliminará permanentemente. Asegúrate de que ya no necesitas la clave o de haberla guardado antes.</string>
+    <string name="native_recovery_restored">Identidad anterior restaurada.</string>
+    <string name="native_recovery_discarded">Copia guardada descartada.</string>
+    <string name="native_auth_recovery">Gestionar identidad guardada</string>
+</resources>

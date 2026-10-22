@@ -1,0 +1,59 @@
+{
+  "baseline_head": "9adb704bbad4f150fa8856931449cbce4a8b759b",
+  "closed_gaps": [
+    {
+      "id": "KOT03",
+      "journey": "Choose a gallery image as the local avatar from Home or Profile",
+      "flutter_baseline": [
+        "lib/screens/home_screen.dart:597-608",
+        "lib/services/nostr_profile_service.dart:425-428"
+      ],
+      "android_before": "DefaultLocalPictureImporter.kt:91-92 applied an Elvis error check to the result of inJustDecodeBounds. Android intentionally returns null for that decode, so every valid image failed with Bild nicht lesbar.",
+      "android_after": "Validate that the input stream exists, decode image bounds without requiring a Bitmap result, validate dimensions, then run the existing bounded decode, JPEG encoding, preference update, and cleanup.",
+      "android_wiring": [
+        "feature/home/ui/HomeScreen.kt:153-154",
+        "feature/home/HomeViewModel.kt:559-564",
+        "feature/home/data/HomeDataSource.kt:339",
+        "feature/profile/edit/ProfileEditRoute.kt:36-37",
+        "feature/profile/edit/ProfileEditViewModel.kt:670-676"
+      ],
+      "baseline_regression": {
+        "tests": 3,
+        "failures": 3
+      },
+      "new_regression_coverage": [
+        "Real Android Context constructor and native BitmapFactory, no fake encoder",
+        "800x400 PNG becomes 400x200 JPEG and is stored",
+        "Replacement 160x240 PNG stays 160x240, old copy deleted after new save",
+        "Unreadable image preserves previous avatar path and bytes"
+      ]
+    }
+  ],
+  "targeted_command": "JAVA_HOME=/home/tg/development/jdk17 tools/gradlew-locked --offline :data:profile:testDebugUnitTest --tests space.einundzwanzig.meetup.data.profile.AndroidLocalPictureImporterTest --tests space.einundzwanzig.meetup.data.profile.LocalPictureImporterTest",
+  "test_results": [
+    {
+      "class": "AndroidLocalPictureImporterTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "class": "LocalPictureImporterTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0
+    }
+  ],
+  "verification": {
+    "diff_check": "pass",
+    "gradle": "BUILD SUCCESSFUL in 10s",
+    "scope": "Robolectric Android API 34 with native graphics, plus existing JVM importer tests; no device runtime claim"
+  },
+  "unverified": [
+    "Full feature parity beyond inspected paths",
+    "Physical system photo-picker/content-provider return",
+    "Emulator/device runtime",
+    "Mac/Apple SDK and runtime"
+  ],
+  "status": "KOT03 implemented; 7 targeted tests passed"
+}

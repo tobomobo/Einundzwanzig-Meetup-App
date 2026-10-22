@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_onboarding_loading">Loading</string>
+    <string name="native_onboarding_storage_title">Secure storage unreadable</string>
+    <string name="native_onboarding_storage_body">Your key could not be read right now. Nothing new will be created – please try again.</string>
+    <string name="native_onboarding_logo">Einundzwanzig Meetup</string>
+    <string name="native_onboarding_language_chip">Language: %1$s</string>
+    <string name="native_onboarding_selected">Selected</string>
+    <string name="native_onboarding_overwrite_title">Create a new identity?</string>
+    <string name="native_onboarding_overwrite_body">There is already an identity on this device. A new one overwrites the existing key – without a backup it is lost.</string>
+    <string name="native_onboarding_overwrite_confirm">Create new</string>
+    <string name="native_onboarding_show_password">Show password</string>
+    <string name="native_onboarding_hide_password">Hide password</string>
+    <string name="native_onboarding_secure_progress">Step %1$d of %2$d</string>
+    <string name="native_onboarding_bunker_qr">QR code for pairing with the signer</string>
+    <string name="native_onboarding_bunker_scan">Scan QR code</string>
+    <string name="native_onboarding_bunker_scan_title">Scan bunker:// QR code</string>
+    <string name="native_onboarding_bunker_scan_invalid">No bunker:// code detected.</string>
+    <string name="native_onboarding_meetup_favorite">Favorite</string>
+    <string name="native_onboarding_meetup_not_favorite">Not a favorite</string>
+    <string name="native_onboarding_storage_diagnostics">Diagnostics and recover old data</string>
+</resources>

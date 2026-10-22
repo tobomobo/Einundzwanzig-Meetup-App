@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Native-only strings of :core:camera (German default). Flutter's mobile_scanner had no own texts. -->
+<resources>
+    <string name="native_camera_permission_title">Kamerazugriff benötigt</string>
+    <string name="native_camera_permission_body">Um QR-Codes zu scannen, braucht die App Zugriff auf deine Kamera. Es werden keine Bilder gespeichert.</string>
+    <string name="native_camera_permission_rationale">Ohne Kamerazugriff kann die App keine QR-Codes scannen. Bitte erlaube den Zugriff, wenn du gefragt wirst.</string>
+    <string name="native_camera_permission_denied_forever">Der Kamerazugriff ist abgelehnt. Du kannst ihn in den App-Einstellungen unter „Berechtigungen“ erlauben.</string>
+    <string name="native_camera_permission_grant">Kamera erlauben</string>
+    <string name="native_camera_permission_ask_again">Erneut fragen</string>
+    <string name="native_camera_open_settings">Einstellungen öffnen</string>
+    <string name="native_camera_unavailable_title">Kamera nicht verfügbar</string>
+    <string name="native_camera_unavailable_body">Die Kamera konnte nicht gestartet werden. Vielleicht wird sie gerade von einer anderen App verwendet.</string>
+    <string name="native_camera_retry">Erneut versuchen</string>
+    <string name="native_camera_preview_description">Kameravorschau zum Scannen von QR-Codes</string>
+    <string name="native_torch">Taschenlampe</string>
+    <string name="native_torch_state_on">An</string>
+    <string name="native_torch_state_off">Aus</string>
+</resources>

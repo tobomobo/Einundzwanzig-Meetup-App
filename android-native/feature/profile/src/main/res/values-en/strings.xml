@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="native_relays_active">
+        <item quantity="one">%1$d active relay</item>
+        <item quantity="other">%1$d active relays</item>
+    </plurals>
+    <string name="native_relay_remove">Remove</string>
+    <string name="native_relay_remove_a11y">Remove %1$s</string>
+    <string name="native_relay_enabled">Relay enabled</string>
+    <string name="native_relay_disabled">Relay disabled</string>
+    <string name="native_nostr_label">Nostr</string>
+    <string name="native_npub_button">NPUB</string>
+    <string name="native_nsec_button">NSEC</string>
+    <string name="native_nsec_hint">nsec1...</string>
+    <plurals name="native_platforms_active">
+        <item quantity="one">%1$d platform active</item>
+        <item quantity="other">%1$d platforms active</item>
+    </plurals>
+    <string name="native_list_joiner">" and "</string>
+    <string name="native_auth_show_key">Please confirm your identity to show the key</string>
+    <string name="native_auth_export_key">Please confirm your identity to export the key</string>
+    <string name="native_auth_unavailable">Identity confirmation is not available here</string>
+    <string name="native_meetup_favorite">Favorite</string>
+    <string name="native_meetup_not_favorite">Not a favorite</string>
+    <string name="native_bunker_qr">QR code for pairing with the signer</string>
+    <string name="native_profile_avatar">Profile picture</string>
+    <string name="native_more_favorites">+%1$d ★</string>
+    <plurals name="native_more_favorites_a11y">
+        <item quantity="one">%1$d more favourite</item>
+        <item quantity="other">%1$d more favourites</item>
+    </plurals>
+    <string name="native_recovery_title">Earlier identity found</string>
+    <string name="native_recovery_body">Additional keys were saved when importing Flutter data. You can restore, export or discard them.</string>
+    <string name="native_recovery_restore">Restore identity</string>
+    <string name="native_recovery_export">Export key</string>
+    <string name="native_recovery_discard">Discard saved copy</string>
+    <string name="native_recovery_restore_confirm">This replaces the current local identity and removes its proofs. Back up the current key first if needed. Device authentication is required to continue.</string>
+    <string name="native_recovery_export_confirm">After device authentication, the private key is shown in a protected view. Share it only with trusted apps. The saved copy is kept.</string>
+    <string name="native_recovery_discard_confirm">After device authentication, this saved copy is permanently deleted. Make sure you no longer need the key or have backed it up first.</string>
+    <string name="native_recovery_restored">Earlier identity restored.</string>
+    <string name="native_recovery_discarded">Saved copy discarded.</string>
+    <string name="native_auth_recovery">Manage saved identity</string>
+</resources>

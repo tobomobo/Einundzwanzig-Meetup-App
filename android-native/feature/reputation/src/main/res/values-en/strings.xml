@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_repPublishNoKey">No key available</string>
+    <string name="native_repPublishNoBadges">No badges available</string>
+    <string name="native_repPublishUpToDate">Reputation is up to date — no update needed</string>
+    <string name="native_repPublishOk">Reputation updated on %1$d relays</string>
+    <string name="native_repPublishNoRelay">Could not send to any relay</string>
+    <string name="native_repPublishError">Publish error: %1$s</string>
+    <string name="native_repSignFailed">The QR code could not be signed. Scanners reject unsigned codes — check your signer.</string>
+    <string name="native_repLoadError">Reputation could not be loaded.</string>
+    <string name="native_retry">Try again</string>
+    <string name="native_repQrDescription">Reputation QR code</string>
+    <string name="native_rcNoDataHint">Scan your first badge at a meetup to make your reputation visible.</string>
+    <string name="native_qrStatsLine">%1$d badges · %2$d meetups · %3$d signers</string>
+    <string name="native_qrProofLine">%1$d of %2$d badges cryptographically verified</string>
+    <string name="native_qrSignedBy">Signed: %1$s</string>
+    <plurals name="native_qrHopsAway">
+        <item quantity="one">%1$d hop away</item>
+        <item quantity="other">%1$d hops away</item>
+    </plurals>
+    <string name="native_qrVerifyOk">Schnorr signature verified ✓</string>
+    <string name="native_qrVerifyMissing">Missing signature data</string>
+    <string name="native_qrVerifyBadPubkey">Invalid pubkey format</string>
+    <string name="native_qrVerifyBadSig">Invalid signature format</string>
+    <string name="native_qrVerifyInvalid">Schnorr signature INVALID!</string>
+    <string name="native_qrVerifyLegacy">Legacy QR (v1) is no longer accepted. Ask the organizer for a new v2 tag.</string>
+    <string name="native_qrIdentityMismatch">Warning: this QR code names a different npub than the key that signed it. The identity is not confirmed; the network data below belongs to the signer.</string>
+    <string name="native_qrLinkedUnconfirmed">Linked (unconfirmed)</string>
+    <string name="native_rvInputHint">21rep::npub1...::platform::user::sig=...\nor npub1...</string>
+    <string name="native_rvPaste">Paste from clipboard and verify</string>
+    <string name="native_rvMsgBadFormat">Invalid format. Expected: 21rep::npub::platform::username::sig=...</string>
+    <string name="native_rvMsgBadSignature">WARNING: Invalid signature! This verify string has been tampered with.</string>
+    <string name="native_rvMsgUsernameMismatch">WARNING: Username does not match! The string says “%1$s”, the account is “%2$s”.</string>
+    <string name="native_rvMsgNoReputation">Valid format — link unconfirmed. No reputation found on relays.</string>
+    <string name="native_rvMsgFull">Identity and reputation fully confirmed ✓</string>
+    <string name="native_rvMsgPartialWithProof">Reputation partially confirmed — %1$d of %2$d badges bound.</string>
+    <string name="native_rvMsgPartialNoProof">Reputation verified, but the platform proof was not found in the event.</string>
+    <string name="native_rvMsgSignatureOnlyNoBindings">Link unconfirmed — no bound badges.</string>
+    <string name="native_rvMsgNpubNoReputation">No reputation found on relays for this npub.</string>
+    <string name="native_rvMsgNpubWithBindings">Reputation found — but no platform proof. Identity link not confirmed.</string>
+    <string name="native_rvMsgNpubNoBindings">Reputation found, but no bound badges.</string>
+    <string name="native_rvMsgError">Verification error: %1$s</string>
+    <string name="native_openInNostr">Open in Nostr app</string>
+    <string name="native_layerShowDetails">Show details</string>
+    <string name="native_layerHideDetails">Hide details</string>
+    <string name="native_tnHubVerifyTitle">Check reputation</string>
+    <string name="native_tnHubVerifySub">Check a person\'s verify string or npub across all proof layers</string>
+    <!-- Zap activity / NIP-05 domain labels (German literals of :data:proofs, localized natively). -->
+    <string name="native_zapActivityNone">No zap activity</string>
+    <string name="native_zapActivityLittle">Little activity</string>
+    <string name="native_zapActivityRegular">Regularly active</string>
+    <string name="native_zapActivityVeryActive">Very active</string>
+    <string name="native_nip05Community">Community-verified</string>
+    <string name="native_nip05Custom">Own domain</string>
+    <string name="native_nip05PublicProvider">Public provider</string>
+    <string name="native_rvFormatOnly">VALID FORMAT · UNCONFIRMED</string>
+</resources>

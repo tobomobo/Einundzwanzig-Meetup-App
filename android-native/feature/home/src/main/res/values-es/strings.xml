@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Native-only strings of :feature:home (German default). -->
+<resources>
+    <string name="native_home_tile_trust_score">Trust Score</string>
+    <string name="native_home_tile_home_meetup">Meetup principal</string>
+    <string name="native_home_tile_event_chats">Mis citas</string>
+    <string name="native_home_tile_reputation">Reputación</string>
+    <string name="native_home_tile_community">Comunidad</string>
+    <string name="native_home_tile_trust_network">Red de confianza</string>
+    <string name="native_home_tile_events">Eventos</string>
+    <string name="native_home_tile_shoutout">Shoutout</string>
+    <string name="native_home_tile_podcast">Podcast</string>
+    <string name="native_home_tile_satoshiduell">SatoshiDuell</string>
+    <string name="native_home_tile_portal_area">Portal</string>
+    <string name="native_home_tile_plebrap">PlebRap</string>
+    <string name="native_home_tile_nostr">Nostr</string>
+    <string name="native_home_tile_portal_connect">Portal</string>
+    <string name="native_home_tile_converter">Conversor</string>
+    <string name="native_home_tile_btc_dashboard">Bitcoin</string>
+    <string name="native_home_tile_news">Noticias</string>
+    <string name="native_home_tile_portal">Mis meetups</string>
+    <string name="native_home_tile_organisator">Organizador</string>
+    <string name="native_home_customize_title">PERSONALIZAR</string>
+    <string name="native_home_customize_done">LISTO</string>
+    <string name="native_home_customize_hint">Mantén y arrastra para ordenar  ·  🔒 = obligatorio  ·  ✕ = ocultar</string>
+    <string name="native_home_customize_active">ACTIVOS</string>
+    <string name="native_home_customize_active_sub">Todos los mosaicos se pueden mover</string>
+    <string name="native_home_customize_available">DISPONIBLES</string>
+    <string name="native_home_customize_available_sub">Activa el interruptor para añadir</string>
+    <string name="native_home_customize_locked">%1$s es un mosaico obligatorio</string>
+    <string name="native_home_move_up">Subir</string>
+    <string name="native_home_move_down">Bajar</string>
+    <string name="native_home_drag_handle">Arrastrar para ordenar</string>
+    <string name="native_home_device_warning">Este dispositivo muestra indicios de root/jailbreak. Las claves criptográficas podrían estar menos protegidas. Para máxima seguridad, usa un dispositivo sin modificar.</string>
+    <string name="native_home_dismiss_warning">Cerrar aviso</string>
+    <string name="native_home_btc_sub">Red y precio</string>
+    <string name="native_home_refresh">Actualizar datos</string>
+    <string name="native_home_refreshing">Actualizando</string>
+    <string name="native_home_glossary">Glosario</string>
+    <string name="native_home_settings">Ajustes</string>
+    <string name="native_home_avatar_pick">Elegir foto de perfil de la galería</string>
+    <string name="native_home_score_cd">Trust Score %1$s, abrir tarjeta de reputación</string>
+    <string name="native_home_live_open">Abrir sesión en vivo</string>
+    <string name="native_home_event_session">Sesión de insignia de evento</string>
+    <string name="native_home_pin">Fijar</string>
+    <string name="native_home_unpin">Soltar</string>
+    <string name="native_home_edit_tile">Editando %1$s. Arrastra para mover, toca de nuevo para cancelar.</string>
+    <string name="native_home_move_before">Mover antes de %1$s</string>
+    <string name="native_home_edit_done">Listo</string>
+    <string name="native_home_edit_customize">Personalizar</string>
+    <string name="native_home_plebrap_play">Reproducir</string>
+    <string name="native_home_plebrap_pause">Pausa</string>
+    <string name="native_home_plebrap_next">Siguiente pista</string>
+    <string name="native_home_plebrap_library">Biblioteca PlebRap</string>
+    <string name="native_home_reset_failed">El restablecimiento falló: no se borró nada. Detalles en el registro de diagnóstico.</string>
+    <string name="native_home_reset_running">Restableciendo la app …</string>
+    <string name="native_home_page">Meetup %1$d de %2$d</string>
+    <string name="native_home_expand">Desplegar</string>
+    <string name="native_home_collapse">Plegar</string>
+    <string name="native_home_unread_cd">%1$s sin leer</string>
+    <string name="native_home_nostr_new">Nuevo</string>
+    <string name="native_home_logo">Einundzwanzig</string>
+    <string name="native_home_token_not_stored">No se pudo guardar el token</string>
+</resources>

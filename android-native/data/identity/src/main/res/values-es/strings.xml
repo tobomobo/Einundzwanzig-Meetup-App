@@ -1,0 +1,27 @@
+<resources>
+    <string name="native_identity_key_invalid">Clave privada no válida. Comprueba la clave completa.</string>
+    <string name="native_identity_key_prefix">La clave debe comenzar por nsec1.</string>
+    <string name="native_identity_key_encrypted">No se pudo abrir la clave cifrada. Comprueba la clave y la contraseña.</string>
+    <string name="native_identity_key_memory">No hay memoria suficiente para procesar la clave. Cierra otras aplicaciones e inténtalo de nuevo.</string>
+    <string name="native_identity_name_required">Elige un nombre.</string>
+    <string name="native_identity_password_short">La contraseña debe tener al menos 8 caracteres.</string>
+    <string name="native_identity_no_local_key">No hay ninguna clave privada local.</string>
+    <string name="native_identity_no_saved_key">No hay ninguna clave guardada.</string>
+    <string name="native_identity_no_passkey">No hay ninguna clave de acceso guardada.</string>
+    <string name="native_identity_sign_cancelled">Solicitud de firma cancelada.</string>
+    <string name="native_identity_amber_missing">Amber no está instalado.</string>
+    <string name="native_identity_wrong_account">El firmante usó otra cuenta. Selecciona la cuenta conectada.</string>
+    <string name="native_identity_signer_no_event">El firmante no devolvió ningún evento firmado.</string>
+    <string name="native_identity_signer_kind">El firmante cambió el tipo de evento. Se rechazó la respuesta.</string>
+    <string name="native_identity_signer_content">El firmante cambió el contenido. Se rechazó la respuesta.</string>
+    <string name="native_identity_signer_signature">El firmante devolvió una firma no válida.</string>
+    <string name="native_identity_signer_unreadable">No se pudo leer la respuesta del firmante.</string>
+    <string name="native_identity_bunker_timeout">El firmante no respondió. Abre la aplicación del firmante e inténtalo de nuevo.</string>
+    <string name="native_identity_bunker_rejected">Se rechazó la solicitud de firma. Comprueba la autorización en el firmante.</string>
+    <string name="native_identity_bunker_failure">No se pudo conectar con el firmante. Comprueba la dirección, el relay y la autorización.</string>
+    <string name="native_identity_signer_no_key">No hay ninguna clave conectada para este firmante. Vuelve a conectarlo.</string>
+    <string name="native_identity_no_session">No hay ninguna sesión del firmante guardada. Vuelve a conectarlo.</string>
+    <string name="native_identity_web_only">Las extensiones del navegador solo están disponibles en la aplicación web.</string>
+    <string name="native_identity_storage">El almacenamiento seguro no está disponible. Inténtalo de nuevo; las claves existentes se conservan.</string>
+    <string name="native_identity_generic">La operación falló. Inténtalo de nuevo.</string>
+</resources>

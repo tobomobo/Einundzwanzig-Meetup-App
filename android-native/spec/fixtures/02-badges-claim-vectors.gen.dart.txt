@@ -1,0 +1,371 @@
+// Generates android-native/spec/fixtures/02-badges-claim-vectors.json
+// Pure functions are copied VERBATIM from lib/services/badge_security.dart,
+// lib/models/badge.dart and lib/services/rolling_qr_service.dart.
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:bip340/bip340.dart' as bip340;
+import 'package:crypto/crypto.dart';
+import 'package:encrypt/encrypt.dart' as enc;
+import 'package:nostr/nostr.dart';
+import '/home/tg/.t3/worktrees/Einundzwanzig-Meetup-App/t3-1161767c/lib/services/meetup_key.dart';
+
+String canonicalJsonEncode(Map<String, dynamic> data) {
+  final sortedKeys = data.keys.toList()..sort();
+  final sortedMap = <String, dynamic>{};
+  for (final key in sortedKeys) {
+    sortedMap[key] = data[key];
+  }
+  return jsonEncode(sortedMap);
+}
+
+String _prettifySlug(String slug) {
+  final words = slug.split('-').where((w) => w.isNotEmpty);
+  return words.map((w) => w[0].toUpperCase() + w.substring(1)).join(' ');
+}
+
+String eventMeetupId({required String eventAddress, required String title}) {
+  final slug = title
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9äöüß\s-]'), '')
+      .replaceAll(RegExp(r'\s+'), '-');
+  return 'evt:$eventAddress:$slug';
+}
+
+Map<String, dynamic> normalize(Map<String, dynamic> data) {
+  if (data.containsKey('meetup_id')) return data;
+  final normalized = <String, dynamic>{};
+  normalized['v'] = data['v'] ?? 1;
+  final t = data['t'];
+  if (t == 'B') {
+    normalized['type'] = 'BADGE';
+  } else if (t is String) {
+    normalized['type'] = t;
+  } else {
+    normalized['type'] = data['type'] ?? 'BADGE';
+  }
+  final m = data['m'] as String? ?? '';
+  if (m.startsWith('evt:')) {
+    final parts = m.split(':');
+    if (parts.length >= 5) {
+      normalized['event_address'] = '${parts[1]}:${parts[2]}:${parts[3]}';
+      final slug = parts.sublist(4).join(':');
+      normalized['meetup_id'] = 'evt:${parts[3]}';
+      normalized['meetup_name'] = _prettifySlug(slug);
+      normalized['meetup_country'] = '';
+      normalized['is_event'] = true;
+    } else {
+      normalized['meetup_id'] = m;
+      normalized['meetup_name'] = m;
+    }
+  } else {
+    final parsed = MeetupKey.parse(m);
+    normalized['meetup_id'] = parsed.slug;
+    normalized['meetup_slug'] = parsed.slug;
+    normalized['meetup_name'] =
+        parsed.slug.isEmpty ? m : MeetupKey.displayFromSlug(parsed.slug);
+    normalized['meetup_country'] = parsed.country;
+  }
+  if (data['meetup_name'] != null) normalized['meetup_name'] = data['meetup_name'];
+  if (data['meetup_country'] != null) normalized['meetup_country'] = data['meetup_country'];
+  if (data['c'] != null) {
+    final int c = data['c'];
+    final dt = DateTime.fromMillisecondsSinceEpoch(c * 1000, isUtc: true); // NOTE: app uses LOCAL; UTC here for a TZ-independent fixture
+    normalized['timestamp'] = dt.toIso8601String();
+    normalized['meetup_date'] = dt.toIso8601String();
+  } else if (data['timestamp'] != null) {
+    normalized['timestamp'] = data['timestamp'];
+    normalized['meetup_date'] = data['meetup_date'] ?? data['timestamp'];
+  }
+  normalized['block_height'] = data['b'] ?? data['block_height'] ?? 0;
+  if (data['x'] != null) normalized['expires_at'] = data['x'];
+  if (data['p'] != null) {
+    normalized['admin_pubkey'] = data['p'];
+    try { normalized['admin_npub'] = Nip19.encodePubkey(data['p']); } catch (_) {}
+  } else if (data['admin_pubkey'] != null) {
+    normalized['admin_pubkey'] = data['admin_pubkey'];
+    normalized['admin_npub'] = data['admin_npub'] ?? '';
+  }
+  if (data['s'] != null) {
+    normalized['sig'] = data['s'];
+  } else if (data['sig'] != null) {
+    normalized['sig'] = data['sig'];
+  }
+  if (data['sig_id'] != null) normalized['sig_id'] = data['sig_id'];
+  if (data['qr_nonce'] != null) normalized['qr_nonce'] = data['qr_nonce'];
+  if (data['qr_time_step'] != null) normalized['qr_time_step'] = data['qr_time_step'];
+  if (data['qr_interval'] != null) normalized['qr_interval'] = data['qr_interval'];
+  if (data['delivery'] != null) normalized['delivery'] = data['delivery'];
+  if (data['n'] != null) normalized['qr_nonce'] = data['n'];
+  if (data['ts'] != null) normalized['qr_time_step'] = data['ts'];
+  if (data['d'] != null) normalized['delivery'] = data['d'] == 'qr' ? 'rolling_qr' : data['d'];
+  return normalized;
+}
+
+// --- minimal badge (fields needed for identity/union) ---
+class B {
+  final String id, meetupName, meetupEventId, sigId, claimSig;
+  final DateTime date;
+  final bool presenceVerified, isOrganizer;
+  final int claimTimestamp;
+  B(this.id, this.meetupName, this.date,
+      {this.meetupEventId = '', this.sigId = '', this.claimSig = '',
+      this.presenceVerified = true, this.isOrganizer = false, this.claimTimestamp = 0});
+}
+
+String identityKey(B b) {
+  if (b.meetupEventId.isNotEmpty) return 'evt:${b.meetupEventId}';
+  if (b.sigId.isNotEmpty) return 'sig:${b.sigId}';
+  final d = b.date;
+  final day = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  return 'nd:${b.meetupName.trim().toLowerCase()}|$day';
+}
+
+String unionKey(B b) => b.isOrganizer ? 'org:${identityKey(b)}' : identityKey(b);
+
+B preferVariant(B a, B b) {
+  final aClaim = a.claimSig.isNotEmpty;
+  final bClaim = b.claimSig.isNotEmpty;
+  if (aClaim != bClaim) return aClaim ? a : b;
+  if (a.presenceVerified != b.presenceVerified) return a.presenceVerified ? a : b;
+  final byDate = a.date.compareTo(b.date);
+  if (byDate != 0) return byDate < 0 ? a : b;
+  if (a.claimTimestamp != b.claimTimestamp) return a.claimTimestamp < b.claimTimestamp ? a : b;
+  final byId = a.id.compareTo(b.id);
+  if (byId != 0) return byId < 0 ? a : b;
+  return a;
+}
+
+List<B> unionByIdentity(List<B> base, List<B> extra) {
+  final byKey = <String, B>{};
+  void add(B badge) {
+    final key = unionKey(badge);
+    final existing = byKey[key];
+    byKey[key] = existing == null ? badge : preferVariant(existing, badge);
+  }
+  for (final b in base) add(b);
+  for (final b in extra) add(b);
+  return byKey.values.toList();
+}
+
+const aux0 = '0000000000000000000000000000000000000000000000000000000000000000';
+
+String evId(String pub, int ca, int kind, List<List<String>> tags, String content) =>
+    sha256.convert(utf8.encode(jsonEncode([0, pub, ca, kind, tags, content]))).toString();
+
+void main() {
+  final out = <String, dynamic>{};
+  final orgPriv = '1'.padLeft(64, '0');
+  final attPriv = '2'.padLeft(64, '0');
+  final orgPub = bip340.getPublicKey(orgPriv);
+  final attPub = bip340.getPublicKey(attPriv);
+  out['_note'] = 'Generated with Dart from verbatim copies of the Flutter code. Signatures use BIP-340 with aux_rand = 32 zero bytes (deterministic). Keys are test-only (privkey 1 and 2).';
+  out['keys'] = {
+    'organizer': {'priv': orgPriv, 'pub': orgPub, 'npub': Nip19.encodePubkey(orgPub)},
+    'attendee': {'priv': attPriv, 'pub': attPub, 'npub': Nip19.encodePubkey(attPub)},
+  };
+
+  // canonical JSON
+  out['canonicalJson'] = [
+    {'input_insertion_order': {'z': 1, 'a': 2, 'm': 3, 'b': 4}, 'expected': canonicalJsonEncode({'z': 1, 'a': 2, 'm': 3, 'b': 4})},
+    {'input_insertion_order': {'b': [1, 2, 3], 'a': {'y': true, 'x': false}}, 'expected': canonicalJsonEncode({'b': [1, 2, 3], 'a': {'y': true, 'x': false}}), 'note': 'only TOP-LEVEL keys are sorted; nested maps keep insertion order'},
+    {'input_insertion_order': {'s': 'ä"\\\n\u0001/< \t'}, 'expected': canonicalJsonEncode({'s': 'ä"\\\n\u0001/< \t'}), 'note': 'Dart escaping: only " \\ and control chars < 0x20 (\\b \\t \\n \\f \\r short, others \\u00XX lowercase); non-ASCII and / and U+2028 raw'},
+    {'input_insertion_order': {'d': [0.0, 0.0001, 1e-7, 48.2, 1e21, 100.0, -0.0]}, 'expected': canonicalJsonEncode({'d': [0.0, 0.0001, 1e-7, 48.2, 1e21, 100.0, -0.0]}), 'note': 'Dart double.toString formatting'},
+  ];
+
+  // compact badge
+  const createdAt = 1760000000;
+  const meetupId = 'bad-neuenahr-de';
+  const block = 917000;
+  const x = createdAt + 4 * 3600;
+  final content = {'v': 2, 't': 'B', 'm': meetupId, 'b': block, 'x': x};
+  final contentJson = canonicalJsonEncode(content);
+  final tags = [['t', 'badge'], ['m', meetupId]];
+  final id = evId(orgPub, createdAt, 21000, tags, contentJson);
+  final sig = bip340.sign(orgPriv, id, aux0);
+  final base = {...content, 'c': createdAt, 'p': orgPub, 's': sig};
+  out['compactBadge'] = {
+    'kind': 21000,
+    'tags': tags,
+    'content': contentJson,
+    'created_at': createdAt,
+    'serialized_for_id': jsonEncode([0, orgPub, createdAt, 21000, tags, contentJson]),
+    'id': id,
+    'sig': sig,
+    'valid': Event(id, orgPub, createdAt, 21000, tags, contentJson, sig, verify: false).isValid(),
+    'base_payload_json': jsonEncode(base),
+    'nfc_ndef_text_record_payload_hex_prefix': '02656e',
+  };
+
+  // tampered variants must fail
+  final tamperedB = canonicalJsonEncode({...content, 'b': block + 1});
+  out['compactBadge']['tampered_b_valid'] =
+      Event(evId(orgPub, createdAt, 21000, tags, tamperedB), orgPub, createdAt, 21000, tags, tamperedB, sig, verify: false).isValid();
+
+  // rolling QR
+  const seed = '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff';
+  const ts = 176000000;
+  final nonceFull = Hmac(sha256, utf8.encode(seed)).convert(utf8.encode(ts.toString())).toString();
+  final qr = Map<String, dynamic>.from(jsonDecode(jsonEncode(base)));
+  qr['n'] = nonceFull.substring(0, 16);
+  qr['ts'] = ts;
+  qr['d'] = 'rolling_qr';
+  qr['la'] = 50.5453;
+  qr['lo'] = 7.1123;
+  out['rollingQr'] = {
+    'seed_hex_string': seed,
+    'hmac_key': 'UTF-8 bytes of the 64-char hex STRING (not hex-decoded)',
+    'time_step': ts,
+    'hmac_message': ts.toString(),
+    'hmac_sha256_hex': nonceFull,
+    'nonce': nonceFull.substring(0, 16),
+    'qr_string': jsonEncode(qr),
+    'note': 'time_step = floor(unixSeconds / 10); valid iff |currentStep - ts| <= 1',
+  };
+
+  // claim
+  const claimedAt = 1760000123;
+  const claimBlock = 917001;
+  final claimContent = {
+    'action': 'claim_badge',
+    'org_sig': sig,
+    'org_event_id': '',
+    'org_pubkey': orgPub,
+    'block_height': claimBlock,
+    'claimed_at': claimedAt,
+  };
+  final claimJson = canonicalJsonEncode(claimContent);
+  final claimTags = [['t', 'badge_claim'], ['p', orgPub], ['block', claimBlock.toString()]];
+  final claimId = evId(attPub, claimedAt, 21002, claimTags, claimJson);
+  final claimSig = bip340.sign(attPriv, claimId, aux0);
+  out['claim'] = {
+    'kind': 21002,
+    'tags': claimTags,
+    'content': claimJson,
+    'created_at': claimedAt,
+    'serialized_for_id': jsonEncode([0, attPub, claimedAt, 21002, claimTags, claimJson]),
+    'id': claimId,
+    'sig': claimSig,
+    'valid': Event(claimId, attPub, claimedAt, 21002, claimTags, claimJson, claimSig, verify: false).isValid(),
+    'note': 'org_event_id is the badge sigId, which is EMPTY for compact (v2) badges',
+  };
+  final cpi = sha256.convert(utf8.encode('$sig|$claimSig|$attPub')).toString();
+  out['proofs'] = {
+    'claimProofId_input': '$sig|$claimSig|$attPub',
+    'claimProofId': cpi,
+    'badgeProofV2_single_bound_badge': sha256.convert(utf8.encode(cpi)).toString(),
+    'proofId_when_sigId_empty': sig.substring(0, 64),
+    'badgeProofV1_single_badge_sigId_empty': sha256.convert(utf8.encode(sig.substring(0, 64))).toString(),
+  };
+  final dUtc = DateTime.utc(2025, 3, 15, 19);
+  final data = 'wien-Wien, AT-${dUtc.toIso8601String()}-875000';
+  out['proofs']['proofId_fallback_input'] = data;
+  out['proofs']['proofId_fallback'] = sha256.convert(utf8.encode(data)).toString();
+  out['proofs']['verificationHash'] = sha256.convert(utf8.encode(data)).toString().substring(0, 16);
+  out['proofs']['reputationQr_meetupList_hash_input'] = '21meetup:Wien, AT';
+  out['proofs']['reputationQr_meetupList_hash12'] = sha256.convert(utf8.encode('21meetup:Wien, AT')).toString().substring(0, 12);
+
+  // dart iso8601
+  out['dartIso8601'] = [
+    {'utc': true, 'y': 2025, 'mo': 3, 'd': 15, 'h': 19, 'mi': 0, 's': 0, 'ms': 0, 'us': 0, 'expected': DateTime.utc(2025, 3, 15, 19).toIso8601String()},
+    {'utc': false, 'y': 2025, 'mo': 3, 'd': 15, 'h': 19, 'mi': 0, 's': 0, 'ms': 0, 'us': 0, 'expected': DateTime(2025, 3, 15, 19).toIso8601String()},
+    {'utc': true, 'y': 2025, 'mo': 3, 'd': 15, 'h': 19, 'mi': 0, 's': 0, 'ms': 123, 'us': 456, 'expected': DateTime.utc(2025, 3, 15, 19, 0, 0, 123, 456).toIso8601String()},
+    {'utc': false, 'y': 2025, 'mo': 1, 'd': 2, 'h': 3, 'mi': 4, 's': 5, 'ms': 6, 'us': 0, 'expected': DateTime(2025, 1, 2, 3, 4, 5, 6).toIso8601String()},
+  ];
+
+  // AES-GCM blob
+  final keyBytes = Uint8List.fromList(List.generate(32, (i) => i));
+  final ivBytes = Uint8List.fromList(List.generate(12, (i) => 0xA0 + i));
+  final plain = jsonEncode([
+    {'id': 'wien', 'meetupName': 'Wien, AT', 'date': '2025-03-15T19:00:00.000Z', 'iconPath': 'assets/badge_icon.png'}
+  ]);
+  final e = enc.Encrypter(enc.AES(enc.Key(keyBytes), mode: enc.AESMode.gcm)).encrypt(plain, iv: enc.IV(ivBytes));
+  out['aesGcmBlob'] = {
+    'key_hex': keyBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join(),
+    'iv_hex': ivBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join(),
+    'plaintext': plain,
+    'blob': '${enc.IV(ivBytes).base64}:${e.base64}',
+    'format': 'base64(iv 12 bytes) + ":" + base64(ciphertext || 16-byte GCM tag), standard base64 alphabet WITH padding, no AAD',
+  };
+
+  // MeetupKey
+  final parseCases = ['bad-neuenahr', 'frankfurt-am-main', 'köln-deutz', 'aachen-de', 'bad-neuenahr-de', 'wien-at', 'zürich-ch', 'aschaffenburg', '', '-de', 'aachen-', 'test-xx', 'test-uk', 'test-gb'];
+  out['meetupKey'] = {
+    'parse': [for (final c in parseCases) {'input': c, 'slug': MeetupKey.parse(c).slug, 'country': MeetupKey.parse(c).country}],
+    'compose': [
+      for (final c in [['bad-neuenahr', 'DE'], ['wien', 'at'], ['bad-neuenahr', ''], ['bad-neuenahr', 'Deutschland'], ['', 'DE']])
+        {'slug': c[0], 'country': c[1], 'expected': MeetupKey.compose(c[0], c[1])}
+    ],
+    'slug': [for (final n in ['Aschaffenburg', ' Bad Neuenahr ', 'Neu-Ulm', 'München', 'Frankfurt am Main']) {'input': n, 'expected': MeetupKey.slug(n)}],
+    'displayFromSlug': [for (final s in ['bad-neuenahr', 'neu-ulm', 'münchen', 'a--b']) {'input': s, 'expected': MeetupKey.displayFromSlug(s)}],
+    'eventId': {'slug': 'bad-neuenahr', 'date_local': '2026-10-05', 'expected': MeetupKey.eventId('bad-neuenahr', DateTime(2026, 10, 5))},
+  };
+
+  // normalize
+  final evtM = eventMeetupId(eventAddress: '31923:$orgPub:zitadelle-2026', title: '  Zitadelle Bitcoin-Treff 2026! Große Party ');
+  out['eventMeetupId'] = {
+    'eventAddress': '31923:$orgPub:zitadelle-2026',
+    'title': '  Zitadelle Bitcoin-Treff 2026! Große Party ',
+    'expected': evtM,
+  };
+  out['normalize'] = [
+    for (final input in <Map<String, dynamic>>[
+      {'v': 2, 't': 'B', 'm': 'aschaffenburg-de', 'b': 875000, 'x': 1700021600, 'p': orgPub, 's': 'a' * 128},
+      {'v': 2, 't': 'B', 'm': 'münchen-de', 'b': 0},
+      {'v': 2, 't': 'B', 'm': 'bad-neuenahr', 'b': 0, 'd': 'qr'},
+      {'v': 2, 't': 'B', 'm': evtM, 'b': 0},
+      {'v': 2, 't': 'B', 'm': 'evt:31923:abc', 'b': 0},
+      {'v': 2, 't': 'B', 'm': '', 'b': 0},
+      {'v': 2, 't': 'B', 'm': 'wien-at', 'b': 1, 'n': 'ffff', 'ts': 5, 'd': 'rolling_qr', 'la': 48.2, 'lo': 16.3},
+    ])
+      {'input': input, 'expected': normalize(input)}
+  ];
+  out['normalize_note'] = "'timestamp'/'meetup_date' from 'c' are rendered in LOCAL time by the app (DateTime.fromMillisecondsSinceEpoch without isUtc); this fixture uses UTC to be timezone-independent.";
+
+  // identityKey / union
+  final d1 = DateTime.utc(2026, 10, 11, 19);
+  final d2 = DateTime.utc(2026, 10, 11, 20);
+  final cases = <String, B>{
+    'withEventId': B('a', 'Koblenz', d1, meetupEventId: 'koblenz-2026-10-11'),
+    'withSigIdOnly': B('a', 'Koblenz', d1, sigId: 'f' * 64),
+    'nameDayFallback': B('a', '  KoBlenz, DE ', d1),
+    'organizerMarker': B('org-koblenz-2026-10-11', 'Koblenz', d1, meetupEventId: 'koblenz-2026-10-11', isOrganizer: true),
+  };
+  out['identityKey'] = [
+    for (final e in cases.entries)
+      {'case': e.key, 'id': e.value.id, 'meetupName': e.value.meetupName, 'date': e.value.date.toIso8601String(), 'meetupEventId': e.value.meetupEventId, 'sigId': e.value.sigId, 'isOrganizer': e.value.isOrganizer, 'identityKey': identityKey(e.value), 'unionKey': unionKey(e.value)}
+  ];
+  final first = B('koblenz-2026-10-11', 'Koblenz', d1, meetupEventId: 'koblenz-2026-10-11', claimSig: 'sig');
+  final second = B('koblenz-2026-10-11-2', 'Koblenz', d2, meetupEventId: 'koblenz-2026-10-11', claimSig: 'sig');
+  final unclaimed = B('koblenz-2026-10-11', 'Koblenz', d1, meetupEventId: 'koblenz-2026-10-11');
+  final marker = B('org-koblenz-2026-10-11', 'Koblenz', DateTime.utc(2026, 10, 11, 18), meetupEventId: 'koblenz-2026-10-11', isOrganizer: true);
+  out['unionByIdentity'] = [
+    {'case': 'both claimed, earlier wins regardless of side', 'base': ['first'], 'extra': ['second'], 'expectedIds': unionByIdentity([first], [second]).map((b) => b.id).toList()},
+    {'case': 'both claimed, reversed', 'base': ['second'], 'extra': ['first'], 'expectedIds': unionByIdentity([second], [first]).map((b) => b.id).toList()},
+    {'case': 'claimed beats unclaimed even if later', 'base': ['unclaimed'], 'extra': ['second'], 'expectedIds': unionByIdentity([unclaimed], [second]).map((b) => b.id).toList()},
+    {'case': 'organizer marker is separate', 'base': ['first', 'marker'], 'extra': ['second'], 'expectedIds': unionByIdentity([first, marker], [second]).map((b) => b.id).toList()},
+  ];
+  out['unionByIdentity_fixtures'] = {
+    'first': {'id': first.id, 'date': d1.toIso8601String(), 'meetupEventId': first.meetupEventId, 'claimSig': 'sig'},
+    'second': {'id': second.id, 'date': d2.toIso8601String(), 'meetupEventId': second.meetupEventId, 'claimSig': 'sig'},
+    'unclaimed': {'id': unclaimed.id, 'date': d1.toIso8601String(), 'meetupEventId': unclaimed.meetupEventId, 'claimSig': ''},
+    'marker': {'id': marker.id, 'date': marker.date.toIso8601String(), 'meetupEventId': marker.meetupEventId, 'isOrganizer': true},
+  };
+
+  // Reputation QR (kind 21001)
+  const qrJson = '{"v":6,"id":{"n":"Anon"},"rp":{"sc":1.5,"lv":"STARTER","bc":1,"vc":1,"mc":1,"si":1,"ad":10,"ml":["abcdefabcdef"],"bb":1},"pf":{"bp":"x","pv":2,"vc":1,"tc":1,"bb":1},"t":1760000000000}';
+  final qrId = evId(attPub, createdAt, 21001, [], qrJson);
+  final qrSig = bip340.sign(attPriv, qrId, aux0);
+  out['reputationQrV3'] = {
+    'kind': 21001,
+    'tags': [],
+    'json': qrJson,
+    'created_at': createdAt,
+    'id': qrId,
+    'sig': qrSig,
+    'qr_string': '21v3:${base64Encode(utf8.encode(qrJson))}.$qrSig.$qrId.$createdAt.$attPub',
+    'valid': Event(qrId, attPub, createdAt, 21001, [], qrJson, qrSig, verify: false).isValid(),
+  };
+
+  print(const JsonEncoder.withIndent('  ').convert(out));
+}

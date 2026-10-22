@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- ShareHelper.SHARE_DIR: temporary files handed to other apps via ACTION_SEND. -->
+    <cache-path name="share" path="share/" />
+    <!-- ShareHelper.BACKUP_DIR: backup files shared as fallback (spec 08 §11). -->
+    <cache-path name="backup" path="backup/" />
+</paths>

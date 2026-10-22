@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_markdown_image_placeholder">"🖼  Image"</string>
+    <string name="native_npub_copy">Copy npub</string>
+    <string name="native_npub_open_profile">Open Nostr profile</string>
+    <string name="native_avatar_description">Profile picture</string>
+    <string name="native_snackbar_dismiss">Dismiss</string>
+    <string name="native_guide_tip">Tip</string>
+</resources>

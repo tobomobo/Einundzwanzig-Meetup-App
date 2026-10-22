@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_ppNameOther">Otra plataforma</string>
+    <string name="native_ppHintSka">Tu nombre de usuario en Satoshi-Kleinanzeigen</string>
+    <string name="native_ppHintTelegram">Tu @usuario de Telegram (sin @)</string>
+    <string name="native_ppHintRobosats">Tu nombre de robot en RoboSats</string>
+    <string name="native_ppHintNostr">Tu nombre de perfil de Nostr (NIP-05 o nombre visible)</string>
+    <string name="native_ppHintOther">Tu nombre de usuario en la plataforma</string>
+    <string name="native_proofErrNoKey">No hay ninguna clave</string>
+    <string name="native_ppErrEmptyUsername">El nombre de usuario no puede estar vacío</string>
+    <string name="native_proofErrGeneric">Error: %1$s</string>
+    <string name="native_ppRevokeFailed">No se pudo eliminar la vinculación.</string>
+    <string name="native_ppRevokeFor">Revocar vinculación con %1$s (%2$s)</string>
+    <string name="native_ppCreating">Firmando la prueba …</string>
+    <string name="native_ppEmbeddedInQr">Incluido en tu QR de reputación</string>
+    <string name="native_ppAlreadyLinked">Ya vinculado</string>
+    <string name="native_humFound">Pago Lightning encontrado — ¡estás verificado!</string>
+    <string name="native_humNotFound">No se encontró ningún recibo de zap. ¿Has zapeado alguna vez a alguien en Nostr? Zapea a quien quieras (cualquier cantidad de sats) y vuelve.</string>
+    <string name="native_humNoKey">No hay ninguna clave</string>
+    <string name="native_humInvalidNpub">npub no válido</string>
+    <string name="native_humError">La comprobación falló — inténtalo de nuevo.</string>
+    <string name="native_humLastJustNow">Justo ahora</string>
+    <string name="native_humLastMinutes">Hace %1$d min</string>
+    <string name="native_humLastHours">Hace %1$d h</string>
+</resources>

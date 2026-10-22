@@ -1,0 +1,164 @@
+{
+  "_comment": "Test vectors for domain 01-identity-keys. 'source' says where a value comes from. Values marked 'dart-test' are copied verbatim from the Flutter test suite and are proven by it. Values marked 'derived' were computed from the Dart encoding rules (Uri.encodeQueryComponent / Uri.encodeComponent / jsonEncode) and cross-checked with Python; port them as regression tests. NIP-44 vectors are NOT duplicated here: use <repo>/test/fixtures/nip44.vectors.json (paulmillr/nip44, unchanged).",
+
+  "nip19": {
+    "source": "dart-test (test/nip07_signer_test.dart, test/user_profile_test.dart, test/signing_mode_test.dart); pairing verified with Python bech32",
+    "cases": [
+      {
+        "hex": "fa5e3477d2d6b92d667dcab66c8bbb1527014599c5eecddd545e3a39d7870268",
+        "npub": "npub1lf0rga7j66uj6enae2mxezamz5nsz3vechhvmh25tcarn4u8qf5q534jzc"
+      },
+      {
+        "_note": "test/nip46_signing_service_test.dart uses _mine=fa5e347dd2... together with _myNpub above. They do NOT belong together; the Dart test never checks that. Correct encoding of that hex is given here.",
+        "hex": "fa5e347dd2d6b92d667dcab6cc8bbb1524e0a2ccc5eecddd551787473c3814d3",
+        "npub": "npub1lf0rglwj66uj6enae2mvezamz5jwpgkvchhvmh24z7r5w0pcznfs0dv8jn"
+      }
+    ],
+    "decodePubkey_wrong_hrp_returns_empty_string": true
+  },
+
+  "nip49": {
+    "source": "dart-test (test/nip49_test.dart), official NIP-49 vectors",
+    "official": {
+      "ncryptsec": "ncryptsec1qgg9947rlpvqu76pj5ecreduf9jxhselq2nae2kghhvd5g7dgjtcxfqtd67p9m0w57lspw8gsq6yphnm8623nsl8xn9j4jdzz84zm3frztj3z7s35vpzmqf6ksu8r89qk5z2zxfmu5gv8th8wclt0h4p",
+      "password": "nostr",
+      "privkeyHex": "3501454135014541350145413501453fefb02227e449e57cf4d3a3ce05378683",
+      "payloadBytes": 91,
+      "version": 2,
+      "logN": 16,
+      "keySecurityByte": 0,
+      "bech32Length": 162,
+      "wrongPassword": "falsch",
+      "_derived_scrypt_key_hex": "6d1e8b279f52b3a9ba60a2b43cab50804a67ac763ff4bafa782475efb0722aff"
+    },
+    "nfkc": {
+      "ncryptsec": "ncryptsec1qgy5kwr5v8p206vwaflp4g6r083kwts6q5sh8m4d0q56edpxwhrly78ema2z7jpdeldsz7u5wpxpyhs6m0405skdsep9n37uncw7xlc8q8meyw6d6ky47vcl0guhqpt5dx8ejxc8hvzf6y2gwsl5s0nw",
+      "passwordComposed": "ÅΩẛ̣",
+      "passwordNormalized": "ÅΩṩ",
+      "normalizedUtf8Hex": "c385cea9e1b9a9",
+      "privkeyHex": "11b25a101667dd9208db93c0827c6bdad66729a5b521156a7e9d3b22b3ae8944"
+    },
+    "roundtrip": {
+      "privkeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "password": "geheim",
+      "logN": 8,
+      "unicodePassword": "Grüß-Ähre-😀"
+    },
+    "rejects": [
+      {"case": "empty password on encrypt", "password": ""},
+      {"case": "privkey wrong length", "privkeyHex": "abababababababababababababababab"},
+      {"case": "privkey not hex", "privkeyHex": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"},
+      {"case": "wrong prefix", "input": "nsec1abcdef"},
+      {"case": "truncated", "input": "first 60 chars of official ncryptsec"},
+      {"case": "log_n byte set to 255", "expect": "rejected before scrypt runs"},
+      {"case": "keySecurity byte (index 42) flipped without re-encrypting", "expect": "MAC failure"}
+    ]
+  },
+
+  "pbkdf2_hmac_sha256": {
+    "source": "dart-test (test/pbkdf2_equality_test.dart, test/pbkdf2_web_equality_test.dart); re-verified with Python hashlib",
+    "salt_utf8": "einundzwanzig-salt-32-bytes-lang!",
+    "cases": [
+      {"password": "korrekt pferd batterie klammer", "iterations": 1, "keyBytes": 32, "hex": "070375026d4efd90f55f8c596f9804c9d59e8b261c226982aea5b2076a95bb8a"},
+      {"password": "korrekt pferd batterie klammer", "iterations": 2, "keyBytes": 32, "hex": "f92df020004a77d443c83df50dd1899ad67b97d28b7d21b9481a78e5cb86885a"},
+      {"password": "korrekt pferd batterie klammer", "iterations": 4096, "keyBytes": 32, "hex": "730ecb5f9ff2ce548af5ef16149284b4b0e96be1a1c57f1192bafe12bae7b0c9"},
+      {"password": "korrekt pferd batterie klammer", "iterations": 100000, "keyBytes": 32, "hex": "22772726dbae2cda50c4f036ecce698ad1def22782eaab08d439742d531e0166"},
+      {"password": "passwort", "iterations": 600000, "keyBytes": 32, "hex": "c32f5c29f83c8c3a2250ecd4ca726a7766d74edfd8cb74d2cf95e7d4654ce58e"},
+      {"password": "Gruß-Ähre-müde-😀", "iterations": 1000, "keyBytes": 32, "hex": "090f088c774831b951cdff271be383fe5c34b45a5e925f5cf465eda21affa3a1"},
+      {"password": "passwort", "iterations": 1000, "keyBytes": 64, "hex": "546f47b1fbba44eb9b8f88a78a65a017911b0f1d744ad7aff4742981e7af99d8ca31938c361ececdd17b1f0eeefadfec9df608589f378a985dc1424b6b1481ba"},
+      {"password": "einundzwanzig-test-passwort", "iterations": 600000, "keyBytes": 32, "hex": "e69c19ea83dcda0b6f2e010dfaa087359d3d4b5ad4ba925b012cbfa9b80e271c"}
+    ],
+    "rejects": [
+      {"iterations": 0, "keyBytes": 32},
+      {"iterations": 1, "keyBytes": 0}
+    ]
+  },
+
+  "nip46": {
+    "requestedPerms": {
+      "source": "derived from Nip46Client.signedKinds",
+      "value": "get_public_key,nip44_encrypt,nip44_decrypt,sign_event:21000,sign_event:21001,sign_event:21002,sign_event:21003,sign_event:22242,sign_event:30021,sign_event:30078,sign_event:30079,sign_event:31922,sign_event:31923"
+    },
+    "clientMetadataJson": {
+      "source": "derived (Dart jsonEncode, no '/' escaping, key order name,url,image)",
+      "value": "{\"name\":\"Einundzwanzig Meetup\",\"url\":\"https://github.com/louisthecat86/Einundzwanzig-Meetup-App\",\"image\":\"https://raw.githubusercontent.com/louisthecat86/Einundzwanzig-Meetup-App/main/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-60x60%403x.png\"}"
+    },
+    "nostrConnectUri": {
+      "source": "derived (asserted piecewise by test/nip46_client_test.dart and test/nip46_signing_service_test.dart)",
+      "input": {
+        "clientPubkeyHex": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+        "relays": ["wss://a.test"],
+        "secret": "abc123",
+        "perms": "<requestedPerms>",
+        "appName": "Einundzwanzig Meetup",
+        "appUrl": "https://github.com/louisthecat86/Einundzwanzig-Meetup-App",
+        "appImage": "https://raw.githubusercontent.com/louisthecat86/Einundzwanzig-Meetup-App/main/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-60x60%403x.png"
+      },
+      "expected": "nostrconnect://cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd?relay=wss%3A%2F%2Fa.test&secret=abc123&perms=get_public_key%2Cnip44_encrypt%2Cnip44_decrypt%2Csign_event%3A21000%2Csign_event%3A21001%2Csign_event%3A21002%2Csign_event%3A21003%2Csign_event%3A22242%2Csign_event%3A30021%2Csign_event%3A30078%2Csign_event%3A30079%2Csign_event%3A31922%2Csign_event%3A31923&name=Einundzwanzig%20Meetup&url=https%3A%2F%2Fgithub.com%2Flouisthecat86%2FEinundzwanzig-Meetup-App&image=https%3A%2F%2Fraw.githubusercontent.com%2Flouisthecat86%2FEinundzwanzig-Meetup-App%2Fmain%2Fios%2FRunner%2FAssets.xcassets%2FAppIcon.appiconset%2FIcon-App-60x60%25403x.png"
+    },
+    "appNameEncoding": {
+      "source": "dart-test (App-Name bleibt fuer native URI-Parser unveraendert) + derived",
+      "cases": [
+        {"name": "Einundzwanzig Meetup", "encoded": "Einundzwanzig%20Meetup"},
+        {"name": "Meetup + Café & Bitcoin", "encoded": "Meetup%20%2B%20Caf%C3%A9%20%26%20Bitcoin"}
+      ]
+    },
+    "bunkerParse": {
+      "source": "dart-test (test/nip46_client_test.dart group Bunker-Adresse)",
+      "valid": [
+        {
+          "input": " bunker://abababababababababababababababababababababababababababababababab?relay=wss://a.test&relay=wss://b.test&secret=deadbeef ",
+          "remoteSignerPubkey": "abababababababababababababababababababababababababababababababab",
+          "relays": ["wss://a.test", "wss://b.test"],
+          "secret": "deadbeef"
+        }
+      ],
+      "persistForm": {
+        "input": "bunker://abababababababababababababababababababababababababababababababab?relay=wss://a.test&secret=deadbeef",
+        "toBunkerUri": "bunker://abababababababababababababababababababababababababababababababab?relay=wss%3A%2F%2Fa.test"
+      },
+      "twoRelaysPersistForm": "bunker://abababababababababababababababababababababababababababababababab?relay=wss%3A%2F%2Fa.test&relay=wss%3A%2F%2Fb.test",
+      "invalid": [
+        "bunker://abababababababababababababababababababababababababababababababab",
+        "bunker://abababababababababababababababababababababababababababababababab?relay=http://a.test",
+        "https://example.com",
+        "bunker://nichthex?relay=wss://a.test",
+        "bunker://ababababababababababababababababababababababababababababababab?relay=wss://a.test",
+        ""
+      ]
+    },
+    "timeoutsSeconds": {"connect": 75, "getPublicKey": 75, "pairing": 120, "sign_event": 60, "nip44_encrypt": 60, "nip44_decrypt": 60, "ping": 15, "relayOpen": 10, "relayCooldownAfterBlock": 120, "reqSinceSkew": 60}
+  },
+
+  "passkeyPrf": {
+    "source": "derived from lib/services/passkey_prf_service.dart",
+    "rpId": "einundzwanzig.space",
+    "rpName": "21meetup",
+    "saltUtf8": "21meetup-easyauth-prf-v1",
+    "saltBase64UrlNoPad": "MjFtZWV0dXAtZWFzeWF1dGgtcHJmLXYx",
+    "userIdEncoding": "base64url WITH '=' padding of the 32 raw bytes of the x-only pubkey",
+    "prfPasswordForNip49": "lowercase hex of the raw PRF output bytes (prf.results.first base64url-decoded), 64 chars for 32 bytes",
+    "nip49LogN": 8
+  },
+
+  "appReviewDemo": {
+    "source": "dart-test (test/app_review_demo_test.dart)",
+    "payload": "21review:einundzwanzig-meetup-demo",
+    "matches": [
+      {"input": "21review:einundzwanzig-meetup-demo", "expect": true},
+      {"input": " 21review:einundzwanzig-meetup-demo ", "expect": true},
+      {"input": "21:something", "expect": false},
+      {"input": null, "expect": false}
+    ],
+    "isDemoLogin": [
+      {"user": "AppReview", "pass": "ReviewDemo1", "expect": true},
+      {"user": " AppReview ", "pass": "ReviewDemo1", "expect": true},
+      {"user": "AppReview", "pass": "wrong", "expect": false},
+      {"user": "", "pass": "ReviewDemo1", "expect": false}
+    ]
+  },
+
+  "nip44Probe": {
+    "plaintext": "e21-nip44-probe"
+  }
+}

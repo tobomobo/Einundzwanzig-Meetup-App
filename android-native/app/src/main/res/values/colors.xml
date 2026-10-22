@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="brand_dark">#FF0C0C0E</color>
+
+    <!-- Home-screen widget: always dark like the Flutter widget (spec 14 §3.1.2). -->
+    <color name="widget_orange">#FFF7931A</color>
+    <color name="widget_grey">#FF8A8F98</color>
+    <color name="widget_text">#FFFFFFFF</color>
+    <color name="widget_news_text">#FFCCCCCC</color>
+    <color name="widget_divider">#22F7931A</color>
+    <color name="widget_badge_text">#FF141416</color>
+</resources>

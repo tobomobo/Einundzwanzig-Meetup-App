@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!--
+            The app's single FileProvider. Everything shared as a file (share-card PNG,
+            reputation QR, world map, backups, log export) is written to cacheDir/share/
+            and exposed through this authority. See ShareHelper.
+        -->
+        <provider
+            android:name="space.einundzwanzig.meetup.core.ui.share.ShareFileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/core_ui_share_paths" />
+        </provider>
+
+        <!-- Chooser callback (EXTRA_CHOSEN_COMPONENT) for ShareHelper.*ForResult; never exported. -->
+        <receiver
+            android:name="space.einundzwanzig.meetup.core.ui.share.ShareChooserReceiver"
+            android:exported="false" />
+    </application>
+</manifest>

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_backupItemProfile">Perfil</string>
+    <!-- args: count:int -->
+    <plurals name="native_backupItemBadges">
+        <item quantity="one">%1$d insignia</item>
+        <item quantity="many">%1$d insignias</item>
+        <item quantity="other">%1$d insignias</item>
+    </plurals>
+    <string name="native_backupItemNostrKey">clave Nostr</string>
+    <!-- args: count:int -->
+    <plurals name="native_backupItemPlatformProofs">
+        <item quantity="one">%1$d prueba de plataforma</item>
+        <item quantity="many">%1$d pruebas de plataforma</item>
+        <item quantity="other">%1$d pruebas de plataforma</item>
+    </plurals>
+    <string name="native_backupItemHumanity">prueba de humanidad</string>
+    <string name="native_backupErrSwitchPending">Un cambio de identidad aún no ha terminado. Vuelve a cargar la copia de seguridad de la nueva identidad.</string>
+    <!-- args: count:int -->
+    <plurals name="native_backupErrStageFailed">
+        <item quantity="one">No se pudo preparar %1$d insignia de la copia de seguridad.</item>
+        <item quantity="many">No se pudieron preparar %1$d insignias de la copia de seguridad.</item>
+        <item quantity="other">No se pudieron preparar %1$d insignias de la copia de seguridad.</item>
+    </plurals>
+    <string name="native_backupErrKeyUnreadable">La clave de la copia de seguridad no se puede leer ahora. Tu colección no cambia.</string>
+    <string name="native_backupErrKeyNotTaken">La clave de la copia de seguridad no se aplicó. Tu colección no cambia.</string>
+    <!-- args: count:int -->
+    <plurals name="native_backupErrBadgesNotSaved">
+        <item quantity="one">No se pudo guardar %1$d insignia de la copia de seguridad. Todo lo demás se restauró.</item>
+        <item quantity="many">No se pudieron guardar %1$d insignias de la copia de seguridad. Todo lo demás se restauró.</item>
+        <item quantity="other">No se pudieron guardar %1$d insignias de la copia de seguridad. Todo lo demás se restauró.</item>
+    </plurals>
+    <string name="native_backupErrHoldNotPersisted">No se pudo registrar el cambio.</string>
+    <string name="native_backupErrClearNotMarked">No se pudo marcar la colección vacía.</string>
+    <string name="native_backupErrProofsNotCleared">No se pudieron eliminar las pruebas de la identidad anterior.</string>
+    <string name="native_backupErrProofsNotSaved">No se pudieron guardar algunas pruebas de la copia de seguridad. Los datos ya restaurados se conservan. Carga la copia de seguridad de nuevo.</string>
+    <string name="native_backupErrUnreadable">No se pudo leer el archivo.</string>
+    <string name="native_backupWorking">Procesando copia de seguridad …</string>
+    <string name="native_backupRuleMet">Cumplido</string>
+    <string name="native_backupRuleNotMet">No cumplido</string>
+</resources>

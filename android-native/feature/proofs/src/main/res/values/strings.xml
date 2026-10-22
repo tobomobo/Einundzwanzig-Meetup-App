@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Platform catalogue (spec 06 §2.6); German defaults equal PlatformInfo.name/hint. -->
+    <string name="native_ppNameOther">Andere Plattform</string>
+    <string name="native_ppHintSka">Dein Benutzername auf Satoshi-Kleinanzeigen</string>
+    <string name="native_ppHintTelegram">Dein Telegram @username (ohne @)</string>
+    <string name="native_ppHintRobosats">Dein RoboSats Robot-Name</string>
+    <string name="native_ppHintNostr">Dein Nostr-Profilname (NIP-05 oder Display Name)</string>
+    <string name="native_ppHintOther">Dein Benutzername auf der Plattform</string>
+    <!-- ProofCreateError texts (spec 06 §2.6). args: detail:String -->
+    <string name="native_proofErrNoKey">Kein Schlüssel vorhanden</string>
+    <string name="native_ppErrEmptyUsername">Benutzername darf nicht leer sein</string>
+    <string name="native_proofErrGeneric">Fehler: %1$s</string>
+    <string name="native_ppRevokeFailed">Die Verknüpfung konnte nicht gelöscht werden.</string>
+    <!-- Revoke button of a proof card (TalkBack): %1$s platform name, %2$s username. -->
+    <string name="native_ppRevokeFor">Verknüpfung mit %1$s (%2$s) widerrufen</string>
+    <string name="native_ppCreating">Beweis wird signiert …</string>
+    <string name="native_ppEmbeddedInQr">Im Reputation-QR eingebettet</string>
+    <string name="native_ppAlreadyLinked">Bereits verknüpft</string>
+    <!-- HumanityOutcome texts (spec 06 §2.6). -->
+    <string name="native_humFound">Lightning-Zahlung gefunden — du bist verifiziert!</string>
+    <string name="native_humNotFound">Kein Zap-Receipt gefunden. Hast du schon einmal jemanden auf Nostr gezappt? Zappe irgendjemanden (egal wieviel Sats) und komm zurück.</string>
+    <string name="native_humNoKey">Kein Schlüssel vorhanden</string>
+    <string name="native_humInvalidNpub">Ungültiger npub</string>
+    <string name="native_humError">Prüfung fehlgeschlagen — bitte erneut versuchen.</string>
+    <!-- HumanityStatus.lastCheckedStr (spec 06 §2.6). -->
+    <string name="native_humLastJustNow">Gerade eben</string>
+    <string name="native_humLastMinutes">Vor %1$d Min.</string>
+    <string name="native_humLastHours">Vor %1$d Std.</string>
+</resources>

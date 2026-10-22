@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_events_label_detail">%1$s: %2$s</string>
+    <string name="native_events_time_suffix">%1$s h</string>
+    <string name="native_events_favorite_add">Añadir a favoritos</string>
+    <string name="native_events_favorite_remove">Quitar de favoritos</string>
+    <string name="native_events_show_attendees">Mostrar asistentes</string>
+    <string name="native_events_hide_attendees">Ocultar asistentes</string>
+    <string name="native_events_refresh">Actualizar</string>
+    <string name="native_events_prev_month">Mes anterior</string>
+    <string name="native_events_next_month">Mes siguiente</string>
+    <string name="native_events_prev_year">Año anterior</string>
+    <string name="native_events_next_year">Año siguiente</string>
+    <string name="native_events_badge">Con insignia</string>
+    <string name="native_events_rsvp_not_accepted">Ningún relay aceptó la respuesta</string>
+    <string name="native_events_add_issuer_row">Añadir fila de ayudante</string>
+    <string name="native_events_remove_issuer_row">Quitar fila de ayudante</string>
+    <string name="native_events_add_helper">Añadir ayudante</string>
+    <string name="native_events_remove_helper">Quitar ayudante</string>
+    <string name="native_events_clear_location">Borrar ubicación</string>
+    <string name="native_events_pick_image">Elegir una imagen de la galería</string>
+    <string name="native_events_unread">%1$s mensajes sin leer</string>
+    <string name="native_events_open_meetup_chat">Abrir el chat del meetup</string>
+    <string name="native_events_npub_hint">npub1…</string>
+    <string name="native_events_dash">–</string>
+    <string name="native_events_clear_filter">Borrar filtro</string>
+    <string name="native_events_image_unreadable">No se pudo leer la imagen</string>
+    <plurals name="native_events_month_events">
+        <item quantity="one">%1$s: %2$d evento</item>
+        <item quantity="many">%1$s: %2$d eventos</item>
+        <item quantity="other">%1$s: %2$d eventos</item>
+    </plurals>
+    <plurals name="native_events_day_events">
+        <item quantity="one">%1$s, %2$d evento</item>
+        <item quantity="many">%1$s, %2$d eventos</item>
+        <item quantity="other">%1$s, %2$d eventos</item>
+    </plurals>
+</resources>

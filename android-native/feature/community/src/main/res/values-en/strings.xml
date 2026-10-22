@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Native-only strings of :feature:community (ARB strings live in :core:l10n). -->
+<resources>
+    <string name="native_community_not_found">Not found.</string>
+    <string name="native_community_play">Play</string>
+    <string name="native_community_pause">Pause</string>
+    <string name="native_community_next">Next song</string>
+    <string name="native_community_previous">Previous song</string>
+    <string name="native_community_clear_search">Clear search</string>
+    <string name="native_community_add_to_calendar">Add to calendar</string>
+    <string name="native_community_open_link">Open link</string>
+    <string name="native_community_seek">Position in song</string>
+    <string name="native_lightning_wallet_chooser">Choose Lightning wallet</string>
+</resources>

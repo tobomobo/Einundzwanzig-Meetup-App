@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Native-only strings of :feature:reputation (spec 04 §2.10 proposed keys and native additions). German default. -->
+<resources>
+    <string name="native_repPublishNoKey">Kein Schlüssel vorhanden</string>
+    <string name="native_repPublishNoBadges">Keine Badges vorhanden</string>
+    <string name="native_repPublishUpToDate">Reputation ist aktuell — kein Update nötig</string>
+    <string name="native_repPublishOk">Reputation auf %1$d Relays aktualisiert</string>
+    <string name="native_repPublishNoRelay">Konnte an keinen Relay senden</string>
+    <string name="native_repPublishError">Publish-Fehler: %1$s</string>
+    <string name="native_repSignFailed">Der QR-Code konnte nicht signiert werden. Scanner lehnen unsignierte Codes ab — prüfe deinen Signer.</string>
+    <string name="native_repLoadError">Reputation konnte nicht geladen werden.</string>
+    <string name="native_retry">Erneut versuchen</string>
+    <string name="native_repQrDescription">Reputations-QR-Code</string>
+    <string name="native_rcNoDataHint">Scanne deinen ersten Badge bei einem Meetup, um deine Reputation sichtbar zu machen.</string>
+    <string name="native_qrStatsLine">%1$d Badges · %2$d Meetups · %3$d Signer</string>
+    <string name="native_qrProofLine">%1$d von %2$d Badges kryptographisch verifiziert</string>
+    <string name="native_qrSignedBy">Signiert: %1$s</string>
+    <plurals name="native_qrHopsAway">
+        <item quantity="one">%1$d Hop entfernt</item>
+        <item quantity="other">%1$d Hops entfernt</item>
+    </plurals>
+    <string name="native_qrVerifyOk">Schnorr-Signatur verifiziert ✓</string>
+    <string name="native_qrVerifyMissing">Fehlende Signatur-Daten</string>
+    <string name="native_qrVerifyBadPubkey">Ungültiges Pubkey-Format</string>
+    <string name="native_qrVerifyBadSig">Ungültiges Signatur-Format</string>
+    <string name="native_qrVerifyInvalid">Schnorr-Signatur UNGÜLTIG!</string>
+    <string name="native_qrVerifyLegacy">Legacy-QR (v1) wird nicht mehr akzeptiert. Bitte Organisator um neuen v2-Tag.</string>
+    <string name="native_qrIdentityMismatch">Achtung: Der QR-Code nennt einen anderen npub als den Schlüssel, der ihn signiert hat. Die Identität ist nicht bestätigt; die Netzwerk-Daten unten gehören zum Signierer.</string>
+    <string name="native_qrLinkedUnconfirmed">Verknüpft (unbestätigt)</string>
+    <string name="native_rvInputHint">21rep::npub1...::plattform::user::sig=...\noder npub1...</string>
+    <string name="native_rvPaste">Aus der Zwischenablage einfügen und prüfen</string>
+    <string name="native_rvMsgBadFormat">Ungültiges Format. Erwartet: 21rep::npub::plattform::username::sig=...</string>
+    <string name="native_rvMsgBadSignature">WARNUNG: Signatur ungültig! Dieser Verify-String wurde manipuliert.</string>
+    <string name="native_rvMsgUsernameMismatch">WARNUNG: Username stimmt nicht überein! String sagt „%1$s“, Account ist „%2$s“.</string>
+    <string name="native_rvMsgNoReputation">Format gültig — Verknüpfung unbestätigt. Keine Reputation auf Relays gefunden.</string>
+    <string name="native_rvMsgFull">Identität und Reputation vollständig bestätigt ✓</string>
+    <string name="native_rvMsgPartialWithProof">Reputation teilweise bestätigt — %1$d von %2$d Badges gebunden.</string>
+    <string name="native_rvMsgPartialNoProof">Reputation verifiziert, aber Plattform-Proof nicht im Event gefunden.</string>
+    <string name="native_rvMsgSignatureOnlyNoBindings">Verknüpfung unbestätigt — keine gebundenen Badges.</string>
+    <string name="native_rvMsgNpubNoReputation">Keine Reputation auf Relays gefunden für diesen npub.</string>
+    <string name="native_rvMsgNpubWithBindings">Reputation gefunden — aber kein Plattform-Proof. Identitäts-Verknüpfung nicht bestätigt.</string>
+    <string name="native_rvMsgNpubNoBindings">Reputation gefunden, aber keine gebundenen Badges.</string>
+    <string name="native_rvMsgError">Verifikations-Fehler: %1$s</string>
+    <string name="native_openInNostr">In Nostr-App öffnen</string>
+    <string name="native_layerShowDetails">Details anzeigen</string>
+    <string name="native_layerHideDetails">Details ausblenden</string>
+    <string name="native_tnHubVerifyTitle">Reputation prüfen</string>
+    <string name="native_tnHubVerifySub">Verify-String oder npub einer Person über alle Beweis-Layer prüfen</string>
+    <!-- Zap activity / NIP-05 domain labels (German literals of :data:proofs, localized natively). -->
+    <string name="native_zapActivityNone">Keine Zap-Aktivität</string>
+    <string name="native_zapActivityLittle">Wenig Aktivität</string>
+    <string name="native_zapActivityRegular">Regelmäßig aktiv</string>
+    <string name="native_zapActivityVeryActive">Sehr aktiv</string>
+    <string name="native_nip05Community">Community-verifiziert</string>
+    <string name="native_nip05Custom">Eigene Domain</string>
+    <string name="native_nip05PublicProvider">Public Provider</string>
+    <string name="native_rvFormatOnly">FORMAT GÜLTIG · UNBESTÄTIGT</string>
+</resources>
