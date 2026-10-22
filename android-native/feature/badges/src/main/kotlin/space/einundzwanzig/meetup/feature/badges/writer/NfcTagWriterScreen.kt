@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package space.einundzwanzig.meetup.feature.badges.writer
 
 import androidx.compose.animation.AnimatedContent
@@ -41,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -59,7 +62,7 @@ import space.einundzwanzig.meetup.core.navigation.LocalNavigator
 import space.einundzwanzig.meetup.core.navigation.RollingQr
 import space.einundzwanzig.meetup.core.ui.component.AppLoadingIndicator
 import space.einundzwanzig.meetup.core.ui.component.AppSnackbarHost
-import space.einundzwanzig.meetup.core.ui.component.AppTopBar
+import space.einundzwanzig.meetup.core.ui.component.AppMediumTopBar
 import space.einundzwanzig.meetup.core.ui.component.LocalAppSnackbarHostState
 import space.einundzwanzig.meetup.core.ui.component.Tone
 import space.einundzwanzig.meetup.core.ui.component.showAppSnackbar
@@ -75,6 +78,7 @@ import space.einundzwanzig.meetup.feature.badges.common.PrimaryActionButton
 import space.einundzwanzig.meetup.feature.badges.common.PulsingCircle
 import space.einundzwanzig.meetup.feature.badges.common.ShapedIcon
 import space.einundzwanzig.meetup.feature.badges.nfc.NfcReaderModeEffect
+import space.einundzwanzig.meetup.feature.badges.nfc.openNfcSettings
 import space.einundzwanzig.meetup.core.l10n.R as L10nR
 
 /** Test tags of the writer. */
@@ -92,7 +96,8 @@ fun NfcTagWriterRoute(viewModel: NfcTagWriterViewModel = hiltViewModel()) {
     val appHost = LocalAppSnackbarHostState.current
     val localHost = remember { SnackbarHostState() }
     val host = appHost ?: localHost
-    val res = LocalContext.current.resources
+    val context = LocalContext.current
+    val res = context.resources
     val haptics = rememberHaptics()
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
@@ -103,6 +108,7 @@ fun NfcTagWriterRoute(viewModel: NfcTagWriterViewModel = hiltViewModel()) {
                 )
                 NfcTagWriterEvent.OpenRollingQr -> navigator.navigateFromRoot(RollingQr)
                 NfcTagWriterEvent.Back -> navigator.back()
+                NfcTagWriterEvent.OpenNfcSettings -> openNfcSettings(context)
             }
         }
     }
@@ -128,14 +134,17 @@ fun NfcTagWriterScreen(
     snackbarHost: @Composable () -> Unit = {},
 ) {
     val onPrimary = MaterialTheme.colorScheme.onPrimary
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
-        modifier = modifier,
+        modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            AppTopBar(
+            AppMediumTopBar(
                 title = stringResource(L10nR.string.writerCreateMeetupTag),
                 onBack = { onAction(NfcTagWriterAction.Back) },
+                scrollBehavior = scrollBehavior,
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
+                    scrolledContainerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = onPrimary,
                     navigationIconContentColor = onPrimary,
                 ),
@@ -205,8 +214,8 @@ private fun WriterContent(state: NfcTagWriterUiState, onAction: (NfcTagWriterAct
     val homeText = when (val home = state.home) {
         HomeMeetupInfo.Loading -> null
         HomeMeetupInfo.NoHome -> stringResource(L10nR.string.writerSelectHomeFirst)
-        is HomeMeetupInfo.NotFound -> "Meetup: ${home.id}"
-        is HomeMeetupInfo.Found -> "📍 ${home.city}, ${home.country}"
+        is HomeMeetupInfo.NotFound -> stringResource(R.string.native_writer_home_not_found, home.id)
+        is HomeMeetupInfo.Found -> stringResource(R.string.native_meetup_pin_country, home.city, home.country)
     }
     InfoBox(
         icon = Icons.Rounded.Storefront,

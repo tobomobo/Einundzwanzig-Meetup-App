@@ -73,10 +73,20 @@ internal fun MeetupBadge.artSeed(): String = BadgeArtSpec.seedFor(meetupName, bl
 /** Dart `toUpperCase()` for display (keeps `ß`). */
 internal fun dartUpper(s: String): String = DartString.upper(s)
 
-/** The content description of a badge card: name, date, number. */
+/**
+ * The single TalkBack announcement of a badge card: name, date, number and the organizer /
+ * unverified-presence marker (also on compact cards, which do not draw it). The card clears its
+ * children's semantics, so nothing is read twice.
+ */
 @Composable
-private fun badgeCardDescription(badge: MeetupBadge, number: Int): String =
-    "${badge.meetupName}, ${BadgeFormat.dateShort(badge.date)}, #$number"
+private fun badgeCardDescription(badge: MeetupBadge, number: Int): String {
+    val base = "${badge.meetupName}, ${BadgeFormat.dateShort(badge.date)}, #$number"
+    return when {
+        badge.isOrganizer -> "$base, ${stringResource(L10nR.string.walletOrganizerSection)}"
+        !badge.presenceVerified -> "$base, ${stringResource(L10nR.string.badgeUnverified)}"
+        else -> base
+    }
+}
 
 /**
  * Normal wallet badge card (spec 03 §2.1): art, crest watermark, gradient, verified mark,
@@ -102,7 +112,7 @@ internal fun NormalBadgeCard(
             .border(1.dp, primary.copy(alpha = 0.4f), shape),
     ) {
         val description = badgeCardDescription(badge, number)
-        Box(Modifier.fillMaxSize().semantics { contentDescription = description }) {
+        Box(Modifier.fillMaxSize().clearAndSetSemantics { contentDescription = description }) {
             BadgeArt(badge.artSeed(), Modifier.fillMaxSize())
             MeetupCrestWatermark(
                 meetupName = badge.meetupName,
@@ -143,7 +153,7 @@ internal fun NormalBadgeCard(
                         } else if (!badge.presenceVerified) {
                             Icon(
                                 Icons.Rounded.LocationOff,
-                                contentDescription = stringResource(L10nR.string.badgeUnverified),
+                                contentDescription = null,
                                 tint = MaterialTheme.extendedColors.onScrim.copy(alpha = OnScrimTertiary),
                                 modifier = Modifier.size(11.dp),
                             )
@@ -170,7 +180,6 @@ internal fun NormalBadgeCard(
                         style = nameStyle.copy(shadow = Shadow(scrim.copy(alpha = 0.54f), Offset.Zero, with(density) { 12.dp.toPx() })),
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.clearAndSetSemantics { },
                     )
                     Text(
                         text = name,
@@ -233,7 +242,7 @@ internal fun CompactBadgeCard(
             .background(MaterialTheme.colorScheme.surfaceContainer)
             .border(0.8.dp, primary.copy(alpha = 0.3f), shape),
     ) {
-        Box(Modifier.fillMaxSize().semantics { contentDescription = description }) {
+        Box(Modifier.fillMaxSize().clearAndSetSemantics { contentDescription = description }) {
             BadgeArt(badge.artSeed(), Modifier.fillMaxSize())
             MeetupCrestWatermark(
                 meetupName = badge.meetupName,

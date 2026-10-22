@@ -1,6 +1,7 @@
 package space.einundzwanzig.meetup.feature.onboarding.common
 
 import android.content.Context
+import androidx.activity.compose.LocalActivity
 import androidx.annotation.StringRes
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
@@ -11,9 +12,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import space.einundzwanzig.meetup.core.ui.component.AppSnackbarDurations
+import space.einundzwanzig.meetup.core.ui.component.LocalAppSnackbarHostState
 import space.einundzwanzig.meetup.core.ui.component.Tone
 import space.einundzwanzig.meetup.core.ui.component.showAppSnackbar
 
@@ -51,16 +55,28 @@ data class SnackbarMessage(
     val durationMillis: Long = AppSnackbarDurations.Medium,
 )
 
-/** Shows every message of [messages] in [hostState]; a new message replaces the visible one. */
+/**
+ * Shows every message of [messages] in [hostState]; a new message replaces the visible one.
+ *
+ * `showSnackbar` removes its snackbar when the calling coroutine is cancelled. For the app-level
+ * host ([LocalAppSnackbarHostState]) the snackbar must outlive this nav entry (e.g. Intro's
+ * `introSetIdentity` while the setup is pushed, or "key saved" right before the reset to the
+ * shell), so it runs in the Activity's lifecycle scope, which owns that host. A local host lives
+ * and dies with the entry and uses the composition scope.
+ */
 @Composable
 fun SnackbarEffect(messages: Flow<SnackbarMessage>, hostState: SnackbarHostState) {
-    val scope = rememberCoroutineScope()
+    val localScope = rememberCoroutineScope()
+    val appHost = LocalAppSnackbarHostState.current
+    val activityScope = (LocalActivity.current as? LifecycleOwner)?.lifecycleScope
+    val scope = if (hostState === appHost && activityScope != null) activityScope else localScope
+    val currentScope = rememberUpdatedState(scope)
     val context = rememberUpdatedState(LocalContext.current)
     LaunchedEffect(messages, hostState) {
         messages.collect { message ->
             val text = message.text.resolveWith(context.value)
             hostState.currentSnackbarData?.dismiss()
-            scope.launch { hostState.showAppSnackbar(text, message.tone, message.durationMillis) }
+            currentScope.value.launch { hostState.showAppSnackbar(text, message.tone, message.durationMillis) }
         }
     }
 }

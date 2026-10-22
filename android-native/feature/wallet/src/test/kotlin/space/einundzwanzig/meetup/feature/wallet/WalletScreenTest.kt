@@ -1,9 +1,13 @@
 package space.einundzwanzig.meetup.feature.wallet
 
 import android.content.Context
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
-import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.assertContentDescriptionContains
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -128,10 +132,12 @@ class WalletScreenTest {
         val b = badge("b", name = "Wien", date = "2025-02-01T19:00:00.000", meetupEventId = "b", presenceVerified = false)
         show(stateOf(listOf(a, b), groupByMeetup = false))
         rule.onNodeWithText("2026").assertIsDisplayed()
-        rule.onNodeWithTag(WalletTestTags.LIST).performScrollToNode(hasText("#2"))
-        rule.onNodeWithText("#2").assertExists()
+        rule.onNodeWithTag(WalletTestTags.LIST).performScrollToNode(hasContentDescription("#2", substring = true))
+        // The unverified marker is part of the card's single announcement.
+        rule.onNodeWithContentDescription("Wien", substring = true)
+            .assertContentDescriptionContains(str(L10nR.string.badgeUnverified), substring = true)
         rule.onNodeWithText("2025").performClick()
-        rule.onNodeWithText("ULM").performClick()
+        rule.onNodeWithContentDescription("Ulm,", substring = true).performClick()
         assertEquals(WalletAction.ToggleCollapsed("2025"), actions[0])
         assertTrue((actions[1] as WalletAction.OpenDetails).badge === a)
     }
@@ -144,13 +150,27 @@ class WalletScreenTest {
     }
 
     @Test
-    fun `share sheet offers text, qr and json`() {
-        show(stateOf(listOf(badge("1"))).copy(shareSheetOpen = true))
-        rule.onNodeWithTag(WalletSheetTags.SHARE_SHEET).assertExists()
-        rule.onNodeWithText(str(L10nR.string.walletShareText)).performClick()
-        rule.onNodeWithText(str(L10nR.string.walletShowQr)).performClick()
-        rule.onNodeWithText(str(L10nR.string.walletExportJson)).performClick()
-        assertEquals(listOf(WalletAction.ShareText, WalletAction.ShowQr, WalletAction.ExportJson), actions)
+    fun `share sheet offers text, qr and json and hides before reporting`() {
+        var open by mutableStateOf(true)
+        val base = stateOf(listOf(badge("1")))
+        rule.setContent {
+            EinundzwanzigTheme {
+                WalletScreen(base.copy(shareSheetOpen = open), onAction = { actions += it; open = false })
+            }
+        }
+        for (label in listOf(L10nR.string.walletShareText, L10nR.string.walletShowQr, L10nR.string.walletExportJson)) {
+            rule.onNodeWithTag(WalletSheetTags.SHARE_SHEET).assertExists()
+            rule.onNodeWithText(str(label)).performClick()
+            rule.waitForIdle()
+            rule.onNodeWithTag(WalletSheetTags.SHARE_SHEET).assertDoesNotExist()
+            rule.runOnIdle { open = true }
+        }
+        rule.onNodeWithText(str(L10nR.string.cancel)).performClick()
+        rule.waitForIdle()
+        assertEquals(
+            listOf(WalletAction.ShareText, WalletAction.ShowQr, WalletAction.ExportJson, WalletAction.DismissShareSheet),
+            actions,
+        )
     }
 
     @Test
@@ -192,6 +212,7 @@ class WalletScreenTest {
         val buttons = rule.onAllNodesWithText(str(L10nR.string.walletFormerMerge))
         buttons[1].assertIsNotEnabled()
         buttons[0].performClick()
+        rule.waitForIdle()
         assertEquals(listOf<WalletAction>(WalletAction.RequestMerge(readable)), actions)
     }
 

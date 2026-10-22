@@ -10,6 +10,8 @@
     <!-- %1$s = app versionName -->
     <string name="native_settings_version">21Meetup · Version %1$s</string>
     <string name="native_settings_selected">Ausgewählt</string>
+    <!-- TalkBack label of the sheet's drag handle (carries the expand/dismiss actions). -->
+    <string name="native_settings_drag_handle">Ziehpunkt</string>
 
     <string name="native_log_title">Diagnose-Log</string>
     <string name="native_log_probe_tooltip">NIP-44-Verbindung prüfen (Freigabe im Signer eventuell nötig)</string>
@@ -28,4 +30,6 @@
     <!-- %1$d = number of shown entries (Flutter: no plural form) -->
     <string name="native_log_count">%1$d Einträge</string>
     <string name="native_log_clear">Log leeren</string>
+    <!-- Native-only: the clipboard rejected the log (too large for Binder). German like the rest of the screen. -->
+    <string name="native_log_copy_failed">Log konnte nicht kopiert werden</string>
 </resources>

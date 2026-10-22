@@ -202,7 +202,7 @@ class NearbyScreenTest {
         var fits = 0
         val restoration = StateRestorationTester(rule)
         restoration.setContent {
-            FitCameraOnNewSearch(token, camera) {
+            FitCameraOnNewSearch(7L, token, camera) {
                 fits++
                 listOf(berlinPoint)
             }
@@ -223,6 +223,33 @@ class NearbyScreenTest {
     }
 
     @Test
+    fun `after process death the first matching token of a new session still fits`() {
+        val camera = OsmCameraState(CameraPosition(LatLng.DachCenter, 5.0))
+        var session by mutableStateOf(7L)
+        var token by mutableIntStateOf(1)
+        var fits = 0
+        val restoration = StateRestorationTester(rule)
+        restoration.setContent {
+            FitCameraOnNewSearch(session, token, camera) {
+                fits++
+                listOf(berlinPoint)
+            }
+        }
+        rule.waitForIdle()
+        assertEquals(1, fits)
+        // Process death: saved key "7:1" survives, the new ViewModel starts a new session at token 1.
+        rule.runOnIdle { camera.move(userCamera.target, userCamera.zoom) }
+        restoration.emulateSavedInstanceStateRestore()
+        rule.runOnIdle {
+            session = 8L
+            token = 1
+        }
+        rule.waitForIdle()
+        assertEquals(CameraPosition(berlinPoint, 10.0), camera.position)
+        assertEquals(2, fits)
+    }
+
+    @Test
     fun `coming back from details with the same fitToken keeps the camera`() {
         val camera = OsmCameraState(CameraPosition(LatLng.DachCenter, 5.0))
         var onTop by mutableStateOf(true)
@@ -232,7 +259,7 @@ class NearbyScreenTest {
             val holder = rememberSaveableStateHolder()
             if (onTop) {
                 holder.SaveableStateProvider("nearby") {
-                    FitCameraOnNewSearch(1, camera) {
+                    FitCameraOnNewSearch(7L, 1, camera) {
                         fits++
                         listOf(berlinPoint)
                     }

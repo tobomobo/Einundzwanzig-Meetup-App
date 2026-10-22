@@ -5,22 +5,26 @@
     <string name="native_settings_theme_light">Light</string>
     <string name="native_settings_theme_system">System</string>
     <string name="native_settings_version">21Meetup · Version %1$s</string>
+    <string name="native_settings_drag_handle">Drag handle</string>
     <string name="native_settings_selected">Selected</string>
 
-    <string name="native_log_title">Diagnostic log</string>
-    <string name="native_log_probe_tooltip">Check NIP-44 connection (the signer may ask for approval)</string>
-    <string name="native_log_probe_running">NIP-44 probe running</string>
-    <string name="native_log_probe_ok">NIP-44 probe succeeded.</string>
-    <string name="native_log_probe_failed">NIP-44 probe failed — see the diagnostic log for the cause.</string>
-    <string name="native_log_filter_tooltip">Warnings/errors only</string>
-    <string name="native_log_verbose_on_tooltip">Verbose log ON — tap to turn off</string>
-    <string name="native_log_verbose_off_tooltip">Turn on verbose log (more details for troubleshooting)</string>
-    <string name="native_log_verbose_enabled">Verbose log on — reproduce the error now, then share the log.</string>
-    <string name="native_log_verbose_disabled">Verbose log off.</string>
-    <string name="native_log_copy">Copy</string>
-    <string name="native_log_share">Share</string>
-    <string name="native_log_copied">Log copied</string>
-    <string name="native_log_empty">No entries</string>
-    <string name="native_log_count">%1$d entries</string>
-    <string name="native_log_clear">Clear log</string>
+    <!-- Log screen and version footer: hard-coded German in Flutter (spec 12 §2.8 F44, §2.6), kept
+         byte-identical in every language for parity. -->
+    <string name="native_log_title">Diagnose-Log</string>
+    <string name="native_log_probe_tooltip">NIP-44-Verbindung prüfen (Freigabe im Signer eventuell nötig)</string>
+    <string name="native_log_probe_running">NIP-44-Probe läuft</string>
+    <string name="native_log_probe_ok">NIP-44-Probe erfolgreich.</string>
+    <string name="native_log_probe_failed">NIP-44-Probe fehlgeschlagen — Ursache im Diagnose-Log.</string>
+    <string name="native_log_filter_tooltip">Nur Warnungen/Fehler</string>
+    <string name="native_log_verbose_on_tooltip">Ausführliches Log AN — tippen zum Ausschalten</string>
+    <string name="native_log_verbose_off_tooltip">Ausführliches Log einschalten (mehr Details für die Fehlersuche)</string>
+    <string name="native_log_verbose_enabled">Ausführliches Log an — Fehler jetzt nachstellen, dann Log teilen.</string>
+    <string name="native_log_verbose_disabled">Ausführliches Log aus.</string>
+    <string name="native_log_copy">Kopieren</string>
+    <string name="native_log_share">Teilen</string>
+    <string name="native_log_copied">Log kopiert</string>
+    <string name="native_log_empty">Keine Einträge</string>
+    <string name="native_log_count">%1$d Einträge</string>
+    <string name="native_log_clear">Log leeren</string>
+    <string name="native_log_copy_failed">Log konnte nicht kopiert werden</string>
 </resources>

@@ -8,6 +8,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import space.einundzwanzig.meetup.core.common.log.AppLogger
 import javax.inject.Qualifier
 import javax.inject.Singleton
 
@@ -33,7 +34,12 @@ object DispatchersModule {
     @Provides @DefaultDispatcher
     fun defaultDispatcher(): CoroutineDispatcher = Dispatchers.Default
 
+    /**
+     * Spec 12 §2.1: uncaught failures of `appScope.launch` are logged as
+     * `ERROR [Async] Unbehandelter Fehler` instead of killing the process (Flutter
+     * `PlatformDispatcher.onError`), so testers can still export the diagnostic log.
+     */
     @Provides @Singleton @ApplicationScope
     fun applicationScope(@DefaultDispatcher dispatcher: CoroutineDispatcher): CoroutineScope =
-        CoroutineScope(SupervisorJob() + dispatcher)
+        CoroutineScope(SupervisorJob() + dispatcher + AppLogger.coroutineExceptionHandler)
 }

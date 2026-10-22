@@ -274,6 +274,43 @@ class IdentitySetupViewModelTest {
     }
 
     @Test
+    fun `the sheet stays busy while the key file is picked and written`() = runTest(dispatcher) {
+        val gate = CompletableDeferred<Unit>()
+        writer.gate = gate
+        val vm = create()
+        vm.fillNew()
+        vm.onAction(SetupAction.Register)
+        vm.onAction(SetupAction.SecureSkip)
+        vm.onAction(SetupAction.SecureSaveFile)
+        assertEquals(true, vm.s.secureSheet?.busy)
+        // A second picker, "Später" and the clipboard are ignored while the picker / write runs.
+        vm.onAction(SetupAction.SecureSaveFile)
+        vm.onAction(SetupAction.SecureLater)
+        vm.onAction(SetupAction.SecureCopy)
+        assertEquals(1, effects.count { it is SetupEffect.CreateKeyFile })
+        assertNotNull(vm.s.secureSheet)
+        vm.onAction(SetupAction.KeyFilePicked("content://doc/1", "HEADER"))
+        assertEquals(true, vm.s.secureSheet?.busy)
+        assertFalse(effects.any { it is SetupEffect.GoHome || it is SetupEffect.CopyPlain })
+        gate.complete(Unit)
+        assertEquals(1, writer.written.size)
+        assertEquals(UiText.res(L10nR.string.idSetupSecureKeySaved), snacks.single().text)
+        assertNull(vm.s.secureSheet)
+    }
+
+    @Test
+    fun `cancelled picker after save file releases the sheet`() = runTest(dispatcher) {
+        val vm = create()
+        vm.fillNew()
+        vm.onAction(SetupAction.Register)
+        vm.onAction(SetupAction.SecureSkip)
+        vm.onAction(SetupAction.SecureSaveFile)
+        vm.onAction(SetupAction.KeyFilePicked(null, "HEADER"))
+        assertNull(vm.s.secureSheet)
+        assertEquals(SetupStep.MEETUP, vm.s.step)
+    }
+
+    @Test
     fun `key file name is zero padded local date`() {
         // 2024-03-05T10:00:00Z
         assertEquals("Nostr-Schluessel_2024-03-05_21MeetupApp.txt", KeyFile.fileName(1_709_632_800_000, ZoneOffset.UTC))
@@ -311,6 +348,52 @@ class IdentitySetupViewModelTest {
         vm.onAction(SetupAction.PasskeyDone(request, Result.success(result)))
         assertEquals(result, easyAuth.savedPasskey)
         assertNotNull(vm.s.secureSheet)
+    }
+
+    @Test
+    fun `a ceremony cancelled with its composition releases busy and is not relaunched`() = runTest(dispatcher) {
+        passkeys.supported = true
+        val vm = create()
+        vm.fillNew()
+        vm.onAction(SetupAction.Register)
+        vm.onAction(SetupAction.AddPasskey)
+        val request = vm.s.pendingPasskey!!
+        assertFalse(vm.s.passkeyLaunched)
+        vm.onAction(SetupAction.PasskeyLaunched(request))
+        assertTrue(vm.s.passkeyLaunched)
+        assertTrue(vm.s.busy)
+        // The route's catch for a disposed composition.
+        vm.onAction(SetupAction.PasskeyDone(request, Result.failure(PasskeyPrfException(PasskeyPrfException.CANCELLED))))
+        assertNull(vm.s.pendingPasskey)
+        assertFalse(vm.s.passkeyLaunched)
+        assertFalse(vm.s.busy)
+        assertNull(vm.s.error)
+        assertEquals(SetupStep.PASSKEY, vm.s.step)
+        assertNull(easyAuth.savedPasskey)
+    }
+
+    @Test
+    fun `step changes are ignored while busy`() = runTest(dispatcher) {
+        vault.passwordWrap = "ncryptsec1old"
+        val vm = create()
+        vm.onAction(SetupAction.PickResume)
+        vm.onAction(SetupAction.UsePasswordInstead)
+        vm.onAction(SetupAction.ResumePassChanged("pw"))
+        easyAuth.unlockGate = CompletableDeferred()
+        vm.onAction(SetupAction.Resume)
+        assertTrue(vm.s.busy)
+        // TalkBack / keyboard clicks reach onAction although the list absorbs touches.
+        listOf(
+            SetupAction.PickExisting, SetupAction.PickNew, SetupAction.PickResume, SetupAction.OtherWay,
+            SetupAction.ConnectAmber, SetupAction.MeetupLater, SetupAction.OpenMeetupPicker,
+        ).forEach(vm::onAction)
+        assertEquals(SetupStep.RESUME, vm.s.step)
+        assertEquals(RecommendedExistingPath.BUNKER, vm.s.path)
+        assertFalse(vm.s.confirmOverwrite)
+        assertFalse(vm.s.showMeetupPicker)
+        assertTrue(effects.isEmpty())
+        easyAuth.unlockGate!!.complete(Unit)
+        assertFalse(vm.s.busy)
     }
 
     @Test
@@ -510,6 +593,9 @@ class IdentitySetupViewModelTest {
         assertEquals(listOf("bunker://abc?relay=wss://r"), signing.bunkerUris)
         assertFalse(vm.s.showBunkerSheet)
         assertEquals(SetupEffect.GoHome, effects.last())
+        // Closing the sheet restores the previous auth_url handler (spec 01 §2.5).
+        assertEquals(1, signing.closedInterceptors)
+        assertTrue(signing.authHandlers.isEmpty())
     }
 
     @Test

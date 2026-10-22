@@ -37,6 +37,8 @@ import space.einundzwanzig.meetup.feature.reputation.card.ReputationCardInfo
 import space.einundzwanzig.meetup.feature.reputation.card.ReputationCardScreen
 import space.einundzwanzig.meetup.feature.reputation.card.ReputationCardTags
 import space.einundzwanzig.meetup.feature.reputation.card.ReputationCardUiState
+import space.einundzwanzig.meetup.feature.reputation.common.LayerLoad
+import space.einundzwanzig.meetup.feature.reputation.common.LiveLayers
 import space.einundzwanzig.meetup.feature.reputation.hub.TrustNetworkHubAction
 import space.einundzwanzig.meetup.feature.reputation.hub.TrustNetworkHubScreen
 import space.einundzwanzig.meetup.feature.reputation.hub.TrustNetworkHubTags
@@ -139,6 +141,17 @@ class ReputationScreensUiTest {
     }
 
     @Test
+    fun `qr share button shows progress and is disabled while sharing`() {
+        val actions = mutableListOf<ReputationQrAction>()
+        val state = ReputationQrUiState(isLoading = false, hasIdentity = true, content = qrContent)
+        show { ReputationQrScreen(state, onAction = { actions += it }, onBack = {}, isSharing = true) }
+        rule.onNodeWithTag(ReputationQrTags.SHARE_BUTTON).performScrollTo().assertIsNotEnabled()
+        rule.onNodeWithTag(ReputationQrTags.SHARE_PROGRESS, useUnmergedTree = true).assertExists()
+        rule.onNodeWithTag(ReputationQrTags.SHARE_BUTTON).performClick()
+        assertTrue(actions.isEmpty())
+    }
+
+    @Test
     fun `qr card action is disabled while badges are unreadable`() {
         show { ReputationQrScreen(ReputationQrUiState(isLoading = false, badgesUnreadable = true), onAction = {}, onBack = {}) }
         rule.onNodeWithTag(ReputationQrTags.OPEN_CARD).assertIsNotEnabled()
@@ -219,6 +232,20 @@ class ReputationScreensUiTest {
         show { ReputationScanResultScreen(ReputationScanResultUiState(ReputationQrCodec.parse(Vectors.tamperedQrString)), onBack = {}) }
         rule.onNodeWithText(s(L10nR.string.qrSigInvalid), substring = true, ignoreCase = true).assertExists()
         rule.onNodeWithText(s(L10nR.string.qrVerified), ignoreCase = true).assertDoesNotExist()
+        // Flutter `_showFailed` passes version 0: no version chip on a failed result.
+        rule.onNodeWithText("v3").assertDoesNotExist()
+        rule.onNodeWithText("v2").assertDoesNotExist()
+    }
+
+    @Test
+    fun `scan result shows the loading row while live layers load`() {
+        val state = ReputationScanResultUiState(
+            ReputationQrCodec.parse(Vectors.qrString),
+            layers = LiveLayers(pending = setOf(LayerLoad.NIP05)),
+        )
+        show { ReputationScanResultScreen(state, onBack = {}) }
+        rule.onNodeWithTag(ScanResultTags.LAYERS_LOADING).performScrollTo().assertExists()
+        rule.onNodeWithText(s(L10nR.string.qrCheckingNip05)).assertExists()
     }
 
     // --- ReputationVerify (spec 04 §2.4) + layers (§2.5) ---
@@ -237,6 +264,18 @@ class ReputationScreensUiTest {
         rule.onNodeWithText(s(L10nR.string.rvPartiallyVerified), substring = true, ignoreCase = true).assertExists()
         rule.onNodeWithText("Hal").assertExists()
         rule.onNodeWithTag(LayersTags.SIGNAL).performScrollTo().assertExists()
+    }
+
+    @Test
+    fun `verify shows the status line of the running layer loader`() {
+        val state = ReputationVerifyUiState(
+            input = OTHER_NPUB,
+            result = ProofVerifyResult(VerifyLevel.PARTIAL, VerifyMessage.NpubWithBindings, npub = OTHER_NPUB, reputation = reputationEvent()),
+            layers = LiveLayers(pending = setOf(LayerLoad.NIP05, LayerLoad.LIGHTNING)),
+        )
+        show { ReputationVerifyScreen(state, onAction = {}, onPaste = {}, onBack = {}) }
+        rule.onNodeWithTag(ReputationVerifyTags.LAYERS_STATUS).performScrollTo().assertExists()
+        rule.onNodeWithText(s(L10nR.string.rvCheckingLightning)).assertExists()
     }
 
     @Test

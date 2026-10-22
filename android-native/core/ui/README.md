@@ -21,6 +21,7 @@ EinundzwanzigTheme(themeMode = settings.themeMode) {
     CompositionLocalProvider(
         LocalHapticsEnabled provides settings.hapticEnabled,        // pref `haptic_enabled`, default true
         LocalAppSnackbarHostState provides snackbarHostState,       // render with AppSnackbarHost
+        LocalAppSnackbarController provides snackbarController,     // app-lifetime instance (Hilt @Singleton in :app)
         LocalNostrProfileSource provides profileSource,             // :data:profile
         LocalMeetupCrestSource provides crestSource,                 // :data:meetups (CrestRepository)
     ) {
@@ -28,6 +29,12 @@ EinundzwanzigTheme(themeMode = settings.themeMode) {
     }
 }
 ```
+
+`AppSnackbarController` is the root snackbar queue that survives screen changes and activity
+recreation. `:app` keeps one app-lifetime instance (not `remember`ed), provides it, and calls
+`AppSnackbarControllerEffect(snackbarController, snackbarHostState)` next to `AppSnackbarHost`.
+Code that outlives a screen (an `@ApplicationScope` job, a message right before `replaceTop`) calls
+`controller.show(message, tone, durationMillis)` and never keeps a `SnackbarHostState`.
 
 `GuideController(store: TourProgressStore, scope)`: `:data:settings` implements `TourProgressStore`.
 Provide one app-wide instance, for example from a Hilt module in `:app`.
@@ -65,7 +72,7 @@ Provide one app-wide instance, for example from a Hilt module in `:app`.
 | `ConfirmDialog(title, text, confirmLabel, onConfirm, onDismiss, destructive, icon, dismissible)` | Brand dialog |
 | `AppLoadingIndicator`, `AppContainedLoadingIndicator`, `FullScreenLoading`, `LoadingPlaceholder(height)` | Expressive `LoadingIndicator` instead of spinners |
 | `MonoText`, `SatsAmount(amount)` | Inconsolata |
-| `AppSnackbarHost(hostState)`, `SnackbarHostState.showAppSnackbar(message, tone, durationMillis, …)`, `showLongDismissable(...)`, `AppSnackbarDurations` (1/2/3/6/8/10 s), `LocalAppSnackbarHostState` | Exact Flutter display times (scaled by the accessibility timeout) |
+| `AppSnackbarHost(hostState)`, `SnackbarHostState.showAppSnackbar(message, tone, durationMillis, …)`, `showLongDismissable(...)`, `AppSnackbarDurations` (1/2/3/6/8/10 s), `LocalAppSnackbarHostState`, `AppSnackbarController` + `LocalAppSnackbarController` + `AppSnackbarControllerEffect(controller, host)` (app-lifetime queue) | Exact Flutter display times (scaled by the accessibility timeout) |
 
 ## Formatting and URLs — `…ui.format`, `…ui.util`
 

@@ -25,6 +25,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import javax.inject.Inject
+import kotlin.random.Random
 
 /**
  * State of "MEETUPS IN DER NÄHE" (Dart `_NearbyMeetupsScreenState`, spec 09 §2.2).
@@ -52,6 +53,8 @@ data class NearbyUiState(
     val results: List<NearbyMeetup> = emptyList(),
     /** Incremented after every finished search; the map refits its camera (Dart `_fitMap`). */
     val fitToken: Int = 0,
+    /** Random id of this ViewModel instance; scopes [fitToken] so a token saved before process death never matches a new search. */
+    val fitSession: Long = 0,
     val now: Instant = Instant.EPOCH,
     val zone: ZoneId = ZoneId.systemDefault(),
 ) {
@@ -93,7 +96,9 @@ class NearbyMeetupsViewModel @Inject constructor(
     private val time: TimeSource,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(NearbyUiState(now = Instant.ofEpochMilli(time.nowMillis())))
+    private val _state = MutableStateFlow(
+        NearbyUiState(now = Instant.ofEpochMilli(time.nowMillis()), fitSession = Random.nextLong()),
+    )
     val state: StateFlow<NearbyUiState> = _state.asStateFlow()
 
     private var searchJob: Job? = null

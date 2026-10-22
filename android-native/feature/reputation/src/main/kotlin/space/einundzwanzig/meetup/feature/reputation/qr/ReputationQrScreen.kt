@@ -46,6 +46,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Scaffold
@@ -121,6 +122,7 @@ import space.einundzwanzig.meetup.core.l10n.R as L10nR
 internal object ReputationQrTags {
     const val CARD = "rep_qr_card"
     const val SHARE_BUTTON = "rep_qr_share"
+    const val SHARE_PROGRESS = "rep_qr_share_progress"
     const val PUBLISH_BUTTON = "rep_qr_publish"
     const val PUBLISH_INFO = "rep_qr_publish_info"
     const val PROOF_STATUS = "rep_qr_proof_status"
@@ -159,6 +161,7 @@ internal fun ReputationQrRoute(viewModel: ReputationQrViewModel = hiltViewModel(
     var cardSize by remember { mutableStateOf(DpSize.Zero) }
     val shareText = stringResource(L10nR.string.reputationVerified)
     var sharing by remember { mutableStateOf(false) }
+    val fontScale = LocalDensity.current.fontScale
 
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
@@ -180,6 +183,7 @@ internal fun ReputationQrRoute(viewModel: ReputationQrViewModel = hiltViewModel(
 
     ReputationQrScreen(
         state = state,
+        isSharing = sharing,
         onAction = { action ->
             when (action) {
                 ReputationQrAction.OpenCard -> navigator.navigate(ReputationCard)
@@ -190,8 +194,8 @@ internal fun ReputationQrRoute(viewModel: ReputationQrViewModel = hiltViewModel(
                         sharing = true
                         scope.launch {
                             try {
-                                shareCapturedCard(context, capturer, cardSize.width, cardSize.height, QR_SHARE_FILE, shareText) {
-                                    EinundzwanzigTheme { content.CardVisual() }
+                                shareCapturedCard(context, capturer, cardSize.width, cardSize.height, fontScale, QR_SHARE_FILE, shareText) {
+                                    content.CardVisual()
                                 }
                             } catch (e: CancellationException) {
                                 throw e
@@ -240,6 +244,7 @@ internal fun ReputationQrScreen(
     onAction: (ReputationQrAction) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    isSharing: Boolean = false,
     onCardSize: (DpSize) -> Unit = {},
     snackbarHost: @Composable () -> Unit = {},
 ) {
@@ -292,7 +297,7 @@ internal fun ReputationQrScreen(
                     accentColor = MaterialTheme.colorScheme.error,
                 )
                 2 -> EmptyView(unreadable = state.badgesUnreadable, onScan = { onAction(ReputationQrAction.OpenScanner) })
-                else -> state.content?.let { ContentView(state, it, onAction, onCardSize) }
+                else -> state.content?.let { ContentView(state, it, isSharing, onAction, onCardSize) }
             }
         }
     }
@@ -333,10 +338,12 @@ private fun EmptyView(unreadable: Boolean, onScan: () -> Unit) {
     )
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ContentView(
     state: ReputationQrUiState,
     content: ReputationQrContent,
+    isSharing: Boolean,
     onAction: (ReputationQrAction) -> Unit,
     onCardSize: (DpSize) -> Unit,
 ) {
@@ -385,12 +392,20 @@ private fun ContentView(
         Spacer(Modifier.height(24.dp))
         Button(
             onClick = { onAction(ReputationQrAction.ShareImage) },
+            enabled = !isSharing,
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 56.dp)
                 .testTag(ReputationQrTags.SHARE_BUTTON),
         ) {
-            Icon(Icons.Rounded.Share, contentDescription = null, modifier = Modifier.size(20.dp))
+            if (isSharing) {
+                LoadingIndicator(
+                    color = LocalContentColor.current,
+                    modifier = Modifier.size(22.dp).testTag(ReputationQrTags.SHARE_PROGRESS),
+                )
+            } else {
+                Icon(Icons.Rounded.Share, contentDescription = null, modifier = Modifier.size(20.dp))
+            }
             Spacer(Modifier.width(10.dp))
             Text(stringResource(L10nR.string.reputationShareImage), fontWeight = FontWeight.Bold)
         }

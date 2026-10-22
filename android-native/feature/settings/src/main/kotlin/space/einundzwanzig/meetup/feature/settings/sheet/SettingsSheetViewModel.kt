@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import space.einundzwanzig.meetup.core.common.log.AppLogger
 import space.einundzwanzig.meetup.core.ui.guide.GuideController
+import space.einundzwanzig.meetup.core.ui.guide.GuideTour
 import space.einundzwanzig.meetup.core.ui.theme.ThemeMode
 import space.einundzwanzig.meetup.data.mempool.currency.CurrencyRepository
 import space.einundzwanzig.meetup.data.settings.SettingsRepository
@@ -115,9 +116,17 @@ class SettingsSheetViewModel @Inject constructor(
         }
     }
 
-    /** "Tour wiederholen": reset every tour, then report [SettingsSheetEvent.ToursReset]. */
+    /**
+     * "Tour wiederholen": reset every tour, then report [SettingsSheetEvent.ToursReset].
+     *
+     * The row can be tapped during the settings tour (its last step spotlights it). That tour is
+     * finished first (persisted, then cleared), so the sheet's later `finishIfActive` is a no-op
+     * and no "settings tour completed" write can land after the reset (Flutter's `whenComplete`
+     * updates its prefs cache before `resetAllTours` runs).
+     */
     fun restartTours() {
         viewModelScope.launch {
+            if (guide.activeTour == GuideTour.Settings) guide.finishTour()
             guide.resetAllTours()
             events.send(SettingsSheetEvent.ToursReset)
         }

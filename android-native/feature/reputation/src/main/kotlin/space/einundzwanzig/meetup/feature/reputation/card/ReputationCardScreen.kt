@@ -120,6 +120,7 @@ internal fun ReputationCardRoute(viewModel: ReputationCardViewModel = hiltViewMo
     val capturer = rememberComposableCapturer()
     var cardSize by remember { mutableStateOf(DpSize.Zero) }
     var sharing by remember { mutableStateOf(false) }
+    val fontScale = LocalDensity.current.fontScale
     val shareText = stringResource(L10nR.string.rcShareText)
 
     ReputationCardScreen(
@@ -134,8 +135,8 @@ internal fun ReputationCardRoute(viewModel: ReputationCardViewModel = hiltViewMo
                         sharing = true
                         scope.launch {
                             try {
-                                shareCapturedCard(context, capturer, cardSize.width, cardSize.height, CARD_SHARE_FILE, shareText) {
-                                    EinundzwanzigTheme { ProfileCard(info) }
+                                shareCapturedCard(context, capturer, cardSize.width, cardSize.height, fontScale, CARD_SHARE_FILE, shareText) {
+                                    ProfileCard(info)
                                 }
                             } catch (e: CancellationException) {
                                 throw e

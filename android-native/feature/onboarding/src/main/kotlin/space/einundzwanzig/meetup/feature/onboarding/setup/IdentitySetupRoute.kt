@@ -58,9 +58,13 @@ fun IdentitySetupRoute(viewModel: IdentitySetupViewModel = hiltViewModel()) {
     }
 
     // Passkey ceremony in the UI scope; the ViewModel does the slow, Activity-free scrypt part.
+    // Started at most once per request: a recreated composition (rotation, theme, locale) sees
+    // `passkeyLaunched` and does not open a second system prompt. If the composition goes away
+    // while the prompt is showing, the request ends as "cancelled" so `busy` is released.
     val pending = state.pendingPasskey
     LaunchedEffect(pending) {
-        if (pending == null) return@LaunchedEffect
+        if (pending == null || viewModel.state.value.passkeyLaunched) return@LaunchedEffect
+        viewModel.onAction(SetupAction.PasskeyLaunched(pending))
         val activity = context.findActivity()
         val result = try {
             if (activity == null) throw PasskeyPrfException(PasskeyPrfException.UNHANDLED)
@@ -72,6 +76,7 @@ fun IdentitySetupRoute(viewModel: IdentitySetupViewModel = hiltViewModel()) {
                 },
             )
         } catch (e: CancellationException) {
+            viewModel.onAction(SetupAction.PasskeyDone(pending, Result.failure(PasskeyPrfException(PasskeyPrfException.CANCELLED))))
             throw e
         } catch (e: Exception) {
             Result.failure(e)

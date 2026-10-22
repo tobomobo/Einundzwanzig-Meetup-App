@@ -34,7 +34,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.SheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -71,9 +75,11 @@ internal fun ShareReputationSheet(
     onExportJson: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         modifier = Modifier.testTag(WalletSheetTags.SHARE_SHEET),
     ) {
@@ -91,24 +97,24 @@ internal fun ShareReputationSheet(
                 tint = MaterialTheme.extendedColors.community,
                 title = stringResource(L10nR.string.walletShareText),
                 subtitle = stringResource(L10nR.string.walletShareTextSub),
-                onClick = onShareText,
+                onClick = { scope.hideThen(sheetState, onShareText) },
             )
             ShareOption(
                 icon = Icons.Rounded.QrCode2,
                 tint = MaterialTheme.colorScheme.primary,
                 title = stringResource(L10nR.string.walletShowQr),
                 subtitle = stringResource(L10nR.string.walletShowQrSub),
-                onClick = onShowQr,
+                onClick = { scope.hideThen(sheetState, onShowQr) },
             )
             ShareOption(
                 icon = Icons.Rounded.Code,
                 tint = MaterialTheme.extendedColors.purple,
                 title = stringResource(L10nR.string.walletExportJson),
                 subtitle = stringResource(L10nR.string.walletExportJsonSub),
-                onClick = onExportJson,
+                onClick = { scope.hideThen(sheetState, onExportJson) },
             )
             Spacer(Modifier.height(10.dp))
-            TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+            TextButton(onClick = { scope.hideThen(sheetState, onDismiss) }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
                 Text(stringResource(L10nR.string.cancel), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -142,6 +148,15 @@ private fun ShareOption(icon: ImageVector, tint: Color, title: String, subtitle:
     }
 }
 
+/**
+ * Plays the sheet's hide motion first and only then reports the choice, whose state change
+ * removes the sheet from the composition (otherwise it would snap away).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+private fun CoroutineScope.hideThen(sheetState: SheetState, action: () -> Unit) {
+    launch { sheetState.hide() }.invokeOnCompletion { if (!sheetState.isVisible) action() }
+}
+
 /** "Frühere Sammlungen" archive sheet (spec 03 §2.1.3), entries newest first. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -151,8 +166,11 @@ internal fun FormerCollectionsSheet(
     onDismiss: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
+    val sheetState = rememberModalBottomSheetState()
+    val scope = rememberCoroutineScope()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
         containerColor = colors.surfaceContainer,
         shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
         modifier = Modifier.testTag(WalletSheetTags.FORMER_SHEET),
@@ -173,7 +191,9 @@ internal fun FormerCollectionsSheet(
                 )
                 Spacer(Modifier.height(8.dp))
             }
-            items(entries, key = { it.index }) { entry -> FormerEntryRow(entry, onMerge) }
+            items(entries, key = { it.index }) { entry ->
+                FormerEntryRow(entry, onMerge = { scope.hideThen(sheetState) { onMerge(it) } })
+            }
         }
     }
 }

@@ -16,7 +16,7 @@ Package root: `space.einundzwanzig.meetup.core.common`
 | API | Purpose |
 |---|---|
 | `@IoDispatcher`, `@DefaultDispatcher` | Qualified `CoroutineDispatcher`s |
-| `@ApplicationScope CoroutineScope` | Process-wide scope (`SupervisorJob`) for relays and sync |
+| `@ApplicationScope CoroutineScope` | Process-wide scope (`SupervisorJob` + `AppLogger.coroutineExceptionHandler`: an uncaught `launch` failure is logged as `ERROR [Async] Unbehandelter Fehler`, the process keeps running) for relays and sync |
 | `TimeSource` / `SystemTimeSource` | Injectable wall clock (`nowMillis()`, `nowSeconds()`, `nowMicros()` — Dart `DateTime.now()` precision) |
 | `AppStartupTask` | Hilt multibinding contract for work that runs after the first frame |
 

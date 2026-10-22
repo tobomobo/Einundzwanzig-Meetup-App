@@ -24,6 +24,7 @@ import androidx.core.net.toUri
 import space.einundzwanzig.meetup.core.common.log.AppLogger
 import space.einundzwanzig.meetup.core.ui.nostr.NpubFormat
 import space.einundzwanzig.meetup.core.ui.theme.extendedColors
+import space.einundzwanzig.meetup.data.trust.layers.TrustLayersEvaluator
 import space.einundzwanzig.meetup.data.trust.layers.TrustSignalColor
 import space.einundzwanzig.meetup.data.trust.level.TrustLevel
 import space.einundzwanzig.meetup.data.trust.level.TrustLevelColor
@@ -151,3 +152,12 @@ internal fun openNostr(context: Context, npub: String) {
         AppLogger.warn("Reputation", "nostr:-Link konnte nicht geöffnet werden", e)
     }
 }
+
+/**
+ * Localized platform name: `other` uses `qrPlatformOther` ([TrustLayersEvaluator.platformLabel]
+ * returns the German literal "Andere"); brand names stay as they are.
+ */
+@Composable
+@ReadOnlyComposable
+internal fun platformDisplayName(platform: String): String =
+    if (platform == "other") stringResource(L10nR.string.qrPlatformOther) else TrustLayersEvaluator.platformLabel(platform)

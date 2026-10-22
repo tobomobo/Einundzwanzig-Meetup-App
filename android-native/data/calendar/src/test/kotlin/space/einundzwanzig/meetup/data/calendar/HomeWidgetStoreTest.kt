@@ -3,6 +3,7 @@ package space.einundzwanzig.meetup.data.calendar
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -41,6 +42,22 @@ class HomeWidgetStoreTest {
         testLog(),
         UnconfinedTestDispatcher(scheduler),
     ).also { it.zoneProvider = { ZoneId.of("Europe/Berlin") } }
+
+    @Test
+    fun `snapshots emits the current values and again after every write`() = runTest {
+        val store = store(testScheduler)
+        val seen = mutableListOf<HomeWidgetSnapshot>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) { store.snapshots().collect { seen += it } }
+        assertEquals("", seen.last().meetupCity)
+
+        store.updateMeetup("Wien", null)
+        assertEquals("Wien", seen.last().meetupCity)
+
+        store.writeBitcoin(mapOf("block" to "921.345"))
+        assertEquals("921.345", seen.last().block)
+        assertEquals("Wien", seen.last().meetupCity)
+        job.cancel()
+    }
 
     @Test
     fun `flutter-written values render like the fixture`() = runTest {

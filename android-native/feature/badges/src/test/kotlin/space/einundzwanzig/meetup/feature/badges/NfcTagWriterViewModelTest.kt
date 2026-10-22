@@ -134,7 +134,7 @@ class NfcTagWriterViewModelTest {
         assertEquals(WriterDialog.NFC_DISABLED, model.state.value.dialog)
         model.onAction(NfcTagWriterAction.OpenNfcSettings)
         assertNull(model.state.value.dialog)
-        assertEquals(1, nfc.settingsOpened)
+        assertEquals(NfcTagWriterEvent.OpenNfcSettings, events.last())
     }
 
     @Test

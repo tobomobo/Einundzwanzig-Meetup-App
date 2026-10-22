@@ -1,5 +1,6 @@
 package space.einundzwanzig.meetup.feature.reputation
 
+import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -266,7 +267,7 @@ class ReputationVerifyViewModelTest : MainDispatcherTest() {
     @Test
     fun `initial input is verified at once and loads the layers`() = runTest(dispatcher) {
         val source = FakeReputationDataSource()
-        val vm = ReputationVerifyViewModel(Vectors.signerNpub, source)
+        val vm = ReputationVerifyViewModel(Vectors.signerNpub, source, SavedStateHandle())
         assertEquals(Vectors.signerNpub, vm.state.value.input)
         advanceUntilIdle()
         assertEquals(listOf(Vectors.signerNpub), source.verifyInputs)
@@ -280,7 +281,7 @@ class ReputationVerifyViewModelTest : MainDispatcherTest() {
     @Test
     fun `blank input does nothing, input is trimmed`() = runTest(dispatcher) {
         val source = FakeReputationDataSource()
-        val vm = ReputationVerifyViewModel(null, source)
+        val vm = ReputationVerifyViewModel(null, source, SavedStateHandle())
         vm.onAction(ReputationVerifyAction.InputChanged("   "))
         vm.onAction(ReputationVerifyAction.Verify)
         advanceUntilIdle()
@@ -296,7 +297,7 @@ class ReputationVerifyViewModelTest : MainDispatcherTest() {
         val source = FakeReputationDataSource().apply {
             verify = { ProofVerifyResult(VerifyLevel.INVALID, VerifyMessage.BadFormat) }
         }
-        val vm = ReputationVerifyViewModel("garbage", source)
+        val vm = ReputationVerifyViewModel("garbage", source, SavedStateHandle())
         advanceUntilIdle()
         assertEquals(VerifyLevel.INVALID, vm.state.value.result!!.level)
         assertTrue(source.layerHexes.isEmpty())
@@ -312,7 +313,7 @@ class ReputationVerifyViewModelTest : MainDispatcherTest() {
                 ProofVerifyResult(VerifyLevel.PARTIAL, VerifyMessage.NpubWithBindings, npub = input, reputation = reputationEvent())
             }
         }
-        val vm = ReputationVerifyViewModel("slow", source)
+        val vm = ReputationVerifyViewModel("slow", source, SavedStateHandle())
         advanceUntilIdle()
         assertTrue(vm.state.value.isVerifying)
         vm.onAction(ReputationVerifyAction.Paste(Vectors.signerNpub))
@@ -326,9 +327,18 @@ class ReputationVerifyViewModelTest : MainDispatcherTest() {
     }
 
     @Test
+    fun `typed input survives process death via SavedStateHandle`() = runTest(dispatcher) {
+        val handle = SavedStateHandle()
+        val vm = ReputationVerifyViewModel(null, FakeReputationDataSource(), handle)
+        vm.onAction(ReputationVerifyAction.InputChanged("half typed"))
+        val restored = ReputationVerifyViewModel(null, FakeReputationDataSource(), SavedStateHandle(mapOf(ReputationVerifyViewModel.KEY_INPUT to handle.get<String>(ReputationVerifyViewModel.KEY_INPUT))))
+        assertEquals("half typed", restored.state.value.input)
+    }
+
+    @Test
     fun `paste sets the text and verifies, empty clipboard is ignored`() = runTest(dispatcher) {
         val source = FakeReputationDataSource()
-        val vm = ReputationVerifyViewModel(null, source)
+        val vm = ReputationVerifyViewModel(null, source, SavedStateHandle())
         vm.onAction(ReputationVerifyAction.Paste(null))
         vm.onAction(ReputationVerifyAction.Paste(""))
         advanceUntilIdle()
@@ -345,7 +355,7 @@ class VerifyPersonViewModelTest : MainDispatcherTest() {
     @Test
     fun `invalid npub shows the error and does not check`() = runTest(dispatcher) {
         val source = FakeReputationDataSource()
-        val vm = VerifyPersonViewModel(null, source)
+        val vm = VerifyPersonViewModel(null, source, SavedStateHandle())
         vm.onAction(VerifyPersonAction.InputChanged("npub1nope"))
         vm.onAction(VerifyPersonAction.Check)
         advanceUntilIdle()
@@ -356,7 +366,7 @@ class VerifyPersonViewModelTest : MainDispatcherTest() {
     @Test
     fun `input is trimmed, lower-cased and nostr stripped before the check`() = runTest(dispatcher) {
         val source = FakeReputationDataSource()
-        val vm = VerifyPersonViewModel(null, source)
+        val vm = VerifyPersonViewModel(null, source, SavedStateHandle())
         vm.onAction(VerifyPersonAction.InputChanged("  NOSTR:${OTHER_NPUB.uppercase()} "))
         vm.onAction(VerifyPersonAction.Check)
         advanceUntilIdle()
@@ -368,7 +378,7 @@ class VerifyPersonViewModelTest : MainDispatcherTest() {
     @Test
     fun `failure maps to CHECK_FAILED`() = runTest(dispatcher) {
         val source = FakeReputationDataSource().apply { presence = { _, _ -> error("relay") } }
-        val vm = VerifyPersonViewModel(OTHER_NPUB, source)
+        val vm = VerifyPersonViewModel(OTHER_NPUB, source, SavedStateHandle())
         advanceUntilIdle()
         assertEquals(VerifyPersonError.CHECK_FAILED, vm.state.value.error)
         assertNull(vm.state.value.result)
@@ -377,7 +387,7 @@ class VerifyPersonViewModelTest : MainDispatcherTest() {
     @Test
     fun `scanned npub sets the text and checks`() = runTest(dispatcher) {
         val source = FakeReputationDataSource()
-        val vm = VerifyPersonViewModel(null, source)
+        val vm = VerifyPersonViewModel(null, source, SavedStateHandle())
         vm.onAction(VerifyPersonAction.Scanned(OTHER_NPUB))
         advanceUntilIdle()
         assertEquals(OTHER_NPUB, vm.state.value.input)
@@ -393,7 +403,7 @@ class VerifyPersonViewModelTest : MainDispatcherTest() {
                 PresenceCheck(target, 1, listOf(Vectors.signerNpub, target), emptySet(), true, 0)
             }
         }
-        val vm = VerifyPersonViewModel(Vectors.signerNpub, source)
+        val vm = VerifyPersonViewModel(Vectors.signerNpub, source, SavedStateHandle())
         advanceUntilIdle()
         assertTrue(vm.state.value.checking)
         vm.onAction(VerifyPersonAction.Scanned(OTHER_NPUB))
@@ -405,6 +415,16 @@ class VerifyPersonViewModelTest : MainDispatcherTest() {
         gate.complete(Unit)
         advanceUntilIdle()
         assertEquals(OTHER_NPUB, vm.state.value.result!!.targetNpub)
+    }
+
+    @Test
+    fun `typed input survives process death via SavedStateHandle`() = runTest(dispatcher) {
+        val handle = SavedStateHandle()
+        val vm = VerifyPersonViewModel(null, FakeReputationDataSource(), handle)
+        vm.onAction(VerifyPersonAction.InputChanged("npub1typed"))
+        // Recreated with the restored handle (and the original navigation argument).
+        val restored = VerifyPersonViewModel(OTHER_NPUB, FakeReputationDataSource(), SavedStateHandle(mapOf(VerifyPersonViewModel.KEY_INPUT to handle.get<String>(VerifyPersonViewModel.KEY_INPUT))))
+        assertEquals("npub1typed", restored.state.value.input)
     }
 
     @Test

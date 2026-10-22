@@ -182,6 +182,7 @@ internal fun SecureIdentitySheetContent(state: SecureSheetState, onAction: (Setu
             Spacer(Modifier.height(8.dp))
             OutlinedButton(
                 onClick = { onAction(SetupAction.SecureCopy) },
+                enabled = !state.busy,
                 shapes = ButtonDefaults.shapes(),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp).testTag(SetupTags.SECURE_COPY),

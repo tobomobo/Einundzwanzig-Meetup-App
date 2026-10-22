@@ -129,6 +129,21 @@ class WalletViewModelTest {
     }
 
     @Test
+    fun `former collections with entries open the sheet and reset the loading flag`() {
+        val a = FormerCollection(index = 1, at = DartDateTime.fromMillisecondsSinceEpoch(1_000), reason = "replaced", npub = "", badges = listOf(badge("x")))
+        val b = FormerCollection(index = 0, at = DartDateTime.fromMillisecondsSinceEpoch(0), reason = "rotated", npub = "", badges = null)
+        repo.formers = listOf(a, b)
+        val vm = vm()
+        vm.onAction(WalletAction.OpenFormer)
+        val s = vm.state.value
+        assertEquals(2, s.formerCollections?.size)
+        assertEquals(listOf(a, b), s.formerCollections)
+        assertFalse(s.loadingFormer)
+        vm.onAction(WalletAction.DismissFormer)
+        assertNull(vm.state.value.formerCollections)
+    }
+
+    @Test
     fun `merge passes the stored index, counts added badges and republishes`() = runTest {
         val existing = badge("a", meetupEventId = "m1")
         repo.set(listOf(existing))

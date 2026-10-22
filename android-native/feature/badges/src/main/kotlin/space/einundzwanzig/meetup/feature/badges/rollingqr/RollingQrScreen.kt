@@ -33,6 +33,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.TooltipAnchorPosition
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -114,7 +119,7 @@ fun RollingQrRoute(viewModel: RollingQrViewModel = hiltViewModel()) {
 }
 
 @Composable
-private fun KeepScreenBright(enabled: Boolean) {
+internal fun KeepScreenBright(enabled: Boolean) {
     val view = LocalView.current
     val context = LocalContext.current
     DisposableEffect(enabled) {
@@ -159,11 +164,17 @@ fun RollingQrScreen(
                 ),
                 actions = {
                     if (state.session != null) {
-                        IconButton(
-                            onClick = { onAction(RollingQrAction.EndClicked) },
-                            modifier = Modifier.testTag(RollingQrTags.END),
+                        TooltipBox(
+                            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Below),
+                            tooltip = { PlainTooltip { Text(stringResource(L10nR.string.rqEndSession)) } },
+                            state = rememberTooltipState(),
                         ) {
-                            Icon(Icons.Rounded.StopCircle, contentDescription = stringResource(L10nR.string.rqEndSession))
+                            IconButton(
+                                onClick = { onAction(RollingQrAction.EndClicked) },
+                                modifier = Modifier.testTag(RollingQrTags.END),
+                            ) {
+                                Icon(Icons.Rounded.StopCircle, contentDescription = stringResource(L10nR.string.rqEndSession))
+                            }
                         }
                     }
                 },
@@ -210,7 +221,7 @@ private fun ActiveSession(state: RollingQrUiState, session: MeetupSession) {
     val res = LocalContext.current.resources
     val remaining = BadgeTexts.remaining(res, state.remaining)
     Column(Modifier.fillMaxSize()) {
-        SessionBar(meetupInfo = "📍 " + state.meetupInfo, remaining = remaining)
+        SessionBar(meetupInfo = stringResource(R.string.native_meetup_pin, state.meetupInfo), remaining = remaining)
         Column(
             Modifier
                 .weight(1f)
@@ -290,12 +301,15 @@ private fun QrCard(qr: String?) {
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {
+        // Only spinner -> code animates. Code -> code is a hard cut: a cross-fade would briefly
+        // blend two matrices, and a camera could catch that undecodable frame at the step boundary.
         AnimatedContent(
-            targetState = qr,
+            targetState = qr != null,
             transitionSpec = { fadeIn(spring(stiffness = 1600f)).togetherWith(fadeOut(spring(stiffness = 1600f))) },
             label = "qr",
-        ) { code ->
-            if (code == null) {
+        ) { hasCode ->
+            val code = qr
+            if (!hasCode || code == null) {
                 Box(Modifier.size(QR_SIZE), contentAlignment = Alignment.Center) { AppLoadingIndicator() }
             } else {
                 QrCode(

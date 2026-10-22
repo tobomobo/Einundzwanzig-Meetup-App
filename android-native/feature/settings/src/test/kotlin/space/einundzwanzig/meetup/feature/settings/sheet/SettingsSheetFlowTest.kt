@@ -9,6 +9,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.performScrollTo
 import androidx.navigation3.runtime.NavKey
 import androidx.test.core.app.ApplicationProvider
@@ -195,6 +197,22 @@ class SettingsSheetFlowTest {
         rule.waitForIdle()
         rule.waitUntil(3_000) { store.values[space.einundzwanzig.meetup.core.ui.guide.TourProgressStore.completedKey(GuideTour.Settings)] == true }
         assertEquals(null, guide.activeTour)
+    }
+
+    @Test
+    fun `restart tours during the settings tour leaves the settings tour not completed`() {
+        show()
+        rule.mainClock.advanceTimeBy(SettingsTour.START_DELAY_MS + 100)
+        rule.waitUntil(3_000) { guide.activeTour == GuideTour.Settings }
+        // Semantics click: the spotlight hole lets the tap through in the app; the action is the same.
+        rule.onNodeWithTag(SettingsSheetTags.RESTART).performScrollTo().performSemanticsAction(SemanticsActions.OnClick)
+        rule.waitForIdle()
+        rule.waitUntil(3_000) { snackbar.currentSnackbarData != null }
+        rule.waitForIdle()
+        assertFalse(visible)
+        assertEquals(null, guide.activeTour)
+        assertFalse(runBlocking { store.isCompleted(GuideTour.Settings) })
+        assertFalse(runBlocking { guide.wasTourCompleted(GuideTour.Settings) })
     }
 
     @Test

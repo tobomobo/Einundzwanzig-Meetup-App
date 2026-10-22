@@ -1,12 +1,10 @@
 package space.einundzwanzig.meetup.feature.badges.scanner
 
-import androidx.compose.material3.SnackbarHostState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -20,8 +18,6 @@ import space.einundzwanzig.meetup.core.common.ApplicationScope
 import space.einundzwanzig.meetup.core.common.log.AppLogger
 import space.einundzwanzig.meetup.core.common.log.DiagnosticLog
 import space.einundzwanzig.meetup.core.common.log.describeError
-import space.einundzwanzig.meetup.core.ui.component.Tone
-import space.einundzwanzig.meetup.core.ui.component.showAppSnackbar
 import space.einundzwanzig.meetup.data.issuance.nfc.IssuanceFeatures
 import space.einundzwanzig.meetup.data.issuance.nfc.NfcPayloadError
 import space.einundzwanzig.meetup.data.issuance.scan.BadgeSaveUseCase
@@ -74,15 +70,12 @@ class BadgeScannerViewModel internal constructor(
     /** Dart `_tagProcessing`: NFC debounce, released 1500 ms after processing ends. */
     private var tagProcessing = false
 
-    /** Localized `verifyUnknownMeetup` from the screen (the current locale); falls back to [labels]. */
-    var unknownMeetupLabel: String? = null
-
     fun onAction(action: BadgeScannerAction) {
         when (action) {
             BadgeScannerAction.ScanQrClicked -> startQrScan()
-            is BadgeScannerAction.QrScanned -> onQrScanned(action.raw)
+            is BadgeScannerAction.QrScanned -> onQrScanned(action.raw, label(action.unknownMeetupLabel))
             BadgeScannerAction.ScanNfcClicked -> startNfcRead()
-            is BadgeScannerAction.NfcTagDiscovered -> onTag(action.tag)
+            is BadgeScannerAction.NfcTagDiscovered -> onTag(action.tag, label(action.unknownMeetupLabel))
             is BadgeScannerAction.NfcSessionFailed -> _state.update {
                 it.copy(readingNfc = false, status = ScanStatus.NfcSessionError(action.detail))
             }
@@ -92,22 +85,14 @@ class BadgeScannerViewModel internal constructor(
             }
             BadgeScannerAction.NfcOpenSettings -> {
                 _state.update { it.copy(dialog = null) }
-                nfc.openNfcSettings()
+                send(BadgeScannerEvent.OpenNfcSettings)
             }
             BadgeScannerAction.AddToWallet -> confirmSave()
             BadgeScannerAction.OpenWallet -> send(BadgeScannerEvent.OpenWallet)
             BadgeScannerAction.Close -> send(BadgeScannerEvent.Close)
             BadgeScannerAction.DismissDialog -> dismissDialog()
-            is BadgeScannerAction.CoAttendanceAnswered -> answerCoAttendance(action.publish)
+            is BadgeScannerAction.CoAttendanceAnswered -> answerCoAttendance(action.publish, action.resultSink)
         }
-    }
-
-    /**
-     * Shows a snackbar on the app-level [host] from the application scope so it survives the
-     * switch to the wallet (Flutter's root messenger). Only call it with the app host.
-     */
-    fun showOnAppHost(host: SnackbarHostState, message: String, tone: Tone, durationMillis: Long) {
-        appScope.launch(Dispatchers.Main.immediate) { host.showAppSnackbar(message, tone, durationMillis) }
     }
 
     private fun startQrScan() {
@@ -116,11 +101,12 @@ class BadgeScannerViewModel internal constructor(
         send(BadgeScannerEvent.OpenCamera)
     }
 
-    private fun label(): String = unknownMeetupLabel ?: labels.unknownMeetup()
+    /** The screen's localized `verifyUnknownMeetup` (current locale), else the injected [labels]. */
+    private fun label(fromScreen: String?): String = fromScreen ?: labels.unknownMeetup()
 
-    private fun onQrScanned(raw: String) {
+    private fun onQrScanned(raw: String, unknownMeetup: String) {
         if (_state.value.processing || _state.value.result != null) return
-        process { processor.processQrText(raw, label()) }
+        process { processor.processQrText(raw, unknownMeetup) }
     }
 
     private fun startNfcRead() {
@@ -137,7 +123,7 @@ class BadgeScannerViewModel internal constructor(
         }
     }
 
-    private fun onTag(tag: NfcTagHandle) {
+    private fun onTag(tag: NfcTagHandle, unknownMeetup: String) {
         if (tagProcessing || !_state.value.readingNfc) return
         tagProcessing = true
         viewModelScope.launch {
@@ -148,7 +134,7 @@ class BadgeScannerViewModel internal constructor(
                     is NfcReadResult.Failed -> stopNfc(ScanStatus.NfcRejected(NfcPayloadError.ReadError(read.message)))
                     is NfcReadResult.Payload -> {
                         _state.update { it.copy(readingNfc = false) }
-                        processNow { processor.processNfcPayload(read.bytes, label()) }
+                        processNow { processor.processNfcPayload(read.bytes, unknownMeetup) }
                     }
                 }
             } finally {
@@ -272,35 +258,35 @@ class BadgeScannerViewModel internal constructor(
     private fun dismissDialog() {
         when (_state.value.dialog) {
             // A dismissed opt-in counts as "no" (Dart: dialog result null), then the wallet opens.
-            is ScannerDialog.CoAttendanceOptIn -> answerCoAttendance(false)
+            is ScannerDialog.CoAttendanceOptIn -> answerCoAttendance(false, null)
             else -> _state.update { it.copy(dialog = null) }
         }
     }
 
-    private fun answerCoAttendance(publish: Boolean) {
+    /**
+     * Dart `_askCoAttendanceOptIn`. The wallet opens right away; the publish the user agreed to
+     * runs in the application scope, so neither slow relays nor leaving the wallet cancel it,
+     * and its result goes to [resultSink] (the app-lifetime snackbar queue).
+     */
+    private fun answerCoAttendance(publish: Boolean, resultSink: ScannerResultSink?) {
         val dialog = _state.value.dialog as? ScannerDialog.CoAttendanceOptIn ?: return
         _state.update { it.copy(dialog = null) }
-        if (!publish) {
-            send(BadgeScannerEvent.OpenWallet)
-            return
-        }
-        // Like Flutter's awaited call before the replace: the screen stays (blocking "publishing"
-        // indicator) until the relays answered, then the wallet opens so the result snackbar
-        // follows the save one. Runs in viewModelScope: leaving the screen cancels the publish.
-        _state.update { it.copy(busy = BusyKind.PUBLISHING) }
-        viewModelScope.launch {
-            val count = try {
-                saveUseCase.publishCoAttendance(dialog.badge)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                log.warn(TAG, "Co-Attendance-Veröffentlichung fehlgeschlagen", e)
-                0
+        if (publish) {
+            appScope.launch {
+                val count = try {
+                    saveUseCase.publishCoAttendance(dialog.badge)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    log.warn(TAG, "Co-Attendance-Veröffentlichung fehlgeschlagen", e)
+                    0
+                }
+                resultSink?.show(
+                    if (count > 0) ScannerSnackbar.CO_ATTENDANCE_PUBLISHED else ScannerSnackbar.CO_ATTENDANCE_FAILED,
+                )
             }
-            _state.update { it.copy(busy = null) }
-            snackbar(if (count > 0) ScannerSnackbar.CO_ATTENDANCE_PUBLISHED else ScannerSnackbar.CO_ATTENDANCE_FAILED)
-            send(BadgeScannerEvent.OpenWallet)
         }
+        send(BadgeScannerEvent.OpenWallet)
     }
 
     private fun snackbar(kind: ScannerSnackbar) = send(BadgeScannerEvent.Snackbar(kind))

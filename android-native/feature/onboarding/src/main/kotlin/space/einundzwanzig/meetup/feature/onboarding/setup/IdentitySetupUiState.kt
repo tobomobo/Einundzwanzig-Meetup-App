@@ -65,6 +65,11 @@ data class IdentitySetupUiState(
     /** Native: confirm "Neu hier" when an identity survived on the device (spec 01 §2.3.3 note). */
     val confirmOverwrite: Boolean = false,
     val pendingPasskey: PasskeyRequest? = null,
+    /**
+     * The route already started the Credential Manager UI for [pendingPasskey]. A recreated
+     * composition (rotation, theme or locale change) must not start a second system prompt.
+     */
+    val passkeyLaunched: Boolean = false,
     val reviewUser: String = "",
     val reviewPass: String = "",
     val reviewBusy: Boolean = false,
@@ -107,6 +112,9 @@ sealed interface SetupAction {
     data object UsePasswordInstead : SetupAction
     data object AddPasskey : SetupAction
     data object PasskeyLater : SetupAction
+
+    /** The route is about to start the Credential Manager UI for [request]. */
+    data class PasskeyLaunched(val request: PasskeyRequest) : SetupAction
 
     /** Result of the Credential Manager ceremony the route ran for [request]. */
     data class PasskeyDone(val request: PasskeyRequest, val result: Result<PasskeyPrfResult>) : SetupAction

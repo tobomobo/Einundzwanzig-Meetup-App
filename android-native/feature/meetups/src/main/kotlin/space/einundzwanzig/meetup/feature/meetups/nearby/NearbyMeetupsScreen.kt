@@ -15,7 +15,9 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -62,7 +64,6 @@ import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -193,6 +194,8 @@ fun NearbyMeetupsScreen(
         Column(
             Modifier
                 .padding(padding)
+                .consumeWindowInsets(padding)
+                .imePadding()
                 .fillMaxSize(),
         ) {
             NearbyMap(state, onAction)
@@ -280,7 +283,7 @@ private fun NearbyMap(state: NearbyUiState, onAction: (NearbyAction) -> Unit) {
     )
     val currentState by rememberUpdatedState(state)
     // Dart `_fitMap` after every search: center + all results with coordinates.
-    FitCameraOnNewSearch(state.fitToken, camera) {
+    FitCameraOnNewSearch(state.fitSession, state.fitToken, camera) {
         val s = currentState
         buildList {
             s.center?.let(::add)
@@ -313,15 +316,18 @@ private fun NearbyMap(state: NearbyUiState, onAction: (NearbyAction) -> Unit) {
 }
 
 /**
- * Fits [camera] to [points] once per search ([token]). The applied token is saved, so coming back
+ * Fits [camera] to [points] once per search ([token] within the ViewModel [session]). The applied token is saved, so coming back
  * from MeetupDetails (Navigation 3 recomposes the entry) or rotating keeps the user's zoom/pan.
  */
 @Composable
-internal fun FitCameraOnNewSearch(token: Int, camera: OsmCameraState, points: () -> List<LatLng>) {
-    var fitted by rememberSaveable { mutableIntStateOf(0) }
-    LaunchedEffect(token) {
-        if (token == 0 || token == fitted) return@LaunchedEffect
-        fitted = token
+internal fun FitCameraOnNewSearch(session: Long, token: Int, camera: OsmCameraState, points: () -> List<LatLng>) {
+    // Keyed by ViewModel session + token: after process death the new ViewModel counts from 0
+    // again, and a bare saved token would swallow the matching new search.
+    var fitted by rememberSaveable { mutableStateOf("") }
+    LaunchedEffect(session, token) {
+        val key = "$session:$token"
+        if (token == 0 || key == fitted) return@LaunchedEffect
+        fitted = key
         val list = points()
         runCatching {
             when (list.size) {

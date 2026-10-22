@@ -69,8 +69,10 @@ class OtherScreensTest {
         }
         rule.onAllNodesWithText("ULM").onFirst().assertIsDisplayed()
         rule.onNodeWithText(str(L10nR.string.walletCollectionCount, 2)).assertIsDisplayed()
-        rule.onNodeWithText("#3").assertExists()
-        rule.onNodeWithText("#1").performClick()
+        // Cards announce one merged description ("Ulm, 01.01.25, #1"), not their child texts.
+        rule.onNodeWithContentDescription("#3", substring = true).assertExists()
+        rule.onNodeWithContentDescription("#1", substring = true).performClick()
+        rule.onNodeWithText("#1").assertDoesNotExist()
         assertSame(older, opened)
     }
 

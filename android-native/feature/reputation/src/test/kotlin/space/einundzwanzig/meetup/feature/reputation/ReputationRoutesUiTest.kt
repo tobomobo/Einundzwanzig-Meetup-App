@@ -2,6 +2,7 @@ package space.einundzwanzig.meetup.feature.reputation
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.test.assert
@@ -12,6 +13,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.result.LocalResultEventBus
 import androidx.navigation3.runtime.result.ResultEventBus
@@ -28,7 +30,16 @@ import space.einundzwanzig.meetup.core.navigation.NavResultEffect
 import space.einundzwanzig.meetup.core.navigation.NavResults
 import space.einundzwanzig.meetup.core.navigation.Navigator
 import space.einundzwanzig.meetup.core.navigation.ReputationScanResult
+import space.einundzwanzig.meetup.core.camera.QrImageResult
+import space.einundzwanzig.meetup.core.ui.component.AppSnackbarVisuals
+import space.einundzwanzig.meetup.core.ui.component.LocalAppSnackbarHostState
+import space.einundzwanzig.meetup.core.ui.component.Tone
 import space.einundzwanzig.meetup.core.ui.theme.EinundzwanzigTheme
+import space.einundzwanzig.meetup.data.reputation.publish.PublishResult
+import space.einundzwanzig.meetup.feature.reputation.qr.ReputationQrRoute
+import space.einundzwanzig.meetup.feature.reputation.qr.ReputationQrTags
+import space.einundzwanzig.meetup.feature.reputation.qr.ReputationQrViewModel
+import space.einundzwanzig.meetup.feature.reputation.scan.ReputationGalleryPicker
 import space.einundzwanzig.meetup.data.identity.review.AppReviewDemo
 import space.einundzwanzig.meetup.data.reputation.qr.ReputationQrCodec
 import space.einundzwanzig.meetup.feature.reputation.person.VerifyPersonQrCameraRoute
@@ -66,18 +77,128 @@ class ReputationRoutesUiTest {
     private var deliver: ((String) -> Boolean)? = null
     private var cameraEnabled = true
 
+    /** The last `onResult` the fake gallery slot received. */
+    private var galleryResult: ((QrImageResult) -> Unit)? = null
+
+    /** App snackbar host; its current visuals are asserted (message and tone). */
+    private val snackbars = SnackbarHostState()
+
     @Composable
     private fun Host(content: @Composable () -> Unit) {
-        EinundzwanzigTheme { CompositionLocalProvider(LocalNavigator provides navigator) { content() } }
+        EinundzwanzigTheme {
+            CompositionLocalProvider(LocalNavigator provides navigator, LocalAppSnackbarHostState provides snackbars) { content() }
+        }
     }
 
     private fun scannerRoute(): @Composable () -> Unit = {
         Host {
-            ReputationScannerRoute(scanner = { onResult, _, enabled ->
-                deliver = onResult
-                cameraEnabled = enabled
-            })
+            ReputationScannerRoute(
+                scanner = { onResult, _, enabled ->
+                    deliver = onResult
+                    cameraEnabled = enabled
+                },
+                gallery = { onResult ->
+                    galleryResult = onResult
+                    ReputationGalleryPicker(isDecoding = false, launch = {})
+                },
+            )
         }
+    }
+
+    private fun currentSnackbar(): AppSnackbarVisuals? {
+        rule.waitForIdle()
+        return snackbars.currentSnackbarData?.visuals as? AppSnackbarVisuals
+    }
+
+    private fun gallery(result: QrImageResult) {
+        rule.runOnIdle { galleryResult!!(result) }
+    }
+
+    // --- Gallery (spec 04 §2.3) ---
+
+    @Test
+    fun `gallery image without a code shows qrNoCodeInImage`() {
+        rule.setContent(scannerRoute())
+        gallery(QrImageResult.NoCode)
+        val snackbar = currentSnackbar()!!
+        assertEquals(context.getString(L10nR.string.qrNoCodeInImage), snackbar.message)
+        assertEquals(Tone.Warning, snackbar.tone)
+        assertTrue(navigator.calls.isEmpty())
+    }
+
+    @Test
+    fun `gallery image with a foreign code shows qrNotEinundzwanzig`() {
+        rule.setContent(scannerRoute())
+        gallery(QrImageResult.Codes(listOf("https://example.com")))
+        val snackbar = currentSnackbar()!!
+        assertEquals(context.getString(L10nR.string.qrNotEinundzwanzig), snackbar.message)
+        assertEquals(Tone.Warning, snackbar.tone)
+        assertTrue(navigator.calls.isEmpty())
+    }
+
+    @Test
+    fun `gallery decoding failure shows qrProcessError`() {
+        rule.setContent(scannerRoute())
+        val error = IllegalStateException("broken")
+        gallery(QrImageResult.Failed(error))
+        val snackbar = currentSnackbar()!!
+        assertEquals(context.getString(L10nR.string.qrProcessError, error.toString()), snackbar.message)
+        assertEquals(Tone.Error, snackbar.tone)
+    }
+
+    @Test
+    fun `gallery reputation code replaces the scanner with the result`() {
+        rule.setContent(scannerRoute())
+        gallery(QrImageResult.Codes(listOf("https://example.com", Vectors.qrString)))
+        rule.waitForIdle()
+        assertEquals(ReputationScanResult(Vectors.qrString), navigator.replaced.single())
+        assertEquals(null, currentSnackbar())
+    }
+
+    @Test
+    fun `gallery demo code shows the demo dialog`() {
+        rule.setContent(scannerRoute())
+        gallery(QrImageResult.Codes(listOf(AppReviewDemo.PAYLOAD)))
+        rule.onNodeWithTag(ReputationScannerTags.DEMO_DIALOG).assertExists()
+        assertTrue(navigator.calls.isEmpty())
+    }
+
+    // --- ReputationQr route (spec 04 §2.1) ---
+
+    @Test
+    fun `qr route shows native_repSignFailed when signing failed`() {
+        val source = FakeReputationDataSource().apply { qr = { qrContent(signError = IllegalStateException("rejected")) } }
+        val vm = ReputationQrViewModel(source)
+        rule.setContent { Host { ReputationQrRoute(vm) } }
+        rule.waitUntil(5_000) { snackbars.currentSnackbarData != null }
+        val snackbar = currentSnackbar()!!
+        assertEquals(context.getString(R.string.native_repSignFailed), snackbar.message)
+        assertEquals(Tone.Error, snackbar.tone)
+        assertTrue(snackbar.withDismissAction)
+    }
+
+    @Test
+    fun `qr route publish shows a success snackbar`() {
+        val source = FakeReputationDataSource().apply { publishResult = { PublishResult.Sent(3, "e".repeat(64)) } }
+        val vm = ReputationQrViewModel(source)
+        rule.setContent { Host { ReputationQrRoute(vm) } }
+        rule.onNodeWithTag(ReputationQrTags.PUBLISH_BUTTON).performScrollTo().performClick()
+        rule.waitUntil(5_000) { snackbars.currentSnackbarData != null }
+        val snackbar = currentSnackbar()!!
+        assertEquals(context.getString(R.string.native_repPublishOk, 3), snackbar.message)
+        assertEquals(Tone.Success, snackbar.tone)
+    }
+
+    @Test
+    fun `qr route publish without relay shows an error snackbar`() {
+        val source = FakeReputationDataSource().apply { publishResult = { PublishResult.NoRelay("e") } }
+        val vm = ReputationQrViewModel(source)
+        rule.setContent { Host { ReputationQrRoute(vm) } }
+        rule.onNodeWithTag(ReputationQrTags.PUBLISH_BUTTON).performScrollTo().performClick()
+        rule.waitUntil(5_000) { snackbars.currentSnackbarData != null }
+        val snackbar = currentSnackbar()!!
+        assertEquals(context.getString(R.string.native_repPublishNoRelay), snackbar.message)
+        assertEquals(Tone.Error, snackbar.tone)
     }
 
     @Test

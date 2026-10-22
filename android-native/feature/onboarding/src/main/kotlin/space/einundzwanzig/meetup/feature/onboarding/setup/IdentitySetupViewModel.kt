@@ -7,6 +7,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import space.einundzwanzig.meetup.core.common.TimeSource
 import space.einundzwanzig.meetup.core.common.dart.dartTrim
 import space.einundzwanzig.meetup.core.common.log.AppLogger
@@ -126,6 +128,9 @@ class IdentitySetupViewModel @Inject constructor(
     // endregion
 
     fun onAction(action: SetupAction) {
+        // Flutter `AbsorbPointer` (spec 01 §2.3.1): while busy or bootstrapping no step change, also
+        // not via TalkBack's semantic click or a hardware keyboard, which bypass the pointer filter.
+        if (_state.value.inputBlocked && action in STEP_ACTIONS) return
         when (action) {
             SetupAction.Close -> if (!_state.value.busy) send(SetupEffect.Back)
             SetupAction.Back -> back()
@@ -151,6 +156,9 @@ class IdentitySetupViewModel @Inject constructor(
             SetupAction.UsePasswordInstead -> _state.update { it.copy(error = null, resumeUsePassword = true) }
             SetupAction.AddPasskey -> addPasskey()
             SetupAction.PasskeyLater -> if (!_state.value.busy) launch { offerBackupThenHome() }
+            is SetupAction.PasskeyLaunched -> _state.update {
+                if (it.pendingPasskey == action.request) it.copy(passkeyLaunched = true) else it
+            }
             is SetupAction.PasskeyDone -> onPasskeyDone(action)
             SetupAction.ConnectPrimary -> connectPrimary()
             SetupAction.OtherWay -> _state.update { it.copy(step = SetupStep.EXISTING_MORE) }
@@ -168,10 +176,10 @@ class IdentitySetupViewModel @Inject constructor(
             SetupAction.SaveMeetup -> saveMeetup()
             SetupAction.MeetupLater -> send(SetupEffect.GoHome)
             SetupAction.SecureCreateBackup -> secureCreateBackup()
-            SetupAction.SecureSkip -> setSecureStep(2)
-            SetupAction.SecureSaveFile -> send(SetupEffect.CreateKeyFile(KeyFile.fileName(time.nowMillis())))
+            SetupAction.SecureSkip -> if (_state.value.secureSheet?.busy == false) setSecureStep(2)
+            SetupAction.SecureSaveFile -> secureSaveFile()
             SetupAction.SecureCopy -> secureCopy()
-            SetupAction.SecureLater -> closeSecureSheet()
+            SetupAction.SecureLater -> if (_state.value.secureSheet?.busy == false) closeSecureSheet()
             is SetupAction.KeyFilePicked -> onKeyFilePicked(action)
             is SetupAction.ReviewUserChanged -> _state.update { it.copy(reviewUser = action.value) }
             is SetupAction.ReviewPassChanged -> _state.update { it.copy(reviewPass = action.value) }
@@ -306,7 +314,7 @@ class IdentitySetupViewModel @Inject constructor(
 
     private fun onPasskeyDone(action: SetupAction.PasskeyDone) {
         if (_state.value.pendingPasskey != action.request) return
-        _state.update { it.copy(pendingPasskey = null) }
+        _state.update { it.copy(pendingPasskey = null, passkeyLaunched = false) }
         launch {
             try {
                 val result = action.result.getOrThrow()
@@ -549,7 +557,17 @@ class IdentitySetupViewModel @Inject constructor(
         }
     }
 
+    /** Opens the SAF picker; the sheet stays busy until the file is written or the picker is cancelled. */
+    private fun secureSaveFile() {
+        val sheet = _state.value.secureSheet ?: return
+        if (sheet.busy) return
+        _state.update { it.copy(secureSheet = sheet.copy(busy = true)) }
+        send(SetupEffect.CreateKeyFile(KeyFile.fileName(time.nowMillis())))
+    }
+
     private fun secureCopy() {
+        val sheet = _state.value.secureSheet ?: return
+        if (sheet.busy) return
         val wrap = secureWrap ?: return
         send(SetupEffect.CopyPlain(wrap))
         snack(UiText.res(L10nR.string.keyExportCopied))
@@ -562,9 +580,11 @@ class IdentitySetupViewModel @Inject constructor(
             closeSecureSheet()
             return
         }
+        _state.update { s -> s.secureSheet?.let { s.copy(secureSheet = it.copy(busy = true)) } ?: s }
         launch {
             try {
-                keyFileWriter.write(action.uri, KeyFile.content(action.header, wrap))
+                // Never leave a truncated key file behind, even if the screen goes away meanwhile.
+                withContext(NonCancellable) { keyFileWriter.write(action.uri, KeyFile.content(action.header, wrap)) }
                 snack(UiText.res(L10nR.string.idSetupSecureKeySaved), Tone.Success)
             } catch (e: CancellationException) {
                 throw e
@@ -645,6 +665,25 @@ class IdentitySetupViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "IdentitySetup"
+
+        /** Actions that change the step or start a flow; ignored while [IdentitySetupUiState.inputBlocked]. */
+        private val STEP_ACTIONS: Set<SetupAction> = setOf(
+            SetupAction.PickResume,
+            SetupAction.PickNew,
+            SetupAction.ConfirmOverwrite,
+            SetupAction.PickExisting,
+            SetupAction.OtherWay,
+            SetupAction.ConnectAmber,
+            SetupAction.ConnectPrimary,
+            SetupAction.ConnectBunker,
+            SetupAction.ImportKey,
+            SetupAction.RestoreBackup,
+            SetupAction.UsePasswordInstead,
+            SetupAction.MeetupLater,
+            SetupAction.OpenMeetupPicker,
+            SetupAction.SaveName,
+            SetupAction.SaveMeetup,
+        )
 
         /** Exception text without a Dart/Kotlin type prefix (spec 01 §2.3.8: drop `FormatException: `). */
         fun messageOf(e: Throwable): String {

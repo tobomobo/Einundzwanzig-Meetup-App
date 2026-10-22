@@ -6,6 +6,14 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import space.einundzwanzig.meetup.core.common.IoDispatcher
 import space.einundzwanzig.meetup.core.common.TimeSource
@@ -75,6 +83,20 @@ internal class HomeWidgetStoreImpl @Inject constructor(
             newsIsNew = runCatching { p.getBoolean(KEY_NEWS_IS_NEW, false) }.getOrDefault(false),
         )
     }
+
+    override fun snapshots(): Flow<HomeWidgetSnapshot> = callbackFlow {
+        val p = prefs
+        val signal = Channel<Unit>(Channel.CONFLATED)
+        // Registered before the first read, so no write between read and registration is missed.
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> signal.trySend(Unit) }
+        p.registerOnSharedPreferenceChangeListener(listener)
+        signal.trySend(Unit)
+        val reader = launch { for (u in signal) send(snapshot()) }
+        awaitClose {
+            p.unregisterOnSharedPreferenceChangeListener(listener)
+            reader.cancel()
+        }
+    }.conflate().distinctUntilChanged().flowOn(io)
 
     override suspend fun writeBitcoin(values: Map<String, String>) {
         write("Bitcoin") {

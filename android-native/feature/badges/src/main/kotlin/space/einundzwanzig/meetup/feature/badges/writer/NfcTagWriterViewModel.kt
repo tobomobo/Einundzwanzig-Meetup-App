@@ -93,6 +93,9 @@ sealed interface NfcTagWriterEvent {
     /** 3 s after success: `navigateFromRoot(RollingQr)`. */
     data object OpenRollingQr : NfcTagWriterEvent
     data object Back : NfcTagWriterEvent
+
+    /** Open the system NFC settings from the activity (same task). */
+    data object OpenNfcSettings : NfcTagWriterEvent
 }
 
 /**
@@ -133,7 +136,7 @@ class NfcTagWriterViewModel @Inject constructor(
             NfcTagWriterAction.DismissDialog -> _state.update { it.copy(dialog = null) }
             NfcTagWriterAction.OpenNfcSettings -> {
                 _state.update { it.copy(dialog = null) }
-                nfc.openNfcSettings()
+                _events.trySend(NfcTagWriterEvent.OpenNfcSettings)
             }
             NfcTagWriterAction.Back -> _events.trySend(NfcTagWriterEvent.Back)
         }

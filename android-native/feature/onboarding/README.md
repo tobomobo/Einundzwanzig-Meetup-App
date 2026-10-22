@@ -6,7 +6,9 @@ Splash, Intro and the identity setup wizard. Specs: `spec/01-identity-keys.md` ย
 ## Entries
 
 ```kotlin
-fun EntryProviderScope<NavKey>.onboardingEntries()   // Splash, Intro, IdentitySetup
+fun EntryProviderScope<NavKey>.onboardingEntries(
+    splashViewModel: @Composable () -> SplashViewModel = { hiltViewModel() },
+)   // Splash, Intro, IdentitySetup
 ```
 
 | NavKey | Route / Screen | Spec |
@@ -25,8 +27,11 @@ The session check waits for `MigrationGate.await()` (at most 20 s), then runs
 `SecureKeyStore.ensureMigrated()`, loads the profile and holds 800 ms. `SplashRouting.destinationFor(profile)`
 applies `isOnboarded = hasCustomNickname || isNostrVerified || isAdminVerified`. An unreadable
 secure store gives `SplashUiState.StorageUnavailable` with a retry button and never routes to
-onboarding. `:app` can share the ViewModel and use `isChecking` with
-`installSplashScreen().setKeepOnScreenCondition`.
+onboarding. Only one `SplashViewModel` may exist per start (spec 01 ยง2.1 forbids parallel runs of the
+secure-storage migration). If `:app` uses `isChecking` with `installSplashScreen().setKeepOnScreenCondition`,
+it creates the ViewModel with the Activity as owner and passes the same instance to the entry:
+`onboardingEntries(splashViewModel = { hiltViewModel(LocalActivity.current as ComponentActivity) })`.
+Without a splash condition, keep the default (entry-scoped).
 
 ### Identity setup
 
@@ -58,6 +63,6 @@ Native strings: `res/values{,-en,-es}/strings.xml`, `native_onboarding_*`.
 
 ## Tests
 
-`tools/gradlew-locked :feature:onboarding:testDebugUnitTest`: 83 tests. ViewModel tests with fakes
+`tools/gradlew-locked :feature:onboarding:testDebugUnitTest`: 93 tests. ViewModel tests with fakes
 cover splash routing, intro, all setup paths and the bunker controller. Robolectric Compose tests cover
-the screens, the sheets and the dialogs.
+the screens, the sheets and the dialogs; route tests check the navigation effects (fake `Navigator`) and that app-host snackbars outlive the entry.

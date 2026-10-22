@@ -187,7 +187,7 @@ internal fun BadgeDetailsRouteContent(
                             if (!shareImage(context, badge, tagline)) {
                                 // No chooser could start (spec 03 §2.2 step 5).
                                 AppLogger.warn("Wallet", "Badge-Bild teilen: kein Ziel zum Teilen")
-                                snackbars.showAppSnackbar(context.getString(L10nR.string.repShareError, NO_SHARE_TARGET), Tone.Error)
+                                snackbars.showAppSnackbar(context.getString(L10nR.string.repShareError, context.getString(R.string.native_wallet_no_share_target)), Tone.Error)
                             }
                         } catch (e: CancellationException) {
                             throw e
@@ -203,9 +203,6 @@ internal fun BadgeDetailsRouteContent(
         },
     )
 }
-
-/** Error detail of `repShareError` when no app can receive the image. */
-internal const val NO_SHARE_TARGET = "no share target"
 
 /** Stateless badge details. */
 @OptIn(ExperimentalMaterial3Api::class)

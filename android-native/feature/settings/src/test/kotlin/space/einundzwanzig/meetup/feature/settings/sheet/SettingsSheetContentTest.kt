@@ -215,6 +215,7 @@ class SettingsSheetContentTest {
         ).forEach { rule.onNodeWithTag(it).performScrollTo().assertIsNotEnabled() }
         click(SettingsSheetTags.PROFILE)
         click(SettingsSheetTags.LANGUAGE)
+        click(SettingsSheetTags.theme(ThemeMode.LIGHT))
         assertEquals(emptyList<SettingsSheetAction>(), actions)
         rule.onNodeWithTag(SettingsSheetTags.LANGUAGE_DIALOG).assertDoesNotExist()
     }

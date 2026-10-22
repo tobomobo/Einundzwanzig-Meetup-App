@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package space.einundzwanzig.meetup.feature.badges.wizard
 
 import androidx.compose.foundation.background
@@ -21,11 +23,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Nfc
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -42,7 +46,7 @@ import androidx.compose.ui.unit.sp
 import space.einundzwanzig.meetup.core.navigation.LocalNavigator
 import space.einundzwanzig.meetup.core.navigation.NfcTagWriter
 import space.einundzwanzig.meetup.core.navigation.RollingQr
-import space.einundzwanzig.meetup.core.ui.component.AppTopBar
+import space.einundzwanzig.meetup.core.ui.component.AppMediumTopBar
 import space.einundzwanzig.meetup.core.ui.theme.EinundzwanzigTheme
 import space.einundzwanzig.meetup.feature.badges.R
 import space.einundzwanzig.meetup.feature.badges.common.Gap
@@ -79,9 +83,16 @@ fun MeetupSessionWizardScreen(
     onSkip: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
-        modifier = modifier,
-        topBar = { AppTopBar(title = stringResource(L10nR.string.mwStartMeetup), onBack = onBack) },
+        modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        topBar = {
+            AppMediumTopBar(
+                title = stringResource(L10nR.string.mwStartMeetup),
+                onBack = onBack,
+                scrollBehavior = scrollBehavior,
+            )
+        },
     ) { padding ->
         Column(
             Modifier

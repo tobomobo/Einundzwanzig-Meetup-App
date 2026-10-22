@@ -50,8 +50,9 @@ object SplashRouting {
  * import (bounded, spec 14 §4), `SecureKeyStore.ensureMigrated()`, load the profile, hold for
  * [MIN_SPLASH_MILLIS], then decide Intro vs. app shell.
  *
- * `:app` may share this ViewModel (`hiltViewModel()` in the activity) and keep the system splash
- * on screen while [isChecking] is `true`.
+ * Exactly one instance may exist per start: `:app` may keep the system splash on screen while
+ * [isChecking] is `true`, but then it must hand that same instance to
+ * `onboardingEntries(splashViewModel = …)` (see there).
  */
 @HiltViewModel
 class SplashViewModel @Inject constructor(

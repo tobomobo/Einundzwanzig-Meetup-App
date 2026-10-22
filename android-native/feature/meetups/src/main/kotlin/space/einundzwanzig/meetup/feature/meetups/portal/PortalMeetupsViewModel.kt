@@ -184,7 +184,9 @@ class PortalMeetupsViewModel @Inject constructor(
         loadJob?.cancel()
         if (!pull) _state.update { it.copy(loadingMeetups = true) }
         loadJob = viewModelScope.launch {
-            val meetups = portal.getMyMeetups()
+            // Cards are keyed and addressed by meetup id: drop duplicate ids from the portal
+            // (a duplicate LazyColumn key would crash the screen).
+            val meetups = portal.getMyMeetups().distinctBy { it.id }
             _state.update { s ->
                 s.copy(
                     loadingMeetups = false,

@@ -3,6 +3,7 @@ package space.einundzwanzig.meetup.feature.meetups.portal
 import android.content.Context
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -22,10 +23,14 @@ import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
+import space.einundzwanzig.meetup.core.ui.guide.GuideStep
+import space.einundzwanzig.meetup.core.ui.guide.GuideTargetRegistry
+import space.einundzwanzig.meetup.core.ui.guide.LocalGuideTargetRegistry
 import space.einundzwanzig.meetup.core.ui.theme.EinundzwanzigTheme
 import space.einundzwanzig.meetup.data.meetups.portal.PortalMeetup
 import space.einundzwanzig.meetup.feature.meetups.R
@@ -46,6 +51,34 @@ class PortalScreensTest {
     private fun show(content: @Composable () -> Unit) = rule.setContent { EinundzwanzigTheme { content() } }
 
     // ---- Meine Meetups ------------------------------------------------------------------------
+
+    @Test
+    fun `tour has one non-scrolling step on the app bar title`() {
+        assertEquals(
+            listOf(
+                GuideStep(
+                    targetId = PortalMeetupsTags.TITLE_ANCHOR,
+                    title = L10nR.string.guideMyMeetupsListTitle,
+                    body = L10nR.string.guideMyMeetupsListBody,
+                    scrollIntoView = false,
+                    waitTimeoutMillis = 800,
+                ),
+            ),
+            myMeetupsTourSteps(),
+        )
+        assertEquals("myMeetups.title", PortalMeetupsTags.TITLE_ANCHOR)
+    }
+
+    @Test
+    fun `the tour anchor is registered by the screen`() {
+        val registry = GuideTargetRegistry()
+        show {
+            CompositionLocalProvider(LocalGuideTargetRegistry provides registry) {
+                PortalMeetupsScreen(PortalMeetupsUiState(checking = false, connected = true), SnackbarHostState()) {}
+            }
+        }
+        rule.runOnIdle { assertTrue(registry.isRegistered(PortalMeetupsTags.TITLE_ANCHOR)) }
+    }
 
     @Test
     fun `not connected shows the login card and logs in`() {

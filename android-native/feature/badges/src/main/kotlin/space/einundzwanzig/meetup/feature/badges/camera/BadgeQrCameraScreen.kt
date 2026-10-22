@@ -27,9 +27,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.result.LocalResultEventBus
+import space.einundzwanzig.meetup.core.camera.CameraPermissionStatus
+import space.einundzwanzig.meetup.core.camera.CameraStatus
 import space.einundzwanzig.meetup.core.camera.QrImageResult
 import space.einundzwanzig.meetup.core.camera.QrScanner
+import space.einundzwanzig.meetup.core.camera.rememberCameraPermissionState
 import space.einundzwanzig.meetup.core.camera.rememberQrImagePicker
+import space.einundzwanzig.meetup.core.camera.rememberQrScannerState
 import space.einundzwanzig.meetup.core.navigation.LocalNavigator
 import space.einundzwanzig.meetup.core.navigation.NavResults
 import space.einundzwanzig.meetup.core.navigation.sendResult
@@ -58,7 +62,17 @@ internal fun firstAcceptedBadgeQr(values: List<String?>): String? = values.first
  */
 @Composable
 fun BadgeQrCameraRoute() {
-    BadgeQrCameraRoute(scanner = { onResult, enabled -> QrScanner(onResult = onResult, enabled = enabled) })
+    val permission = rememberCameraPermissionState()
+    val scannerState = rememberQrScannerState()
+    BadgeQrCameraRoute(
+        scanner = { onResult, enabled ->
+            QrScanner(onResult = onResult, state = scannerState, permissionState = permission, enabled = enabled)
+        },
+        // The permission and unavailable panels bring their own text and actions; the
+        // instruction box would cover their buttons on small screens.
+        showInstruction = permission.status == CameraPermissionStatus.Granted &&
+            scannerState.cameraStatus != CameraStatus.Unavailable,
+    )
 }
 
 /**
@@ -72,6 +86,7 @@ internal fun BadgeQrCameraRoute(
         val picker = rememberQrImagePicker(onResult = handler)
         picker::launch
     },
+    showInstruction: Boolean = true,
 ) {
     val navigator = LocalNavigator.current
     val bus = LocalResultEventBus.current
@@ -91,6 +106,7 @@ internal fun BadgeQrCameraRoute(
         onBack = navigator::back,
         onPickImage = launchPicker,
         galleryEnabled = !handled,
+        showInstruction = showInstruction,
     ) {
         scanner(deliver, !handled)
     }
@@ -102,7 +118,8 @@ internal fun galleryCode(result: QrImageResult): String? =
 
 /**
  * Stateless badge camera: top bar with gallery action, the camera [content] (full bleed with
- * the scanner overlay) and the instruction box 60 dp above the bottom.
+ * the scanner overlay) and the instruction box 60 dp above the bottom ([showInstruction]; off
+ * while the camera shows its permission or unavailable panel).
  */
 @Composable
 fun BadgeQrCameraScreen(
@@ -110,6 +127,7 @@ fun BadgeQrCameraScreen(
     onPickImage: () -> Unit,
     modifier: Modifier = Modifier,
     galleryEnabled: Boolean = true,
+    showInstruction: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
     Scaffold(
@@ -140,7 +158,7 @@ fun BadgeQrCameraScreen(
                 .padding(padding),
         ) {
             content()
-            Text(
+            if (showInstruction) Text(
                 text = stringResource(L10nR.string.verifyScanQrInstruction),
                 // Over the camera scrim in both themes, like the camera panels.
                 color = MaterialTheme.extendedColors.onScrim,

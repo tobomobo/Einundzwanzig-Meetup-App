@@ -34,7 +34,6 @@ import space.einundzwanzig.meetup.feature.badges.nfc.NfcReadResult
 import space.einundzwanzig.meetup.feature.badges.scanner.BadgeScannerAction
 import space.einundzwanzig.meetup.feature.badges.scanner.BadgeScannerEvent
 import space.einundzwanzig.meetup.feature.badges.scanner.BadgeScannerViewModel
-import space.einundzwanzig.meetup.feature.badges.scanner.BusyKind
 import space.einundzwanzig.meetup.feature.badges.scanner.RejectReason
 import space.einundzwanzig.meetup.feature.badges.scanner.ScanResultUi
 import space.einundzwanzig.meetup.feature.badges.scanner.ScanStatus
@@ -88,9 +87,9 @@ class BadgeScannerViewModelTest {
     @Test
     fun `found badge shows the confirmation with the localized unknown-meetup label`() = runTest(dispatcher) {
         val model = create()
-        model.unknownMeetupLabel = "Unknown meetup"
         val outcome = found()
-        model.scan(outcome)
+        processor.qrResult = { outcome }
+        model.onAction(BadgeScannerAction.QrScanned("{\"t\":\"B\"}", unknownMeetupLabel = "Unknown meetup"))
         assertEquals(ScanResultUi.Found(outcome.pending, outcome.info), model.state.value.result)
         assertEquals("Unknown meetup", processor.qrCalls.single().second)
         assertFalse(model.state.value.processing)
@@ -214,7 +213,7 @@ class BadgeScannerViewModelTest {
     }
 
     @Test
-    fun `co-attendance opt-in yes publishes and then opens the wallet`() = runTest(dispatcher) {
+    fun `co-attendance opt-in yes opens the wallet at once and reports the publish to the app sink`() = runTest(dispatcher) {
         val model = create()
         model.scan(found())
         val saved = badge()
@@ -223,15 +222,19 @@ class BadgeScannerViewModelTest {
         assertEquals(ScannerDialog.CoAttendanceOptIn(saved), model.state.value.dialog)
         assertFalse(BadgeScannerEvent.OpenWallet in events)
         save.publishGate = CompletableDeferred()
-        model.onAction(BadgeScannerAction.CoAttendanceAnswered(true))
-        // The blocking indicator announces the publish, not a location check.
-        assertEquals(BusyKind.PUBLISHING, model.state.value.busy)
-        assertFalse(BadgeScannerEvent.OpenWallet in events)
-        save.publishGate!!.complete(Unit)
+        val results = mutableListOf<ScannerSnackbar>()
+        model.onAction(BadgeScannerAction.CoAttendanceAnswered(true) { results += it })
+        // Slow relays do not block the user: no busy dialog, the wallet opens right away.
         assertNull(model.state.value.busy)
-        assertEquals(listOf(saved), save.published)
-        assertEquals(listOf(ScannerSnackbar.SAVED, ScannerSnackbar.CO_ATTENDANCE_PUBLISHED), snackbars)
+        assertNull(model.state.value.dialog)
         assertEquals(BadgeScannerEvent.OpenWallet, events.last())
+        assertTrue(results.isEmpty())
+        // The agreed publish outlives the scanner (application scope).
+        model.viewModelScope.cancel()
+        save.publishGate!!.complete(Unit)
+        assertEquals(listOf(saved), save.published)
+        assertEquals(listOf(ScannerSnackbar.CO_ATTENDANCE_PUBLISHED), results)
+        assertEquals(listOf(ScannerSnackbar.SAVED), snackbars)
     }
 
     @Test
@@ -241,8 +244,10 @@ class BadgeScannerViewModelTest {
         save.coAttendanceCount = 0
         save.outcomes += SaveOutcome.Saved(badge(), true, askCoAttendance = true, collection = listOf(badge()))
         model.onAction(BadgeScannerAction.AddToWallet)
-        model.onAction(BadgeScannerAction.CoAttendanceAnswered(true))
-        assertEquals(ScannerSnackbar.CO_ATTENDANCE_FAILED, snackbars.last())
+        val results = mutableListOf<ScannerSnackbar>()
+        model.onAction(BadgeScannerAction.CoAttendanceAnswered(true) { results += it })
+        assertEquals(listOf(ScannerSnackbar.CO_ATTENDANCE_FAILED), results)
+        assertEquals(BadgeScannerEvent.OpenWallet, events.last())
     }
 
     @Test
@@ -348,7 +353,8 @@ class BadgeScannerViewModelTest {
         assertEquals(ScannerDialog.NfcDisabled, model.state.value.dialog)
         assertEquals(ScanStatus.NfcDisabledHint, model.state.value.status)
         model.onAction(BadgeScannerAction.NfcOpenSettings)
-        assertEquals(1, nfc.settingsOpened)
+        assertNull(model.state.value.dialog)
+        assertEquals(BadgeScannerEvent.OpenNfcSettings, events.last())
     }
 
     @Test

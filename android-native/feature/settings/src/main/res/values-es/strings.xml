@@ -4,23 +4,27 @@
     <string name="native_settings_theme_dark">Oscuro</string>
     <string name="native_settings_theme_light">Claro</string>
     <string name="native_settings_theme_system">Sistema</string>
-    <string name="native_settings_version">21Meetup · Versión %1$s</string>
+    <string name="native_settings_version">21Meetup · Version %1$s</string>
+    <string name="native_settings_drag_handle">Controlador de arrastre</string>
     <string name="native_settings_selected">Seleccionado</string>
 
-    <string name="native_log_title">Registro de diagnóstico</string>
-    <string name="native_log_probe_tooltip">Comprobar conexión NIP-44 (puede que el firmante pida autorización)</string>
-    <string name="native_log_probe_running">Prueba NIP-44 en curso</string>
-    <string name="native_log_probe_ok">Prueba NIP-44 correcta.</string>
-    <string name="native_log_probe_failed">La prueba NIP-44 falló — la causa está en el registro de diagnóstico.</string>
-    <string name="native_log_filter_tooltip">Solo avisos/errores</string>
-    <string name="native_log_verbose_on_tooltip">Registro detallado ACTIVADO — toca para desactivarlo</string>
-    <string name="native_log_verbose_off_tooltip">Activar registro detallado (más detalles para buscar errores)</string>
-    <string name="native_log_verbose_enabled">Registro detallado activado — reproduce ahora el error y luego comparte el registro.</string>
-    <string name="native_log_verbose_disabled">Registro detallado desactivado.</string>
-    <string name="native_log_copy">Copiar</string>
-    <string name="native_log_share">Compartir</string>
-    <string name="native_log_copied">Registro copiado</string>
-    <string name="native_log_empty">Sin entradas</string>
-    <string name="native_log_count">%1$d entradas</string>
-    <string name="native_log_clear">Vaciar registro</string>
+    <!-- Log screen and version footer: hard-coded German in Flutter (spec 12 §2.8 F44, §2.6), kept
+         byte-identical in every language for parity. -->
+    <string name="native_log_title">Diagnose-Log</string>
+    <string name="native_log_probe_tooltip">NIP-44-Verbindung prüfen (Freigabe im Signer eventuell nötig)</string>
+    <string name="native_log_probe_running">NIP-44-Probe läuft</string>
+    <string name="native_log_probe_ok">NIP-44-Probe erfolgreich.</string>
+    <string name="native_log_probe_failed">NIP-44-Probe fehlgeschlagen — Ursache im Diagnose-Log.</string>
+    <string name="native_log_filter_tooltip">Nur Warnungen/Fehler</string>
+    <string name="native_log_verbose_on_tooltip">Ausführliches Log AN — tippen zum Ausschalten</string>
+    <string name="native_log_verbose_off_tooltip">Ausführliches Log einschalten (mehr Details für die Fehlersuche)</string>
+    <string name="native_log_verbose_enabled">Ausführliches Log an — Fehler jetzt nachstellen, dann Log teilen.</string>
+    <string name="native_log_verbose_disabled">Ausführliches Log aus.</string>
+    <string name="native_log_copy">Kopieren</string>
+    <string name="native_log_share">Teilen</string>
+    <string name="native_log_copied">Log kopiert</string>
+    <string name="native_log_empty">Keine Einträge</string>
+    <string name="native_log_count">%1$d Einträge</string>
+    <string name="native_log_clear">Log leeren</string>
+    <string name="native_log_copy_failed">Log konnte nicht kopiert werden</string>
 </resources>

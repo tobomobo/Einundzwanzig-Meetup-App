@@ -282,10 +282,16 @@ private fun SettingsTourEffects() {
     }
 }
 
+/**
+ * Flutter-style grabber (40 x 4, 12/20 dp). The M3 sheet merges it into the node carrying the
+ * expand/dismiss accessibility actions; the description makes that node focusable for TalkBack.
+ */
 @Composable
 private fun SheetGrabber() {
+    val description = stringResource(R.string.native_settings_drag_handle)
     Box(
         Modifier
+            .semantics { contentDescription = description }
             .padding(top = 12.dp, bottom = 20.dp)
             .size(width = 40.dp, height = 4.dp)
             .background(MaterialTheme.extendedColors.textTertiary, RoundedCornerShape(2.dp)),
@@ -310,7 +316,7 @@ fun SettingsSheetContent(
     val scroll = rememberScrollState()
     val primary = MaterialTheme.colorScheme.primary
     val gold = MaterialTheme.extendedColors.community
-    val purple = MaterialTheme.extendedColors.nostr
+    val purple = MaterialTheme.extendedColors.purple
     val green = MaterialTheme.extendedColors.success
     val red = MaterialTheme.colorScheme.error
 
@@ -411,7 +417,7 @@ fun SettingsSheetContent(
                     onToggle = { onAction(SettingsSheetAction.SetHaptic(it)) },
                 )
                 RowDivider()
-                ThemeRow(state.themeMode) { onAction(SettingsSheetAction.SetThemeMode(it)) }
+                ThemeRow(state.themeMode, interactive = enabled) { onAction(SettingsSheetAction.SetThemeMode(it)) }
                 RowDivider()
                 SettingsRow(
                     icon = Icons.Rounded.BugReport,
@@ -642,7 +648,7 @@ private fun HapticRow(enabled: Boolean, interactive: Boolean, modifier: Modifier
 /** Native-only appearance choice as an Expressive connected button group. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun ThemeRow(selected: ThemeMode, onSelect: (ThemeMode) -> Unit) {
+private fun ThemeRow(selected: ThemeMode, interactive: Boolean, onSelect: (ThemeMode) -> Unit) {
     val options = listOf(
         Triple(ThemeMode.DARK, Icons.Rounded.DarkMode, R.string.native_settings_theme_dark),
         Triple(ThemeMode.LIGHT, Icons.Rounded.LightMode, R.string.native_settings_theme_light),
@@ -669,7 +675,8 @@ private fun ThemeRow(selected: ThemeMode, onSelect: (ThemeMode) -> Unit) {
                 val description = "$title: ${stringResource(label)}"
                 ToggleButton(
                     checked = checked,
-                    onCheckedChange = { if (!checked) onSelect(mode) },
+                    // Not `enabled = interactive`: that would grey the group out during the hide animation.
+                    onCheckedChange = { if (interactive && !checked) onSelect(mode) },
                     modifier = Modifier
                         .weight(1f)
                         .heightIn(min = 48.dp)

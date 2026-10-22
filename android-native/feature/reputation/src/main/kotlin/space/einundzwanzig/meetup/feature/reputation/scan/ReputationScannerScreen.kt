@@ -30,6 +30,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.TooltipAnchorPosition
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -102,17 +107,30 @@ internal sealed interface ReputationScannerAction {
     data object DismissDemo : ReputationScannerAction
 }
 
+/** Camera slot of [ReputationScannerRoute]: the real [QrScanner]; tests pass a fake that feeds codes. */
+internal typealias ReputationCameraSlot = @Composable (onResult: (String) -> Boolean, state: QrScannerState, enabled: Boolean) -> Unit
+
+/** Gallery picker as seen by [ReputationScannerRoute]: decoding flag and launch action. */
+internal class ReputationGalleryPicker(val isDecoding: Boolean, val launch: () -> Unit)
+
+/**
+ * Gallery slot of [ReputationScannerRoute]: the real Photo Picker ([rememberQrImagePicker]);
+ * tests pass a fake that feeds [QrImageResult]s.
+ */
+internal typealias ReputationGallerySlot = @Composable (onResult: (QrImageResult) -> Unit) -> ReputationGalleryPicker
+
 /**
  * Stateful entry of [ReputationScanner][space.einundzwanzig.meetup.core.navigation.ReputationScanner]
  * (`SecureQRScanner`, spec 04 §2.3). Every reputation hit replaces this screen with the result.
  */
-/** Camera slot of [ReputationScannerRoute]: the real [QrScanner]; tests pass a fake that feeds codes. */
-internal typealias ReputationCameraSlot = @Composable (onResult: (String) -> Boolean, state: QrScannerState, enabled: Boolean) -> Unit
-
 @Composable
 internal fun ReputationScannerRoute(
     scanner: ReputationCameraSlot = { onResult, scannerState, enabled ->
         QrScanner(onResult = onResult, state = scannerState, enabled = enabled)
+    },
+    gallery: ReputationGallerySlot = { onResult ->
+        val picker = rememberQrImagePicker(onResult)
+        ReputationGalleryPicker(isDecoding = picker.isDecoding, launch = picker::launch)
     },
 ) {
     val navigator = LocalNavigator.current
@@ -142,7 +160,7 @@ internal fun ReputationScannerRoute(
         ScanHit.Ignore -> false
     }
 
-    val picker = rememberQrImagePicker { result ->
+    val picker = gallery { result ->
         val outcome = when (result) {
             is QrImageResult.Codes -> ReputationScanLogic.classifyGallery(result.values)
             QrImageResult.NoCode -> GalleryOutcome.NoCode
@@ -214,12 +232,18 @@ internal fun ReputationScannerScreen(
                     scrolledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
                 ),
                 actions = {
-                    IconButton(
-                        onClick = { onAction(ReputationScannerAction.PickFromGallery) },
-                        enabled = galleryEnabled,
-                        modifier = Modifier.testTag(ReputationScannerTags.GALLERY_ACTION),
+                    TooltipBox(
+                        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Below),
+                        tooltip = { PlainTooltip { Text(galleryLabel) } },
+                        state = rememberTooltipState(),
                     ) {
-                        Icon(Icons.Outlined.PhotoLibrary, contentDescription = galleryLabel, tint = if (galleryEnabled) cyanColor else cyanColor.copy(alpha = 0.4f))
+                        IconButton(
+                            onClick = { onAction(ReputationScannerAction.PickFromGallery) },
+                            enabled = galleryEnabled,
+                            modifier = Modifier.testTag(ReputationScannerTags.GALLERY_ACTION),
+                        ) {
+                            Icon(Icons.Outlined.PhotoLibrary, contentDescription = galleryLabel, tint = if (galleryEnabled) cyanColor else cyanColor.copy(alpha = 0.4f))
+                        }
                     }
                 },
             )

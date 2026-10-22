@@ -2,6 +2,13 @@ package space.einundzwanzig.meetup.feature.badges
 
 import android.content.Context
 import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.navigation3.runtime.result.LocalResultEventBus
+import androidx.navigation3.runtime.result.ResultEventBus
+import space.einundzwanzig.meetup.core.navigation.LocalNavigator
+import space.einundzwanzig.meetup.feature.badges.camera.BadgeQrCameraRoute
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -14,6 +21,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import space.einundzwanzig.meetup.core.camera.CameraPermissionContent
+import space.einundzwanzig.meetup.core.camera.CameraPermissionStatus
+import space.einundzwanzig.meetup.core.camera.CameraUnavailableContent
+import space.einundzwanzig.meetup.core.camera.QrScannerTestTags
 import space.einundzwanzig.meetup.core.ui.theme.EinundzwanzigTheme
 import space.einundzwanzig.meetup.data.issuance.nfc.NfcWriteError
 import space.einundzwanzig.meetup.feature.badges.camera.BadgeQrCameraScreen
@@ -129,5 +140,57 @@ class NfcAndWizardScreenTest {
         rule.onNodeWithText(s(L10nR.string.verifyScanQrInstruction)).assertExists()
         rule.onNodeWithContentDescription(s(L10nR.string.qrLoadFromGallery)).performClick()
         assertEquals(1, gallery)
+    }
+
+    @Test
+    fun `writer cannot start while the home meetup is still loading`() {
+        showWriter(NfcTagWriterUiState(home = HomeMeetupInfo.Loading))
+        rule.onNodeWithTag(NfcTagWriterTags.CREATE).performScrollTo().assertIsNotEnabled()
+    }
+
+    @Test
+    fun `badge camera without permission shows the permission panel without the instruction box`() {
+        var requests = 0
+        rule.setContent {
+            EinundzwanzigTheme {
+                BadgeQrCameraScreen(onBack = {}, onPickImage = {}, showInstruction = false) {
+                    CameraPermissionContent(CameraPermissionStatus.Denied, onRequestPermission = { requests++ }, onOpenSettings = {})
+                }
+            }
+        }
+        rule.onNodeWithTag(QrScannerTestTags.Permission).assertExists()
+        rule.onNodeWithTag(BadgeQrCameraTags.INSTRUCTION).assertDoesNotExist()
+        rule.onNodeWithText(s(L10nR.string.verifyScanQr)).assertExists()
+        rule.onNodeWithText(s(space.einundzwanzig.meetup.core.camera.R.string.native_camera_permission_grant)).performClick()
+        assertEquals(1, requests)
+    }
+
+    @Test
+    fun `badge camera unavailable shows the retry panel without the instruction box`() {
+        var retries = 0
+        rule.setContent {
+            EinundzwanzigTheme {
+                BadgeQrCameraScreen(onBack = {}, onPickImage = {}, showInstruction = false) {
+                    CameraUnavailableContent(onRetry = { retries++ })
+                }
+            }
+        }
+        rule.onNodeWithTag(QrScannerTestTags.Unavailable).assertExists()
+        rule.onNodeWithTag(BadgeQrCameraTags.INSTRUCTION).assertDoesNotExist()
+        rule.onNodeWithText(s(space.einundzwanzig.meetup.core.camera.R.string.native_camera_retry)).performClick()
+        assertEquals(1, retries)
+    }
+
+    @Test
+    fun `badge camera route hides the instruction until the permission is granted`() {
+        // Robolectric grants no camera permission: the real route shows the core:camera panel.
+        rule.setContent {
+            CompositionLocalProvider(
+                LocalNavigator provides RecordingNavigator(),
+                LocalResultEventBus provides remember { ResultEventBus() },
+            ) { EinundzwanzigTheme { BadgeQrCameraRoute() } }
+        }
+        rule.onNodeWithTag(QrScannerTestTags.Permission).assertExists()
+        rule.onNodeWithTag(BadgeQrCameraTags.INSTRUCTION).assertDoesNotExist()
     }
 }

@@ -1,5 +1,6 @@
 package space.einundzwanzig.meetup.feature.home
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -129,6 +130,50 @@ class HomeViewModelTest {
         assertEquals("DE", s.favCards[1].country)
         assertFalse(s.countdownLoading)
         assertEquals(2, s.myEventsCount)
+    }
+
+    @Test
+    fun `fallback cards and countdown loading show while favorites are still loading`() {
+        fx.data.user = profile(favorites = listOf("107", "108"))
+        val gate = CompletableDeferred<Unit>()
+        fx.data.favoritesGate = gate
+        fx.data.favorites = FavoritesSnapshot(
+            listOf(fx.data.card("108", NOW.plus(Duration.ofDays(1))), fx.data.card("107", null)),
+            loaded = true,
+        )
+        val vm = fx.create()
+        val loading = vm.state.value
+        assertTrue(loading.hasHome)
+        assertTrue(loading.countdownLoading)
+        assertEquals(listOf("107", "108"), loading.favCards.map { it.key })
+        assertEquals("Label 107", loading.favCards[0].label)
+        assertNull(loading.favCards[0].daysUntil)
+        gate.complete(Unit)
+        val done = vm.state.value
+        assertFalse(done.countdownLoading)
+        assertEquals(listOf("108", "107"), done.favCards.map { it.key })
+        assertEquals(1L, done.favCards[0].daysUntil)
+    }
+
+    @Test
+    fun `reloading the same favorites keeps the carousel page, a changed list resets it`() {
+        fx.data.user = profile(favorites = listOf("107", "108"))
+        fx.data.favorites = FavoritesSnapshot(
+            listOf(fx.data.card("107", NOW.plus(Duration.ofDays(1))), fx.data.card("108", null)),
+            loaded = true,
+        )
+        val vm = fx.create()
+        val epoch = vm.state.value.favEpoch
+        vm.onResume() // first
+        vm.onResume() // back from e.g. the chat of the 2nd favorite
+        assertEquals(epoch, vm.state.value.favEpoch)
+        fx.data.favorites = FavoritesSnapshot(
+            listOf(fx.data.card("108", NOW), fx.data.card("107", NOW.plus(Duration.ofDays(1)))),
+            loaded = true,
+        )
+        vm.onResume()
+        assertEquals(listOf("108", "107"), vm.state.value.favCards.map { it.key })
+        assertEquals(epoch + 1, vm.state.value.favEpoch)
     }
 
     @Test

@@ -1,6 +1,14 @@
 package space.einundzwanzig.meetup.feature.badges
 
+import android.app.Activity
 import android.content.Context
+import android.view.View
+import android.view.WindowManager
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -10,11 +18,15 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import space.einundzwanzig.meetup.core.ui.nostr.NpubFormat
 import space.einundzwanzig.meetup.core.ui.theme.EinundzwanzigTheme
+import space.einundzwanzig.meetup.core.ui.util.findActivity
+import space.einundzwanzig.meetup.feature.badges.rollingqr.KeepScreenBright
 import space.einundzwanzig.meetup.data.issuance.session.SessionRemaining
 import space.einundzwanzig.meetup.feature.badges.rollingqr.RollingQrAction
 import space.einundzwanzig.meetup.feature.badges.rollingqr.RollingQrScreen
@@ -101,5 +113,36 @@ class RollingQrScreenTest {
         show(RollingQrUiState())
         rule.onNodeWithTag(RollingQrTags.EMPTY).assertDoesNotExist()
         rule.onNodeWithTag(RollingQrTags.QR).assertDoesNotExist()
+    }
+
+    @Test
+    fun `screen stays on at full brightness while a session shows and is restored afterwards`() {
+        var sessionShown by mutableStateOf(true)
+        var shown by mutableStateOf(true)
+        lateinit var view: View
+        lateinit var activity: Activity
+        rule.setContent {
+            view = LocalView.current
+            activity = LocalContext.current.findActivity()!!
+            if (shown) KeepScreenBright(enabled = sessionShown)
+        }
+        rule.waitForIdle()
+        assertTrue(view.keepScreenOn)
+        assertEquals(1f, activity.window.attributes.screenBrightness)
+
+        // The session ends (empty state): both are restored.
+        sessionShown = false
+        rule.waitForIdle()
+        assertFalse(view.keepScreenOn)
+        assertEquals(WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE, activity.window.attributes.screenBrightness)
+
+        // A new session, then the screen leaves (dispose): restored again.
+        sessionShown = true
+        rule.waitForIdle()
+        assertEquals(1f, activity.window.attributes.screenBrightness)
+        shown = false
+        rule.waitForIdle()
+        assertFalse(view.keepScreenOn)
+        assertEquals(WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE, activity.window.attributes.screenBrightness)
     }
 }

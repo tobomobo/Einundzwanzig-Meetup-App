@@ -338,7 +338,11 @@ class HomeViewModel @Inject constructor(
                 }
                 return@launch
             }
-            mutableState.update { it.copy(countdownLoading = true) }
+            // Flutter renders a fallback card (home meetup, no date) while the portal loads, so the
+            // carousel is never an empty gap and the next-event line shows its progress bar.
+            mutableState.update {
+                it.copy(countdownLoading = true, favCards = it.favCards.ifEmpty { fallbackCards(keys) })
+            }
             val snapshot = safe("Favoriten") { data.loadFavorites() }
             if (snapshot == null) {
                 mutableState.update { st ->
@@ -348,8 +352,15 @@ class HomeViewModel @Inject constructor(
             }
             val now = ZonedDateTime.ofInstant(Instant.ofEpochMilli(time.nowMillis()), zones.zone())
             val cards = snapshot.cards.map { toUi(it, now) }.ifEmpty { fallbackCards(keys) }
-            mutableState.update {
-                it.copy(favCards = cards, favEpoch = it.favEpoch + 1, countdownLoading = false)
+            // Only a changed card list/order resets the carousel to page 0; a plain reload after
+            // returning from a pushed route (chat, details, calendar) keeps the current page.
+            mutableState.update { st ->
+                val keysChanged = cards.map { it.key } != st.favCards.map { it.key }
+                st.copy(
+                    favCards = cards,
+                    favEpoch = if (keysChanged) st.favEpoch + 1 else st.favEpoch,
+                    countdownLoading = false,
+                )
             }
             val rsvps = safe("Zusagen") { data.loadMeetupRsvps(snapshot.dates) } ?: return@launch
             favMeetupDates = rsvps.size

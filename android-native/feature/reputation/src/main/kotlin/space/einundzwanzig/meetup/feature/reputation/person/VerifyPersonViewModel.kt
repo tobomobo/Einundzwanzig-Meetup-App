@@ -1,6 +1,7 @@
 package space.einundzwanzig.meetup.feature.reputation.person
 
 import androidx.compose.runtime.Immutable
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.assisted.Assisted
@@ -51,6 +52,7 @@ internal sealed interface VerifyPersonAction {
 internal class VerifyPersonViewModel @AssistedInject constructor(
     @Assisted initialTargetNpub: String?,
     private val source: ReputationDataSource,
+    private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
     @AssistedFactory
@@ -58,23 +60,30 @@ internal class VerifyPersonViewModel @AssistedInject constructor(
         fun create(initialTargetNpub: String?): VerifyPersonViewModel
     }
 
-    private val _state = MutableStateFlow(VerifyPersonUiState())
+    // The typed text survives process death (e.g. while the user copies an npub elsewhere).
+    private val _state = MutableStateFlow(VerifyPersonUiState(input = savedStateHandle[KEY_INPUT] ?: ""))
     val state: StateFlow<VerifyPersonUiState> = _state.asStateFlow()
 
     init {
         if (!initialTargetNpub.isNullOrEmpty()) {
-            _state.update { it.copy(input = initialTargetNpub) }
+            // After process death the restored text wins over the navigation argument.
+            if (savedStateHandle.get<String>(KEY_INPUT) == null) setInput(initialTargetNpub)
             check()
         }
     }
 
+    private fun setInput(text: String) {
+        savedStateHandle[KEY_INPUT] = text
+        _state.update { it.copy(input = text) }
+    }
+
     fun onAction(action: VerifyPersonAction) {
         when (action) {
-            is VerifyPersonAction.InputChanged -> _state.update { it.copy(input = action.text) }
+            is VerifyPersonAction.InputChanged -> setInput(action.text)
             VerifyPersonAction.Check -> check()
             is VerifyPersonAction.Scanned -> {
                 // A scan replaces any running check, so the field and the result never disagree.
-                _state.update { it.copy(input = action.npub) }
+                setInput(action.npub)
                 check(restart = true)
             }
             // Handled by the route.
@@ -115,6 +124,7 @@ internal class VerifyPersonViewModel @AssistedInject constructor(
 
     companion object {
         private const val TAG = "VerifyPerson"
+        internal const val KEY_INPUT = "input"
 
         /**
          * Dart `input.trim().toLowerCase().replaceFirst('nostr:', '')`. PARITY: the first

@@ -177,13 +177,6 @@ class BadgeScannerScreenTest {
     }
 
     @Test
-    fun `publishing announces the relay publish, not a location check`() {
-        show(BadgeScannerUiState(busy = BusyKind.PUBLISHING))
-        rule.onNodeWithContentDescription(s(R.string.native_scanner_publishing)).assertExists()
-        rule.onNodeWithContentDescription(s(R.string.native_scanner_locating)).assertDoesNotExist()
-    }
-
-    @Test
     @Config(qualifiers = "en")
     fun `typed rejections are localized`() {
         var status: ScanStatus by mutableStateOf(

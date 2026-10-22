@@ -110,11 +110,7 @@ internal class FakeSaveUseCase : BadgeSaveUseCase {
 }
 
 internal class FakeNfc(var availability: NfcAvailability = NfcAvailability.ENABLED) : NfcStatusSource {
-    var settingsOpened = 0
     override fun availability(): NfcAvailability = availability
-    override fun openNfcSettings() {
-        settingsOpened++
-    }
 }
 
 internal class FakeTag(

@@ -8,4 +8,5 @@
     <string name="native_wallet_close_info">Close info</string>
     <string name="native_wallet_view_compact">Compact</string>
     <string name="native_wallet_view_normal">Normal</string>
+    <string name="native_wallet_no_share_target">No app found to share with</string>
 </resources>

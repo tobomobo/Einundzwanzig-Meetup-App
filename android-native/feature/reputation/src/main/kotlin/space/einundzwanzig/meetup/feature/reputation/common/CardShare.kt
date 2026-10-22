@@ -2,6 +2,9 @@ package space.einundzwanzig.meetup.feature.reputation.common
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import space.einundzwanzig.meetup.core.ui.share.ComposableCapturer
 import space.einundzwanzig.meetup.core.ui.share.ShareHelper
@@ -19,7 +22,8 @@ internal const val CARD_SHARE_FILE = "einundzwanzig_reputation_card.png"
 private const val SHARE_PIXEL_RATIO = 3f
 
 /**
- * Renders [content] offscreen at [width] × [height] dp with pixel ratio 3, writes it to
+ * Renders [content] offscreen at [width] × [height] dp with pixel ratio 3 and the on-screen
+ * [fontScale] (so the measured card size fits), writes it to
  * `cacheDir/share/[fileName]` and opens the share sheet (FileProvider URI, read grant,
  * subject and text; spec 04 §2.1.1 steps 2–3, S-12).
  *
@@ -30,11 +34,17 @@ internal suspend fun shareCapturedCard(
     capturer: ComposableCapturer,
     width: Dp,
     height: Dp,
+    fontScale: Float,
     fileName: String,
     text: String,
     content: @Composable () -> Unit,
 ): Boolean {
-    val bitmap = capturer.capture(width, height, pixelRatio = SHARE_PIXEL_RATIO, content = content)
+    val bitmap = capturer.capture(width, height, pixelRatio = SHARE_PIXEL_RATIO) {
+        // The capturer renders at fontScale 1, but [width] × [height] were measured on screen at
+        // the user's font scale: restore it so the text (and thus the card height) matches.
+        val density = LocalDensity.current
+        CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale), content = content)
+    }
     return try {
         ShareHelper.shareImage(context, bitmap, fileName, subject = SHARE_SUBJECT, text = text)
     } finally {

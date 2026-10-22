@@ -63,6 +63,14 @@ class PortalMeetupsViewModelTest {
     }
 
     @Test
+    fun `duplicate meetup ids from the portal are shown once`() {
+        portal.token = "t"
+        portal.myMeetups = listOf(PortalMeetup(1, "A", "a"), PortalMeetup(2, "B", "b"), PortalMeetup(1, "A", "a"))
+        val vm = PortalMeetupsViewModel(portal)
+        assertEquals(listOf(1, 2), vm.state.value.cards.map { it.meetup.id })
+    }
+
+    @Test
     fun `a token of another identity is deleted and the login view returns`() {
         portal.token = "t"
         portal.tokenMatches = false

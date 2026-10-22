@@ -153,24 +153,29 @@ internal fun WalletRouteContent(showBack: Boolean, viewModel: WalletViewModel) {
     val localHost = remember { SnackbarHostState() }
     val snackbars = appHost ?: localHost
     val lifecycleOwner = LocalLifecycleOwner.current
+    // The collector outlives recompositions; read the latest host and context, not the first ones.
+    val currentSnackbars by rememberUpdatedState(snackbars)
+    val currentContext by rememberUpdatedState(context)
 
     LaunchedEffect(viewModel, lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             viewModel.events.collect { event ->
+                val ctx = currentContext
+                val host = currentSnackbars
                 when (event) {
-                    is WalletEvent.Snackbar -> snackbars.showAppSnackbar(
-                        context.getString(event.message.text, *event.message.args.toTypedArray()),
+                    is WalletEvent.Snackbar -> host.showAppSnackbar(
+                        ctx.getString(event.message.text, *event.message.args.toTypedArray()),
                         event.message.tone,
                         AppSnackbarDurations.Medium,
                     )
                     is WalletEvent.ShareText -> {
-                        val shared = runCatching { ShareHelper.shareText(context, event.text, event.subject) }
+                        val shared = runCatching { ShareHelper.shareText(ctx, event.text, event.subject) }
                             .onFailure { AppLogger.warn("Wallet", "Teilen fehlgeschlagen", it) }
                             .getOrDefault(false)
                         if (!shared) {
                             // Clipboard fallback (spec 03 §2.1.2 step 5).
-                            SecretClipboard.copyPlain(context, event.text, event.subject)
-                            snackbars.showAppSnackbar(context.getString(event.fallback.text), event.fallback.tone)
+                            SecretClipboard.copyPlain(ctx, event.text, event.subject)
+                            host.showAppSnackbar(ctx.getString(event.fallback.text), event.fallback.tone)
                         }
                     }
                 }
@@ -384,31 +389,36 @@ private fun WalletLibraryList(state: WalletUiState, onAction: (WalletAction) -> 
     val numbers = remember(state.badges) {
         IdentityHashMap<MeetupBadge, Int>().apply { state.badges.forEachIndexed { i, b -> put(b, i + 1) } }
     }
-    LazyColumn(
-        state = listState,
-        modifier = Modifier
-            .fillMaxSize()
-            .testTag(WalletTestTags.LIST)
-            .guideScrollContainer(listState),
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 24.dp),
-    ) {
-        item(key = "controls", contentType = "controls") { LibraryControls(state, onAction) }
-        if (state.groups.isEmpty()) {
-            item(key = "noResults", contentType = "noResults") { NoResults() }
-        } else if (state.groupByMeetup) {
-            state.groups.forEachIndexed { index, group ->
-                item(key = "c:${group.key}", contentType = "collection") {
-                    CollectionCard(
-                        group = group,
-                        onClick = { onAction(WalletAction.OpenCollection(group.key)) },
-                        modifier = Modifier
-                            .padding(bottom = 10.dp)
-                            .then(if (index == 0) Modifier.guideAnchor(WalletTour.FIRST_BADGE) else Modifier),
-                    )
+    // Search and grouping stay pinned above the scrolling list (badge_wallet.dart: Column with
+    // the controls above an Expanded list).
+    Column(Modifier.fillMaxSize()) {
+        LibraryControls(state, onAction)
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .testTag(WalletTestTags.LIST)
+                .guideScrollContainer(listState),
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = if (state.groupByMeetup) 8.dp else 4.dp, bottom = 24.dp),
+        ) {
+            if (state.groups.isEmpty()) {
+                item(key = "noResults", contentType = "noResults") { NoResults() }
+            } else if (state.groupByMeetup) {
+                state.groups.forEachIndexed { index, group ->
+                    item(key = "c:${group.key}", contentType = "collection") {
+                        CollectionCard(
+                            group = group,
+                            onClick = { onAction(WalletAction.OpenCollection(group.key)) },
+                            modifier = Modifier
+                                .padding(bottom = 10.dp)
+                                .then(if (index == 0) Modifier.guideAnchor(WalletTour.FIRST_BADGE) else Modifier),
+                        )
+                    }
                 }
+            } else {
+                yearSections(state, numbers, onAction)
             }
-        } else {
-            yearSections(state, numbers, onAction)
         }
     }
 }
@@ -482,7 +492,7 @@ private fun BadgeRow(
 @Composable
 private fun LibraryControls(state: WalletUiState, onAction: (WalletAction) -> Unit) {
     val colors = MaterialTheme.colorScheme
-    Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+    Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 6.dp)) {
         if (state.showSearch) {
             // The field owns its text synchronously (no IME desync through the StateFlow round
             // trip). It leaves the composition when the search disappears, and the ViewModel

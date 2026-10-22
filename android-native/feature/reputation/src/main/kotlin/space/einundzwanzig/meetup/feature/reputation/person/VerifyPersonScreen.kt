@@ -6,6 +6,7 @@ import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -35,13 +36,18 @@ import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Hub
 import androidx.compose.material.icons.rounded.LinkOff
-import androidx.compose.material.icons.rounded.OpenInNew
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PersonOutline
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ButtonGroup
+import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -215,30 +221,77 @@ internal fun VerifyPersonScreen(
                     .testTag(VerifyPersonTags.INPUT),
             )
             Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton(
-                    onClick = { onAction(VerifyPersonAction.OpenScanner) },
-                    modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = 52.dp)
-                        .testTag(VerifyPersonTags.SCAN),
-                ) {
-                    Icon(Icons.Rounded.QrCodeScanner, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(L10nR.string.vpScanQr))
-                }
-                Button(
-                    onClick = { onAction(VerifyPersonAction.Check) },
-                    enabled = !state.checking,
-                    modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = 52.dp)
-                        .testTag(VerifyPersonTags.CHECK),
-                ) {
-                    Icon(Icons.Rounded.VerifiedUser, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(L10nR.string.vpCheck), fontWeight = FontWeight.Bold)
-                }
+            val scanLabel = stringResource(L10nR.string.vpScanQr)
+            val checkLabel = stringResource(L10nR.string.vpCheck)
+            val scanInteraction = remember { MutableInteractionSource() }
+            val checkInteraction = remember { MutableInteractionSource() }
+            // Expressive button group: the pressed button widens, its neighbour yields.
+            ButtonGroup(
+                overflowIndicator = { menuState -> ButtonGroupDefaults.OverflowIndicator(menuState) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                customItem(
+                    buttonGroupContent = {
+                        OutlinedButton(
+                            onClick = { onAction(VerifyPersonAction.OpenScanner) },
+                            shapes = ButtonDefaults.shapes(),
+                            interactionSource = scanInteraction,
+                            modifier = Modifier
+                                .weight(1f)
+                                .animateWidth(scanInteraction)
+                                .heightIn(min = 52.dp)
+                                .testTag(VerifyPersonTags.SCAN),
+                        ) {
+                            Icon(Icons.Rounded.QrCodeScanner, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(scanLabel, maxLines = 1)
+                        }
+                    },
+                    menuContent = { menuState ->
+                        DropdownMenuItem(
+                            text = { Text(scanLabel) },
+                            leadingIcon = { Icon(Icons.Rounded.QrCodeScanner, contentDescription = null) },
+                            onClick = {
+                                menuState.dismiss()
+                                onAction(VerifyPersonAction.OpenScanner)
+                            },
+                        )
+                    },
+                )
+                customItem(
+                    buttonGroupContent = {
+                        Button(
+                            onClick = { onAction(VerifyPersonAction.Check) },
+                            enabled = !state.checking,
+                            shapes = ButtonDefaults.shapes(),
+                            interactionSource = checkInteraction,
+                            modifier = Modifier
+                                .weight(1f)
+                                .animateWidth(checkInteraction)
+                                .heightIn(min = 52.dp)
+                                .testTag(VerifyPersonTags.CHECK),
+                        ) {
+                            if (state.checking) {
+                                LoadingIndicator(color = LocalContentColor.current, modifier = Modifier.size(20.dp))
+                            } else {
+                                Icon(Icons.Rounded.VerifiedUser, contentDescription = null, modifier = Modifier.size(18.dp))
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Text(checkLabel, fontWeight = FontWeight.Bold, maxLines = 1)
+                        }
+                    },
+                    menuContent = { menuState ->
+                        DropdownMenuItem(
+                            text = { Text(checkLabel) },
+                            leadingIcon = { Icon(Icons.Rounded.VerifiedUser, contentDescription = null) },
+                            enabled = !state.checking,
+                            onClick = {
+                                menuState.dismiss()
+                                onAction(VerifyPersonAction.Check)
+                            },
+                        )
+                    },
+                )
             }
             state.error?.let { error ->
                 Spacer(Modifier.height(16.dp))
@@ -431,7 +484,7 @@ private fun PathNode(index: Int, last: Boolean, npub: String, onOpen: () -> Unit
             }
         }
         if (!first) {
-            Icon(Icons.Rounded.OpenInNew, contentDescription = null, tint = tertiaryTextColor.copy(alpha = 0.6f), modifier = Modifier.size(14.dp))
+            Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, tint = tertiaryTextColor.copy(alpha = 0.6f), modifier = Modifier.size(14.dp))
         }
     }
 }

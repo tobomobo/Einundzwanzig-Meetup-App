@@ -112,11 +112,30 @@ private const val DEFAULT_SNACKBAR_MILLIS = 4_000L
 /** Stateful diagnostic log entry (spec 12 §2.8, NIP-44 probe spec 01 §2.9). */
 @Composable
 fun DiagnosticLogRoute(viewModel: DiagnosticLogViewModel = hiltViewModel()) {
+    DiagnosticLogRoute(viewModel, LogClipboard::writeSystemClipboard)
+}
+
+/** [DiagnosticLogRoute] with a replaceable clipboard writer (tests: a writer that throws). */
+@Composable
+internal fun DiagnosticLogRoute(viewModel: DiagnosticLogViewModel, writeClip: (Context, String) -> Unit) {
     val navigator = LocalNavigator.current
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    // "Log kopiert" only after a successful copy; a clipboard failure (e.g. Binder limit) shows
+    // an error snackbar instead of crashing the collector.
+    fun copyAndReport(text: String) {
+        val ok = LogClipboard.copy(context, text, writeClip)
+        scope.launch {
+            snackbar.showAppSnackbar(
+                context.getString(if (ok) R.string.native_log_copied else R.string.native_log_copy_failed),
+                tone = if (ok) Tone.Neutral else Tone.Error,
+                durationMillis = if (ok) AppSnackbarDurations.Short else DEFAULT_SNACKBAR_MILLIS,
+            )
+        }
+    }
 
     LaunchedEffect(viewModel) {
         viewModel.uiEvents.collect { event ->
@@ -128,22 +147,56 @@ fun DiagnosticLogRoute(viewModel: DiagnosticLogViewModel = hiltViewModel()) {
                         durationMillis = DEFAULT_SNACKBAR_MILLIS,
                     )
                 }
-                is DiagnosticLogEvent.Copy -> {
-                    SecretClipboard.copyPlain(context, event.text, LogExport.SHARE_SUBJECT)
-                    scope.launch { snackbar.showAppSnackbar(context.getString(R.string.native_log_copied), durationMillis = AppSnackbarDurations.Short) }
-                }
-                is DiagnosticLogEvent.Share -> {
-                    if (!shareLog(context, event.text)) {
-                        SecretClipboard.copyPlain(context, event.text, LogExport.SHARE_SUBJECT)
-                        scope.launch { snackbar.showAppSnackbar(context.getString(R.string.native_log_copied), durationMillis = AppSnackbarDurations.Short) }
-                    }
-                }
+                is DiagnosticLogEvent.Copy -> copyAndReport(event.text)
+                is DiagnosticLogEvent.Share -> if (!shareLog(context, event.text)) copyAndReport(event.text)
             }
         }
     }
 
     DiagnosticLogScreen(state, snackbar) { action ->
         if (action == DiagnosticLogAction.Back) navigator.back() else viewModel.onAction(action)
+    }
+}
+
+/**
+ * Clipboard copy of the log export. `setPrimaryClip` goes through Binder and throws above about
+ * 1 MB, while the buffer (800 entries of up to 4,000 chars) can reach several MB: the text is
+ * cut to its newest [MAX_CLIP_BYTES] (at a line start) and every failure is caught.
+ */
+internal object LogClipboard {
+    /** UTF-8 budget of the clip, well below the ~1 MB Binder transaction limit. */
+    const val MAX_CLIP_BYTES = 500 * 1024
+
+    fun writeSystemClipboard(context: Context, text: String) {
+        SecretClipboard.copyPlain(context, text, LogExport.SHARE_SUBJECT)
+    }
+
+    /** Copies [clipText] of [text] with [write]; `false` (and a WARN entry) if that throws. */
+    fun copy(context: Context, text: String, write: (Context, String) -> Unit = ::writeSystemClipboard): Boolean = try {
+        write(context, clipText(text))
+        true
+    } catch (e: RuntimeException) {
+        AppLogger.warn("Log", "Kopieren fehlgeschlagen", e)
+        false
+    }
+
+    /**
+     * [text] if it fits into [maxBytes] UTF-8 bytes, else its newest part (the log ends with the
+     * newest entry) starting at a line start; without a line break inside the budget the cut is
+     * at a character boundary.
+     */
+    fun clipText(text: String, maxBytes: Int = MAX_CLIP_BYTES): String {
+        val bytes = text.toByteArray(Charsets.UTF_8)
+        if (bytes.size <= maxBytes) return text
+        var start = bytes.size - maxBytes
+        val newline = (start until bytes.size).firstOrNull { bytes[it] == '\n'.code.toByte() }
+        if (newline != null) {
+            start = newline + 1
+        } else {
+            // Skip UTF-8 continuation bytes (10xxxxxx) so no character is split.
+            while (start < bytes.size && (bytes[start].toInt() and 0xC0) == 0x80) start++
+        }
+        return String(bytes, start, bytes.size - start, Charsets.UTF_8)
     }
 }
 
@@ -302,7 +355,7 @@ private fun LogList(entries: List<LogEntry>) {
     val text = MaterialTheme.colorScheme.onSurface
     val error = MaterialTheme.colorScheme.error
     val warn = MaterialTheme.colorScheme.primary
-    val sec = MaterialTheme.extendedColors.nostr
+    val sec = MaterialTheme.extendedColors.purple
     val info = MaterialTheme.colorScheme.onSurfaceVariant
     val annotated = remember(entries, tertiary, tagColor, text, error, warn, sec, info) {
         buildAnnotatedString {

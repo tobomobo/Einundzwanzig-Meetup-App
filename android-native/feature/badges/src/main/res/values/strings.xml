@@ -29,11 +29,13 @@
     <string name="native_claim_no_key">Kein Schlüssel vorhanden — Claim nicht möglich</string>
     <string name="native_claim_timestamp">Claim-Fehler: Zeitstempel des Signers weicht ab</string>
     <string name="native_claim_error">Claim-Fehler: %1$s</string>
-    <string name="native_scanner_publishing">Wird an die Relays gesendet …</string>
     <string name="native_nfc_adapter_unavailable">NFC-Adapter nicht verfügbar</string>
     <string name="native_wizard_step_nfc">NFC</string>
     <string name="native_wizard_step_qr">QR</string>
     <string name="native_wizard_step_description">Schritt %1$d von %2$d: %3$s</string>
     <string name="native_wizard_step_current">Aktueller Schritt</string>
     <string name="native_wizard_step_pending">Noch nicht erreicht</string>
+    <string name="native_meetup_pin">📍 %1$s</string>
+    <string name="native_meetup_pin_country">📍 %1$s, %2$s</string>
+    <string name="native_writer_home_not_found">Meetup: %1$s</string>
 </resources>

@@ -187,7 +187,10 @@ class FakeLocalEasyAuth(
         savedPasskey = result
     }
     override suspend fun addPasskeyWrap(activity: Activity, displayName: String) = error("UI-scope variant unused")
+    /** When set, `unlockWithPassword` suspends until completed. */
+    var unlockGate: CompletableDeferred<Unit>? = null
     override suspend fun unlockWithPassword(password: String) {
+        unlockGate?.await()
         unlockFailure?.let { throw it }
         unlockedWith += password
     }
@@ -284,8 +287,11 @@ class FakeLocaleController : LocaleController {
 
 class FakeKeyFileWriter : KeyFileWriter {
     var failure: Exception? = null
+    /** When set, `write` suspends until completed. */
+    var gate: CompletableDeferred<Unit>? = null
     val written = mutableListOf<Pair<String, String>>()
     override suspend fun write(uri: String, content: String) {
+        gate?.await()
         failure?.let { throw it }
         written += uri to content
     }

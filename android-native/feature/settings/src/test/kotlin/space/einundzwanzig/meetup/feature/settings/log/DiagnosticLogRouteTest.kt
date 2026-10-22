@@ -2,6 +2,7 @@ package space.einundzwanzig.meetup.feature.settings.log
 
 import android.app.Application
 import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.ComponentActivity
@@ -40,11 +41,13 @@ class DiagnosticLogRouteTest {
     private val app: Application = ApplicationProvider.getApplicationContext()
     private val navigator = BackRecorder()
 
-    private fun show(log: FakeDiagnosticLog) {
+    private fun show(log: FakeDiagnosticLog, writeClip: ((Context, String) -> Unit)? = null) {
         val vm = DiagnosticLogViewModel(log, FakeNip44Probe())
         rule.setContent {
             EinundzwanzigTheme {
-                CompositionLocalProvider(LocalNavigator provides navigator) { DiagnosticLogRoute(vm) }
+                CompositionLocalProvider(LocalNavigator provides navigator) {
+                    if (writeClip == null) DiagnosticLogRoute(vm) else DiagnosticLogRoute(vm, writeClip)
+                }
             }
         }
         rule.waitForIdle()
@@ -119,6 +122,26 @@ class DiagnosticLogRouteTest {
         awaitCopiedSnackbar()
     }
 
+    @Test
+    fun `a clipboard failure shows an error snackbar instead of crashing`() {
+        val log = FakeDiagnosticLog(listOf(entry("INFO", "System", "App 1.7.2")))
+        show(log) { _, _ -> throw RuntimeException("android.os.TransactionTooLargeException") }
+        click(DiagnosticLogTags.COPY)
+        val failed = app.getString(R.string.native_log_copy_failed)
+        rule.waitUntil(3_000) { rule.onAllNodesWithText(failed).fetchSemanticsNodes().isNotEmpty() }
+        assertTrue(rule.onAllNodesWithText(app.getString(R.string.native_log_copied)).fetchSemanticsNodes().isEmpty())
+        rule.onNodeWithTag(DiagnosticLogTags.COPY).assertExists()
+    }
+
+    @Test
+    fun `the share fallback survives a clipboard failure too`() {
+        shadowOf(app).checkActivities(true)
+        val log = FakeDiagnosticLog(listOf(entry("INFO", "System", "App 1.7.2")))
+        show(log) { _, _ -> throw RuntimeException("android.os.TransactionTooLargeException") }
+        click(DiagnosticLogTags.SHARE)
+        val failed = app.getString(R.string.native_log_copy_failed)
+        rule.waitUntil(3_000) { rule.onAllNodesWithText(failed).fetchSemanticsNodes().isNotEmpty() }
+    }
 }
 
 private class BackRecorder : Navigator {

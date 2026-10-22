@@ -26,11 +26,13 @@
     <string name="native_claim_no_key">No key available — claim not possible</string>
     <string name="native_claim_timestamp">Claim error: signer timestamp differs</string>
     <string name="native_claim_error">Claim error: %1$s</string>
-    <string name="native_scanner_publishing">Sending to relays …</string>
     <string name="native_nfc_adapter_unavailable">NFC adapter unavailable</string>
     <string name="native_wizard_step_nfc">NFC</string>
     <string name="native_wizard_step_qr">QR</string>
     <string name="native_wizard_step_description">Step %1$d of %2$d: %3$s</string>
     <string name="native_wizard_step_current">Current step</string>
     <string name="native_wizard_step_pending">Not reached yet</string>
+    <string name="native_meetup_pin">📍 %1$s</string>
+    <string name="native_meetup_pin_country">📍 %1$s, %2$s</string>
+    <string name="native_writer_home_not_found">Meetup: %1$s</string>
 </resources>

@@ -1,5 +1,6 @@
 package space.einundzwanzig.meetup.feature.reputation.verify
 
+import space.einundzwanzig.meetup.feature.reputation.common.platformDisplayName
 import space.einundzwanzig.meetup.feature.reputation.common.nip05DomainLabel
 import space.einundzwanzig.meetup.feature.reputation.common.zapActivityLabel
 import androidx.compose.animation.AnimatedVisibility
@@ -500,7 +501,7 @@ private fun identityDetails(input: LayersInput): List<DetailRow> {
     val nip05 = input.nip05?.takeIf { it.valid }
     if (nip05 != null) rows += DetailRow(nip05.nip05, nip05DomainLabel(nip05.domainKind), true)
     input.platformProofs?.forEach { (key, username) ->
-        val label = TrustLayersEvaluator.platformLabel(key) + if (username.isNotEmpty()) ": @$username" else ""
+        val label = platformDisplayName(key) + if (username.isNotEmpty()) ": @$username" else ""
         rows += DetailRow(label, stringResource(L10nR.string.rlLinked), true)
     }
     if (rows.isEmpty()) {

@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package space.einundzwanzig.meetup.feature.badges.scanner
 
 import android.content.res.Resources
@@ -45,15 +47,15 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -71,7 +73,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.launch
 import space.einundzwanzig.meetup.core.common.dart.DartDateTime
 import space.einundzwanzig.meetup.core.common.dart.toStringAsFixed
 import space.einundzwanzig.meetup.core.navigation.BadgeQrCamera
@@ -82,11 +83,13 @@ import space.einundzwanzig.meetup.core.navigation.NavResults
 import space.einundzwanzig.meetup.core.ui.component.AppContainedLoadingIndicator
 import space.einundzwanzig.meetup.core.ui.component.AppLoadingIndicator
 import space.einundzwanzig.meetup.core.ui.component.AppSnackbarHost
-import space.einundzwanzig.meetup.core.ui.component.AppTopBar
+import space.einundzwanzig.meetup.core.ui.component.AppMediumTopBar
+import space.einundzwanzig.meetup.core.ui.component.AppSnackbarController
+import space.einundzwanzig.meetup.core.ui.component.AppSnackbarControllerEffect
+import space.einundzwanzig.meetup.core.ui.component.LocalAppSnackbarController
 import space.einundzwanzig.meetup.core.ui.component.InfoBanner
 import space.einundzwanzig.meetup.core.ui.component.LocalAppSnackbarHostState
 import space.einundzwanzig.meetup.core.ui.component.Tone
-import space.einundzwanzig.meetup.core.ui.component.showAppSnackbar
 import space.einundzwanzig.meetup.core.ui.haptics.rememberHaptics
 import space.einundzwanzig.meetup.core.ui.theme.Dimens
 import space.einundzwanzig.meetup.core.ui.theme.EinundzwanzigTheme
@@ -110,6 +113,7 @@ import space.einundzwanzig.meetup.feature.badges.common.BadgeTexts
 import space.einundzwanzig.meetup.feature.badges.common.ResourceScanStrings
 import space.einundzwanzig.meetup.feature.badges.common.ShapedIcon
 import space.einundzwanzig.meetup.feature.badges.nfc.NfcReaderModeEffect
+import space.einundzwanzig.meetup.feature.badges.nfc.openNfcSettings
 import space.einundzwanzig.meetup.core.l10n.R as L10nR
 
 /** Test tags of the scanner. */
@@ -124,36 +128,40 @@ object BadgeScannerTags {
     const val SAVING = "badgeScanner.saving"
 }
 
-/** Stateful entry of `BadgeScanner` (spec 02 §2.1). */
+/**
+ * Stateful entry of `BadgeScanner` (spec 02 §2.1). Snackbars go to the app-lifetime
+ * [LocalAppSnackbarController] (Flutter's root messenger), so they survive the `replaceTop` to
+ * the wallet and activity recreation. Without one (tests, previews) a composition-scoped
+ * controller feeds the app or local host; messages still queued when the scanner leaves are then
+ * dropped, including the late co-attendance result.
+ */
 @Composable
 fun BadgeScannerRoute(viewModel: BadgeScannerViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val navigator = LocalNavigator.current
     val appHost = LocalAppSnackbarHostState.current
     val localHost = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-    val res = LocalContext.current.resources
+    val controller = LocalAppSnackbarController.current ?: remember { AppSnackbarController() }.also {
+        AppSnackbarControllerEffect(it, appHost ?: localHost)
+    }
+    val context = LocalContext.current
+    val res = context.resources
     val haptics = rememberHaptics()
     val unknownLabel = stringResource(L10nR.string.verifyUnknownMeetup)
-    SideEffect { viewModel.unknownMeetupLabel = unknownLabel }
 
-    NavResultEffect(NavResults.BadgeQrScanned) { raw -> viewModel.onAction(BadgeScannerAction.QrScanned(raw)) }
+    NavResultEffect(NavResults.BadgeQrScanned) { raw ->
+        viewModel.onAction(BadgeScannerAction.QrScanned(raw, unknownLabel))
+    }
 
-    LaunchedEffect(viewModel) {
+    LaunchedEffect(viewModel, controller) {
         viewModel.events.collect { event ->
             when (event) {
                 BadgeScannerEvent.OpenCamera -> navigator.navigate(BadgeQrCamera)
                 BadgeScannerEvent.OpenWallet -> navigator.replaceTop(BadgeWallet)
                 BadgeScannerEvent.Close -> navigator.back()
+                BadgeScannerEvent.OpenNfcSettings -> openNfcSettings(context)
                 is BadgeScannerEvent.Haptic -> if (event.success) haptics.success() else haptics.error()
-                is BadgeScannerEvent.Snackbar -> {
-                    val spec = snackbarSpec(res, event.kind)
-                    if (appHost != null) {
-                        viewModel.showOnAppHost(appHost, spec.message, spec.tone, spec.durationMillis)
-                    } else {
-                        scope.launch { localHost.showAppSnackbar(spec.message, spec.tone, spec.durationMillis) }
-                    }
-                }
+                is BadgeScannerEvent.Snackbar -> controller.show(snackbarSpec(res, event.kind))
             }
         }
     }
@@ -161,17 +169,32 @@ fun BadgeScannerRoute(viewModel: BadgeScannerViewModel = hiltViewModel()) {
     if (state.nfcEnabled) {
         NfcReaderModeEffect(
             active = state.readingNfc,
-            onTag = { viewModel.onAction(BadgeScannerAction.NfcTagDiscovered(it)) },
+            onTag = { viewModel.onAction(BadgeScannerAction.NfcTagDiscovered(it, unknownLabel)) },
             onError = { viewModel.onAction(BadgeScannerAction.NfcSessionFailed(it)) },
         )
     }
 
     BadgeScannerScreen(
         state = state,
-        onAction = viewModel::onAction,
+        onAction = { action ->
+            if (action is BadgeScannerAction.CoAttendanceAnswered && action.publish) {
+                // Resolve both texts now: the result arrives after this screen (and maybe the
+                // activity) is gone, so the sink keeps only strings and the app-lifetime queue.
+                val published = snackbarSpec(res, ScannerSnackbar.CO_ATTENDANCE_PUBLISHED)
+                val failed = snackbarSpec(res, ScannerSnackbar.CO_ATTENDANCE_FAILED)
+                val sink = ScannerResultSink { kind ->
+                    controller.show(if (kind == ScannerSnackbar.CO_ATTENDANCE_PUBLISHED) published else failed)
+                }
+                viewModel.onAction(action.copy(resultSink = sink))
+            } else {
+                viewModel.onAction(action)
+            }
+        },
         snackbarHost = { if (appHost == null) AppSnackbarHost(localHost) },
     )
 }
+
+private fun AppSnackbarController.show(spec: SnackbarSpec) = show(spec.message, spec.tone, spec.durationMillis)
 
 /** Stateless scanner: scanner view or confirmation view, plus dialogs. */
 @Composable
@@ -181,12 +204,14 @@ fun BadgeScannerScreen(
     modifier: Modifier = Modifier,
     snackbarHost: @Composable () -> Unit = {},
 ) {
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
-        modifier = modifier,
+        modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            AppTopBar(
+            AppMediumTopBar(
                 title = stringResource(L10nR.string.verifyScanBadge),
                 onBack = { onAction(BadgeScannerAction.Close) },
+                scrollBehavior = scrollBehavior,
             )
         },
         snackbarHost = snackbarHost,
@@ -514,7 +539,6 @@ private fun CoAttendanceDialog(onAction: (BadgeScannerAction) -> Unit) {
 private fun BusyDialog(kind: BusyKind) {
     val label = when (kind) {
         BusyKind.LOCATING -> stringResource(R.string.native_scanner_locating)
-        BusyKind.PUBLISHING -> stringResource(R.string.native_scanner_publishing)
     }
     Dialog(
         onDismissRequest = {},

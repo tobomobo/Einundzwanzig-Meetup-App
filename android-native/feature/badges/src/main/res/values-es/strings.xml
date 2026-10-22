@@ -26,11 +26,13 @@
     <string name="native_claim_no_key">No hay clave — no se puede reclamar</string>
     <string name="native_claim_timestamp">Error de reclamación: la marca de tiempo del firmante no coincide</string>
     <string name="native_claim_error">Error de reclamación: %1$s</string>
-    <string name="native_scanner_publishing">Enviando a los relays …</string>
     <string name="native_nfc_adapter_unavailable">Adaptador NFC no disponible</string>
     <string name="native_wizard_step_nfc">NFC</string>
     <string name="native_wizard_step_qr">QR</string>
     <string name="native_wizard_step_description">Paso %1$d de %2$d: %3$s</string>
     <string name="native_wizard_step_current">Paso actual</string>
     <string name="native_wizard_step_pending">Aún no alcanzado</string>
+    <string name="native_meetup_pin">📍 %1$s</string>
+    <string name="native_meetup_pin_country">📍 %1$s, %2$s</string>
+    <string name="native_writer_home_not_found">Meetup: %1$s</string>
 </resources>

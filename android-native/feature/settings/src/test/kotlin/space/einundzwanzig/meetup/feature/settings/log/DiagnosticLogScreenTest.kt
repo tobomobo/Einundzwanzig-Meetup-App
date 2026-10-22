@@ -17,6 +17,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import space.einundzwanzig.meetup.core.ui.theme.EinundzwanzigTheme
 import space.einundzwanzig.meetup.feature.settings.R
 import space.einundzwanzig.meetup.feature.settings.entry
@@ -58,6 +59,15 @@ class DiagnosticLogScreenTest {
     fun `the whole log is one selectable text, so a selection can span every line`() {
         show(DiagnosticLogUiState(entries = listOf(entry("WARN", "Chat", "a", time), entry("SEC", "Signer", "b", time))))
         rule.onNodeWithTag(DiagnosticLogTags.LIST).assertTextEquals("${hhmmss()}  WARN   Chat: a\n${hhmmss()}  SEC    Signer: b")
+    }
+
+    @Test
+    @Config(qualifiers = "en")
+    fun `the log screen stays German in English like Flutter (F44)`() {
+        show(DiagnosticLogUiState(entries = listOf(entry("INFO", "System", "App 1.7.2", time))))
+        rule.onNodeWithText("Diagnose-Log").assertExists()
+        rule.onNodeWithTag(DiagnosticLogTags.COUNT).assertTextEquals("1 Einträge")
+        rule.onNodeWithText("Log leeren").assertExists()
     }
 
     @Test

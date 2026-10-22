@@ -66,7 +66,7 @@ internal fun BoundedDatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
             TextButton(onClick = { state.selectedDateMillis?.let { onPicked(it.utcDate()) } ?: onDismiss() }) {
-                Text(stringResource(android.R.string.ok))
+                Text(stringResource(L10nR.string.actionOk))
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(L10nR.string.actionCancel)) } },
@@ -108,7 +108,7 @@ internal fun BoundedDateRangePickerDialog(
                         onPicked(from, state.selectedEndDateMillis?.utcDate() ?: from)
                     }
                 },
-            ) { Text(stringResource(android.R.string.ok)) }
+            ) { Text(stringResource(L10nR.string.actionOk)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(L10nR.string.actionCancel)) } },
     ) {
@@ -132,7 +132,7 @@ internal fun TimePickerDialog(initial: LocalTime, onDone: (LocalTime?) -> Unit) 
         onDismissRequest = { onDone(null) },
         confirmButton = {
             TextButton(onClick = { onDone(LocalTime.of(state.hour, state.minute)) }) {
-                Text(stringResource(android.R.string.ok))
+                Text(stringResource(L10nR.string.actionOk))
             }
         },
         dismissButton = { TextButton(onClick = { onDone(null) }) { Text(stringResource(L10nR.string.actionCancel)) } },

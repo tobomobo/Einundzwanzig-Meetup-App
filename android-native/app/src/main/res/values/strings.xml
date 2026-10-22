@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Home-screen widget (spec 14 §3.2). German default identical to the Flutter labels. -->
+    <string name="native_widget_label">21Meetup</string>
+    <string name="native_widget_description">Bitcoin-Netzwerk &amp; nächstes Meetup</string>
+    <string name="native_widget_logo">Einundzwanzig</string>
+    <string name="native_widget_refresh">Aktualisieren</string>
+    <string name="native_widget_bitcoin">BITCOIN</string>
+    <string name="native_widget_block">BLOCK</string>
+    <string name="native_widget_price">PREIS</string>
+    <string name="native_widget_moscow">MOSCOW</string>
+    <string name="native_widget_fees">FEES L·M·H</string>
+    <string name="native_widget_hashrate">HASHRATE</string>
+    <string name="native_widget_supply">SUPPLY</string>
+    <string name="native_widget_difficulty">DIFFICULTY</string>
+    <string name="native_widget_next_meetup">NÄCHSTES MEETUP</string>
+    <string name="native_widget_no_meetup">Kein Home-Meetup</string>
+    <string name="native_widget_choose_in_app">In der App wählen</string>
+    <string name="native_widget_today">Heute</string>
+    <string name="native_widget_tomorrow">Morgen</string>
+    <plurals name="native_widget_in_days">
+        <item quantity="one">in %1$d Tag</item>
+        <item quantity="other">in %1$d Tagen</item>
+    </plurals>
+    <string name="native_widget_news">NEWS</string>
+    <string name="native_widget_news_new">NEU</string>
+    <string name="native_widget_updated">Stand %1$s</string>
+    <!-- App shell -->
+    <string name="native_shell_scan">Scannen</string>
+    <!-- Flutter data import still running after the 20 s splash (spec 14 §4.7) -->
+    <string name="native_migration_wait_title">Daten werden übernommen…</string>
+    <string name="native_migration_wait_body">Deine Daten aus der bisherigen App werden übernommen. Das kann auf älteren Geräten etwas dauern. Bitte die App nicht schließen.</string>
+</resources>

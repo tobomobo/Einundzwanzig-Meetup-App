@@ -26,12 +26,15 @@ Outgoing navigation: `MeetupCalendar()` (empty state), `ReputationQr` (share she
 
 - **Wallet** (`WalletScreen` + `WalletViewModel`): large flexible app bar `BADGE WALLET (n)` with
   map, compact/normal, former collections, duplicate cleanup and share actions (visibility rules
-  of §2.1); search (≥ 6 badges, cleared when the field disappears), connected "Nach Meetup" /
-  "Nach Jahr" toggle group, collection cards or collapsible year sections with normal/compact
-  cards, `#n` numbering by object identity. States: loading (store not read yet), empty
+  of §2.1); search (≥ 6 badges, cleared when the field disappears) and a "Nach Meetup" /
+  "Nach Jahr" pair of `ToggleButton`s with `ButtonGroupDefaults` connected shapes, both pinned
+  above the scrolling list as in Flutter, collection cards or collapsible year sections with normal/compact
+  cards, `#n` numbering by object identity. Badge cards announce one merged description (name,
+  date, `#n`, organizer / unverified marker) and clear their children's semantics. States: loading (store not read yet), empty
   (`walletNoBadges`, `emptyFindMeetup`), unreadable (`badgesUnreadableBody`, no actions), no
   results. Share sheet (text / QR / JSON with clipboard fallback), former collections sheet with
-  merge confirmation, cleanup dialog. Cleanup and merge call
+  merge confirmation, cleanup dialog. Sheet choices play the sheet's hide motion before they are
+  reported. Cleanup and merge call
   `ReputationPublisher.publishInBackground`. Cleanup uses `BadgeRepository.update` (atomic,
   removes exactly the shown objects). Wallet tour (`GuideTour.Wallet`, `WalletTour`).
 - **Collection** (`CollectionScreen` + `CollectionViewModel`): group rebuilt from the live
@@ -80,15 +83,17 @@ CompositionLocalProvider(LocalMeetupCrestSource provides meetupCrestSource) { Na
   covered (collection, details, map), resumed on return, and finished only when the entry is
   popped (`WalletViewModel.onCleared`). A wallet tab left for another tab keeps the tour paused.
 - Search uses a `TextFieldState` owned by the field (no StateFlow round trip for the IME).
-- Badge details: a share without a chooser target shows `repShareError` ("no share target");
+- Badge details: a share without a chooser target shows `repShareError` with the native,
+  localized detail `native_wallet_no_share_target` (Flutter has no such case);
   the world map stays silent as in Flutter and only logs.
 - `Normal`/`Kompakt` tooltips are localized native strings (`native_wallet_view_*`).
 - Collection-card "vor 0 Jahren" quirk (days 360–364) is kept for parity.
 
 ## Tests
 
-`tools/gradlew-locked :feature:wallet:testDebugUnitTest` (87 tests): domain vectors (block,
+`tools/gradlew-locked :feature:wallet:testDebugUnitTest`: domain vectors (block,
 ago labels, share text, JSON checksum `745487f0`, grouping, identity duplicates), ViewModels with
 fakes (wallet, collection, details, world map, crest source), Robolectric Compose UI tests of
 every screen, sheet and dialog, and route tests (`WalletRouteTest`: tour start/pause/resume/finish,
-share-text clipboard fallback, details share error and hash copy).
+share-text clipboard fallback, outgoing NavKeys (collection with query, details index of a
+duplicate, map, QR, calendar), details share error and hash copy).

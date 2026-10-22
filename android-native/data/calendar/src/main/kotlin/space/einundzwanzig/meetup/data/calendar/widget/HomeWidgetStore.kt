@@ -1,5 +1,7 @@
 package space.einundzwanzig.meetup.data.calendar.widget
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import java.time.Instant
 
 /**
@@ -16,6 +18,13 @@ interface HomeWidgetStore {
 
     /** Current values with the provider's defaults. */
     suspend fun snapshot(): HomeWidgetSnapshot
+
+    /**
+     * [snapshot] now and again after every change of the widget file (any writer, any process
+     * component), conflated. The Glance composition collects it so a running session shows new
+     * values (Glance calls `provideGlance` only once per session). The default emits once.
+     */
+    fun snapshots(): Flow<HomeWidgetSnapshot> = flow { emit(snapshot()) }
 
     /**
      * Writes the bitcoin strings (`block`, `priceFiat`, `priceSymbol`, `priceEur`, `moscow`,

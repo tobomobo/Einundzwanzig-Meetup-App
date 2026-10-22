@@ -27,6 +27,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
@@ -186,7 +188,17 @@ fun OnboardingBackground(subtle: Boolean, modifier: Modifier = Modifier, content
                 .height(500.dp)
                 .offset(y = (-80).dp)
                 .alpha(glow)
-                .background(Brush.radialGradient(listOf(primary.copy(alpha = 0.08f), Color.Transparent))),
+                // Flutter `RadialGradient(center: topCenter, radius: 1.0)`: centred on the top edge,
+                // radius = the box's shortest side, so the glow fades down from the top.
+                .drawBehind {
+                    drawRect(
+                        Brush.radialGradient(
+                            listOf(primary.copy(alpha = 0.08f), Color.Transparent),
+                            center = Offset(size.width / 2f, 0f),
+                            radius = size.minDimension,
+                        ),
+                    )
+                },
         )
         content()
     }

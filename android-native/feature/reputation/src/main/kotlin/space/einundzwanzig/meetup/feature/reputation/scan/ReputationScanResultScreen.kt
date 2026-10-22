@@ -95,8 +95,8 @@ import space.einundzwanzig.meetup.data.proofs.zap.ZapStats
 import space.einundzwanzig.meetup.data.reputation.qr.QrParseResult
 import space.einundzwanzig.meetup.data.reputation.qr.ReputationQrData
 import space.einundzwanzig.meetup.data.socialgraph.social.SocialAnalysis
-import space.einundzwanzig.meetup.data.trust.layers.TrustLayersEvaluator
 import space.einundzwanzig.meetup.feature.reputation.R
+import space.einundzwanzig.meetup.feature.reputation.common.platformDisplayName
 import space.einundzwanzig.meetup.feature.reputation.common.EvidenceRow
 import space.einundzwanzig.meetup.feature.reputation.common.LayerLoad
 import space.einundzwanzig.meetup.feature.reputation.common.LiveLayers
@@ -169,7 +169,8 @@ internal fun ReputationScanResultScreen(
                     hasIdentity = false,
                     title = stringResource(L10nR.string.qrSigInvalid),
                     subtitle = qrVerifyMessage(result.message),
-                    version = result.version,
+                    // Flutter _showFailed always passes version 0: no version chip on failures.
+                    version = 0,
                 )
                 QrParseResult.UnknownFormat -> StatusHeader(
                     valid = false,
@@ -446,13 +447,14 @@ private fun PlatformsSection(data: ReputationQrData) {
             val entry = value as? JsonObject
             val username = entry.stringField("u") ?: entry.stringField("username") ?: ""
             val hasSig = (entry.stringField("s") ?: entry.stringField("proof_sig") ?: "").isNotEmpty()
-            val label = if (platform == "other") stringResource(L10nR.string.qrPlatformOther) else TrustLayersEvaluator.platformLabel(platform)
+            val label = platformDisplayName(platform)
             // S-9: the pp signature is never checked; a signature only means "linked (unconfirmed)".
             EvidenceRow(
                 icon = platformIcon(platform),
                 title = label + if (username.isNotEmpty()) ": @$username" else "",
                 subtitle = stringResource(if (hasSig) R.string.native_qrLinkedUnconfirmed else L10nR.string.qrLinkedShort),
-                color = if (hasSig) greenColor else amberColor,
+                // Never success green: nothing here is cryptographically confirmed.
+                color = amberColor,
             )
         }
     }

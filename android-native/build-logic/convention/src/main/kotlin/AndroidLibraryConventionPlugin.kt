@@ -11,7 +11,8 @@ class AndroidLibraryConventionPlugin : Plugin<Project> {
             extensions.configure<LibraryExtension> {
                 namespace = defaultNamespace()
                 configureKotlinAndroid(this)
-                defaultConfig.consumerProguardFiles("consumer-rules.pro")
+                // Optional per module: release builds of the app fail on a missing file.
+                if (file("consumer-rules.pro").exists()) defaultConfig.consumerProguardFiles("consumer-rules.pro")
             }
             dependencies.add("implementation", libs.lib("kotlinx-serialization-json"))
         }

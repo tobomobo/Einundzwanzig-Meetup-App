@@ -1,5 +1,6 @@
 package space.einundzwanzig.meetup.feature.badges.nfc
 
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.nfc.NdefMessage
@@ -35,13 +36,10 @@ enum class NfcAvailability {
     ENABLED,
 }
 
-/** Reads the device's NFC state and opens the NFC settings. */
+/** Reads the device's NFC state. Opening the settings is a UI effect ([openNfcSettings]). */
 interface NfcStatusSource {
     /** Current availability; never prompts. */
     fun availability(): NfcAvailability
-
-    /** Opens `Settings.ACTION_NFC_SETTINGS` (Flutter's button only closed the dialog). */
-    fun openNfcSettings()
 }
 
 internal class AndroidNfcStatusSource @Inject constructor(
@@ -51,17 +49,23 @@ internal class AndroidNfcStatusSource @Inject constructor(
         val adapter = NfcAdapter.getDefaultAdapter(context) ?: return NfcAvailability.NOT_SUPPORTED
         return if (adapter.isEnabled) NfcAvailability.ENABLED else NfcAvailability.DISABLED
     }
+}
 
-    override fun openNfcSettings() {
-        val intent = Intent(Settings.ACTION_NFC_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        try {
-            context.startActivity(intent)
-        } catch (e: Exception) {
-            AppLogger.warn(TAG, "NFC-Einstellungen nicht verfügbar", e)
-            runCatching {
-                context.startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            }
-        }
+/**
+ * Opens `Settings.ACTION_NFC_SETTINGS` from the activity (same task, so back returns to the
+ * scanner/writer); falls back to `ACTION_WIRELESS_SETTINGS`. Flutter's button only closed the dialog.
+ */
+internal fun openNfcSettings(context: Context) {
+    val activity = context.findActivity()
+    fun start(action: String) {
+        val intent = Intent(action)
+        if (activity != null) activity.startActivity(intent) else context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+    try {
+        start(Settings.ACTION_NFC_SETTINGS)
+    } catch (e: ActivityNotFoundException) {
+        AppLogger.warn(TAG, "NFC-Einstellungen nicht verfügbar", e)
+        runCatching { start(Settings.ACTION_WIRELESS_SETTINGS) }
     }
 }
 
@@ -169,7 +173,7 @@ internal class AndroidNfcTagHandle(private val tag: Tag) : NfcTagHandle {
 }
 
 /**
- * Keeps `NfcAdapter.enableReaderMode` (NFC-A/B/V = Flutter's ISO 14443 + ISO 15693) on while
+ * Keeps `NfcAdapter.enableReaderMode` (NFC-A/B/F/V, spec 02 §11; NDEF check stays on) on while
  * [active] and the screen is resumed; tags are delivered on the main thread. Errors starting
  * the session go to [onError]. Only used behind `IssuanceFeatures.NFC_ENABLED`.
  */
@@ -192,7 +196,8 @@ internal fun NfcReaderModeEffect(
                 adapter.enableReaderMode(
                     activity,
                     { tag -> main.post { currentOnTag.value(AndroidNfcTagHandle(tag)) } },
-                    NfcAdapter.FLAG_READER_NFC_A or NfcAdapter.FLAG_READER_NFC_B or NfcAdapter.FLAG_READER_NFC_V,
+                    NfcAdapter.FLAG_READER_NFC_A or NfcAdapter.FLAG_READER_NFC_B or
+                        NfcAdapter.FLAG_READER_NFC_F or NfcAdapter.FLAG_READER_NFC_V,
                     null,
                 )
                 enabled = true

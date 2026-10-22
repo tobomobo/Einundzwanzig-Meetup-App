@@ -4,10 +4,14 @@ import android.content.Context
 import android.os.Looper
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.lifecycle.viewModelScope
@@ -16,6 +20,7 @@ import androidx.navigation3.runtime.result.LocalResultEventBus
 import androidx.navigation3.runtime.result.ResultEventBus
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -40,6 +45,9 @@ import space.einundzwanzig.meetup.core.navigation.Navigator
 import space.einundzwanzig.meetup.core.navigation.NfcTagWriter
 import space.einundzwanzig.meetup.core.navigation.RollingQr
 import space.einundzwanzig.meetup.core.navigation.sendResult
+import space.einundzwanzig.meetup.core.ui.component.AppSnackbarController
+import space.einundzwanzig.meetup.core.ui.component.AppSnackbarControllerEffect
+import space.einundzwanzig.meetup.core.ui.component.LocalAppSnackbarController
 import space.einundzwanzig.meetup.core.ui.component.LocalAppSnackbarHostState
 import space.einundzwanzig.meetup.core.ui.theme.EinundzwanzigTheme
 import space.einundzwanzig.meetup.data.identity.profile.UserProfile
@@ -208,6 +216,48 @@ class BadgeRoutesTest {
     }
 
     @Test
+    fun `co-attendance yes opens the wallet at once and the publish result reaches the app queue after the scanner left`() {
+        val model = scannerViewModel()
+        val appHost = SnackbarHostState()
+        val controller = AppSnackbarController()
+        var scannerShown by mutableStateOf(true)
+        lateinit var bus: ResultEventBus
+        processor.qrResult = { found() }
+        save.publishGate = CompletableDeferred()
+        save.outcomes += SaveOutcome.Saved(badge(), presenceVerified = true, askCoAttendance = true, collection = listOf(badge()))
+        rule.setContent {
+            bus = remember { ResultEventBus() }
+            CompositionLocalProvider(
+                LocalResultEventBus provides bus,
+                LocalNavigator provides navigator,
+                LocalAppSnackbarHostState provides appHost,
+                LocalAppSnackbarController provides controller,
+            ) {
+                AppSnackbarControllerEffect(controller, appHost)
+                EinundzwanzigTheme { if (scannerShown) BadgeScannerRoute(model) }
+            }
+        }
+        rule.runOnIdle { bus.sendResult(NavResults.BadgeQrScanned, "{\"t\":\"B\"}") }
+        rule.waitUntil(5_000) { model.state.value.result is ScanResultUi.Found }
+        rule.onNodeWithTag(BadgeScannerTags.ADD).performScrollTo().performClick()
+        rule.onNodeWithText(context.getString(L10nR.string.caOptInYes)).performClick()
+        rule.waitUntil(5_000) { "replaceTop:BadgeWallet" in navigator.calls }
+        rule.waitUntil(5_000) { appHost.currentSnackbarData != null }
+        assertEquals(context.getString(L10nR.string.verifyBadgeSaved), appHost.currentSnackbarData!!.visuals.message)
+
+        // The scanner leaves (wallet replaced it); the agreed publish still finishes and reports.
+        scannerShown = false
+        rule.waitForIdle()
+        rule.runOnIdle { appHost.currentSnackbarData!!.dismiss() }
+        save.publishGate!!.complete(Unit)
+        rule.waitUntil(5_000) {
+            shadowOf(Looper.getMainLooper()).idle() // the app-scope publish resumes on Dispatchers.Main
+            appHost.currentSnackbarData?.visuals?.message == context.getString(L10nR.string.caPublished)
+        }
+        assertEquals(1, save.published.size)
+    }
+
+    @Test
     fun `scanner back pops`() {
         val model = scannerViewModel()
         rule.setContent {
@@ -276,7 +326,7 @@ class BadgeRoutesTest {
 }
 
 /** Records every navigation call as `"<method>[:<key>]"`. */
-private class RecordingNavigator : Navigator {
+internal class RecordingNavigator : Navigator {
     val calls = mutableListOf<String>()
     private fun name(key: NavKey) = when (key) {
         BadgeWallet -> "BadgeWallet"

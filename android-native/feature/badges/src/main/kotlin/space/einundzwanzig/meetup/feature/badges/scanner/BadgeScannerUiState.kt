@@ -21,8 +21,7 @@ interface ScannerLabels {
  * @property processing a scan is being verified (block height, registry, claim signing).
  * @property readingNfc NFC reader mode is on.
  * @property result non-null = confirmation view (`_success == true`).
- * @property busy the blocking indicator of `_confirmSaveBadge` (locating) or of the
- *   co-attendance publish; `null` = not shown.
+ * @property busy the blocking indicator of `_confirmSaveBadge` (locating); `null` = not shown.
  */
 data class BadgeScannerUiState(
     val nfcEnabled: Boolean = false,
@@ -38,9 +37,15 @@ data class BadgeScannerUiState(
 enum class BusyKind {
     /** Location check + save (`_confirmSaveBadge`). */
     LOCATING,
+}
 
-    /** Co-attendance publish to the relays. */
-    PUBLISHING,
+/**
+ * Receives a result that arrives after the scanner is gone (the co-attendance publish). The
+ * route backs it with the app-lifetime `AppSnackbarController` and pre-resolved strings, so it
+ * holds no activity, composition or `SnackbarHostState`. Called on any thread.
+ */
+fun interface ScannerResultSink {
+    fun show(kind: ScannerSnackbar)
 }
 
 /** Typed reason of [ScanStatus.Rejected] that the UI localizes (spec 02 §2.9). */
@@ -125,9 +130,10 @@ sealed interface ScannerDialog {
 /** User and system input of the scanner. */
 sealed interface BadgeScannerAction {
     data object ScanQrClicked : BadgeScannerAction
-    data class QrScanned(val raw: String) : BadgeScannerAction
+    /** [unknownMeetupLabel]: the screen's `verifyUnknownMeetup` in the current locale. */
+    data class QrScanned(val raw: String, val unknownMeetupLabel: String? = null) : BadgeScannerAction
     data object ScanNfcClicked : BadgeScannerAction
-    data class NfcTagDiscovered(val tag: NfcTagHandle) : BadgeScannerAction
+    data class NfcTagDiscovered(val tag: NfcTagHandle, val unknownMeetupLabel: String? = null) : BadgeScannerAction
     data class NfcSessionFailed(val detail: String) : BadgeScannerAction
     data object NfcDialogScanQr : BadgeScannerAction
     data object NfcOpenSettings : BadgeScannerAction
@@ -135,7 +141,8 @@ sealed interface BadgeScannerAction {
     data object OpenWallet : BadgeScannerAction
     data object Close : BadgeScannerAction
     data object DismissDialog : BadgeScannerAction
-    data class CoAttendanceAnswered(val publish: Boolean) : BadgeScannerAction
+    /** [resultSink] receives `caPublished`/`caPublishFailed` after the scanner was replaced. */
+    data class CoAttendanceAnswered(val publish: Boolean, val resultSink: ScannerResultSink? = null) : BadgeScannerAction
 }
 
 /** One-shot effects. */
@@ -151,6 +158,9 @@ sealed interface BadgeScannerEvent {
 
     /** Show a snackbar on the app host (it outlives the screen). */
     data class Snackbar(val kind: ScannerSnackbar) : BadgeScannerEvent
+
+    /** Open the system NFC settings from the activity (same task). */
+    data object OpenNfcSettings : BadgeScannerEvent
 
     /** Haptic feedback for a scan result. */
     data class Haptic(val success: Boolean) : BadgeScannerEvent

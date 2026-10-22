@@ -1,6 +1,7 @@
 package space.einundzwanzig.meetup.feature.reputation.verify
 
 import androidx.compose.runtime.Immutable
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.assisted.Assisted
@@ -51,6 +52,7 @@ internal sealed interface ReputationVerifyAction {
 internal class ReputationVerifyViewModel @AssistedInject constructor(
     @Assisted initialInput: String?,
     private val source: ReputationDataSource,
+    private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
     @AssistedFactory
@@ -58,24 +60,31 @@ internal class ReputationVerifyViewModel @AssistedInject constructor(
         fun create(initialInput: String?): ReputationVerifyViewModel
     }
 
-    private val _state = MutableStateFlow(ReputationVerifyUiState())
+    // The typed text survives process death (e.g. while the user copies a string elsewhere).
+    private val _state = MutableStateFlow(ReputationVerifyUiState(input = savedStateHandle[KEY_INPUT] ?: ""))
     val state: StateFlow<ReputationVerifyUiState> = _state.asStateFlow()
 
     private var job: Job? = null
 
     init {
         if (!initialInput.isNullOrEmpty()) {
-            _state.update { it.copy(input = initialInput) }
+            // After process death the restored text wins over the navigation argument.
+            if (savedStateHandle.get<String>(KEY_INPUT) == null) setInput(initialInput)
             verify()
         }
     }
 
+    private fun setInput(text: String) {
+        savedStateHandle[KEY_INPUT] = text
+        _state.update { it.copy(input = text) }
+    }
+
     fun onAction(action: ReputationVerifyAction) {
         when (action) {
-            is ReputationVerifyAction.InputChanged -> _state.update { it.copy(input = action.text) }
+            is ReputationVerifyAction.InputChanged -> setInput(action.text)
             ReputationVerifyAction.Verify -> verify()
             is ReputationVerifyAction.Paste -> if (!action.text.isNullOrEmpty()) {
-                _state.update { it.copy(input = action.text) }
+                setInput(action.text)
                 verify()
             }
         }
@@ -104,5 +113,9 @@ internal class ReputationVerifyViewModel @AssistedInject constructor(
                 loadLiveLayers(source, hex) { change -> _state.update { it.copy(layers = change(it.layers)) } }
             }
         }
+    }
+
+    internal companion object {
+        const val KEY_INPUT = "input"
     }
 }
