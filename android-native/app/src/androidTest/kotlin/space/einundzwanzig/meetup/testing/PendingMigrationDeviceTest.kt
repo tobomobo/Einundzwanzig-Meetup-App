@@ -1,5 +1,6 @@
 package space.einundzwanzig.meetup.testing
 
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.graphics.Bitmap
 import android.os.SystemClock
 import android.system.Os
@@ -72,14 +73,39 @@ class PendingMigrationDeviceTest {
 
     private fun awaitText(text: String): AccessibilityNodeInfo {
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
-        val deadline = SystemClock.elapsedRealtime() + 10_000
-        while (SystemClock.elapsedRealtime() < deadline) {
-            // Compose exposes virtual children but does not implement the provider's text-search
-            // operation on every version. Traverse the real accessibility tree, like UiAutomator.
-            findText(automation.rootInActiveWindow, text)?.let { return it }
-            SystemClock.sleep(100)
+        val previousFlags = automation.serviceInfo.flags
+        automation.serviceInfo = automation.serviceInfo.apply {
+            flags = flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
+                AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
         }
-        throw AssertionError("Real Activity did not expose '$text' within 10 seconds")
+        try {
+            val deadline = SystemClock.elapsedRealtime() + 10_000
+            while (SystemClock.elapsedRealtime() < deadline) {
+                // A fresh API 26 AVD shows the system's first immersive-mode explanation over
+                // diagnostics. Confirm that specific window, as a user would; keep the deadline
+                // and the actual app accessibility assertions unchanged.
+                automation.windows.firstOrNull {
+                    it.title?.toString() == "ImmersiveModeConfirmation" ||
+                        it.root?.findResource("com.android.systemui:id/immersive_cling_title") != null
+                }?.root?.findResource("android:id/ok", "com.android.systemui:id/ok")
+                    ?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                // Compose exposes virtual children but does not implement the provider's text-search
+                // operation on every version. Traverse the real accessibility tree, like UiAutomator.
+                findText(automation.rootInActiveWindow, text)?.let { return it }
+                SystemClock.sleep(100)
+            }
+            throw AssertionError("Real Activity did not expose '$text' within 10 seconds")
+        } finally {
+            automation.serviceInfo = automation.serviceInfo.apply { flags = previousFlags }
+        }
+    }
+
+    private fun AccessibilityNodeInfo.findResource(vararg ids: String): AccessibilityNodeInfo? {
+        if (viewIdResourceName in ids && isVisibleToUser) return this
+        for (index in 0 until childCount) {
+            getChild(index)?.findResource(*ids)?.let { return it }
+        }
+        return null
     }
 
     private fun findText(node: AccessibilityNodeInfo?, text: String): AccessibilityNodeInfo? {

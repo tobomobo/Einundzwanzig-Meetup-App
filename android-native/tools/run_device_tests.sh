@@ -20,6 +20,7 @@ avd_name="$("$adb" -s "$serial" emu avd name | tr -d '\r' | head -1)"
 mkdir -p "$artifact_dir"
 wifi_before=""
 data_before=""
+restore_adb_shell=0
 finish() {
   local status=$?
   if (( status != 0 )); then
@@ -31,6 +32,10 @@ finish() {
   "$adb" -s "$serial" pull "/sdcard/Android/data/$package/files/device-failures" "$artifact_dir/failures" 2>/dev/null || true
   if [[ "$wifi_before" == 1 ]]; then "$adb" -s "$serial" shell svc wifi enable || true; fi
   if [[ "$data_before" == 1 ]]; then "$adb" -s "$serial" shell svc data enable || true; fi
+  if (( restore_adb_shell )); then
+    "$adb" -s "$serial" unroot || true
+    "$adb" -s "$serial" wait-for-device || true
+  fi
   return "$status"
 }
 trap finish EXIT
@@ -40,6 +45,21 @@ tools/gradlew-locked ":app:assemble${task_variant}" ":app:assemble${task_variant
 "$adb" -s "$serial" install -r "app/build/outputs/apk/androidTest/$variant/app-$variant-androidTest.apk"
 # Exercise bundled/offline behavior and prevent startup services from contacting public relays.
 # Restore only the connectivity that this dedicated AVD had before the test run.
+# The API 26 google_apis image denies CHANGE_WIFI_STATE to UID 2000, so svc kills
+# itself with exit 137. Elevate only the dedicated emulator's ADB daemon for setup;
+# instrumentation and the app still execute with their normal application UIDs.
+# Restore the daemon's original shell mode after restoring connectivity in finish.
+if [[ "$("$adb" -s "$serial" shell getprop ro.build.version.sdk | tr -d '\r')" == 26 ]] &&
+   [[ "$("$adb" -s "$serial" shell id -u | tr -d '\r')" != 0 ]]; then
+  echo "Preparing API 26 emulator connectivity with privileged ADB"
+  restore_adb_shell=1
+  "$adb" -s "$serial" root
+  "$adb" -s "$serial" wait-for-device
+  [[ "$("$adb" -s "$serial" shell id -u | tr -d '\r')" == 0 ]] || {
+    echo "API 26 connectivity setup requires a rootable test AVD" >&2
+    exit 1
+  }
+fi
 echo "Reading emulator Wi-Fi state"
 wifi_before="$("$adb" -s "$serial" shell settings get global wifi_on | tr -d '\r')"
 echo "Reading emulator mobile-data state"
