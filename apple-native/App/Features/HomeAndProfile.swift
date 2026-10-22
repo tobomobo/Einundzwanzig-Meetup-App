@@ -57,6 +57,7 @@ struct OnboardingView: View {
 
 struct HomeView: View {
     @Environment(AppStore.self) private var store
+    @Environment(BadgeStore.self) private var wallet
     private let columns = [GridItem(.adaptive(minimum: 155), spacing: 16)]
 
     var body: some View {
@@ -138,11 +139,19 @@ struct HomeView: View {
                 NavigationLink(value: AppRoute.glossary) { Image(systemName: "questionmark.circle").font(.title3) }
                     .accessibilityLabel("nav.glossary")
             }
-            Text("home.greeting \(store.profile.nickname)").font(.largeTitle.bold())
+            HStack(spacing: 14) {
+                ProfilePictureView(allowsLocalPicture: true, size: 52)
+                Text("home.greeting \(store.profile.nickname)").font(.largeTitle.bold())
+            }
                 .fixedSize(horizontal: false, vertical: true)
             Text("home.tagline").font(.title3).foregroundStyle(.secondary)
             NavigationLink(value: AppRoute.reputation) {
-                Label("reputation.unavailable", systemImage: "shield.lefthalf.filled").font(.caption.weight(.semibold))
+                Label {
+                    if wallet.walletLoaded, !wallet.walletUnreadable, wallet.publicKey == store.identity.publicKey {
+                        HStack { Text("Trust score"); Text(wallet.trust.total, format: .number.precision(.fractionLength(1))) }
+                    } else { Text("Unlock to show reputation") }
+                } icon: { Image(systemName: "shield.lefthalf.filled") }
+                    .font(.caption.weight(.semibold)).accessibilityElement(children: .combine)
                     .padding(.horizontal, 12).padding(.vertical, 8).background(.background.opacity(0.8), in: Capsule())
             }.buttonStyle(.plain)
         }
@@ -178,7 +187,7 @@ struct FavoriteMeetupCard: View {
                 }
                 HStack {
                     NavigationLink("nav.events", value: AppRoute.events(meetup.id)).buttonStyle(.bordered)
-                    NavigationLink(value: AppRoute.unavailable(.chat)) { Label("nav.chat", systemImage: "bubble.left.and.bubble.right") }.buttonStyle(.bordered)
+                    NavigationLink { NativeChatDirectoryView(meetupID: meetup.id) } label: { Label("nav.chat", systemImage: "bubble.left.and.bubble.right") }.buttonStyle(.bordered)
                 }
             }
         }
@@ -198,12 +207,20 @@ struct ProfileEditView: View {
     var body: some View {
         Form {
             Section("profile.local") {
+                HStack { Spacer(); ProfilePictureView(size: 76); Spacer() }
                 TextField("profile.nickname", text: $nickname).textContentType(.nickname).accessibilityIdentifier("profile.editNickname")
                 TextField("Full name", text: $fullName).textContentType(.name).accessibilityIdentifier("profile.fullName")
                 TextField("profile.npub.optional", text: $npub).autocorrectionDisabled()
                 TextField("Telegram handle", text: $telegramHandle).autocorrectionDisabled()
                 TextField("Twitter handle", text: $twitterHandle).autocorrectionDisabled()
-                TextField("Home meetup", text: $homeMeetupID)
+                NavigationLink {
+                    HomeMeetupPickerView(selection: $homeMeetupID)
+                } label: {
+                    LabeledContent("Home meetup") {
+                        Text(store.meetups.first(where: { $0.id == homeMeetupID })?.name ?? homeMeetupID)
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 NavigationLink("Choose favorite meetups") { MeetupDirectoryView() }
                 Text("profile.public.body").font(.caption).foregroundStyle(.secondary)
             }
@@ -213,7 +230,7 @@ struct ProfileEditView: View {
                 NavigationLink("integration.proofs") { TrustProofsView() }
                 NavigationLink("integration.humanity") { TrustProofsView() }
             }
-            Button("action.save") { if store.saveProfile(nickname: nickname, npub: npub, fullName: fullName, homeMeetupID: homeMeetupID, telegramHandle: telegramHandle, twitterHandle: twitterHandle) { dismiss() } }
+            Button("action.save") { if store.saveProfile(nickname: nickname, npub: npub, fullName: fullName, homeMeetupID: homeMeetupID, favoriteMeetupIDs: UserContinuity.ordered(([homeMeetupID].filter { !$0.isEmpty }) + store.preferences.favoriteIDs.sorted()), telegramHandle: telegramHandle, twitterHandle: twitterHandle) { dismiss() } }
                 .disabled(nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .formStyle(.grouped)
@@ -222,6 +239,42 @@ struct ProfileEditView: View {
             guard !loaded else { return }; loaded = true
             nickname = store.profile.nickname; npub = store.profile.npub; fullName = store.profile.fullName
             homeMeetupID = store.profile.homeMeetupID; telegramHandle = store.profile.telegramHandle; twitterHandle = store.profile.twitterHandle
+        }
+    }
+}
+
+struct HomeMeetupPickerView: View {
+    @Environment(AppStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @Binding var selection: String
+    @State private var search = ""
+    var body: some View {
+        List {
+            ForEach(store.meetups.filter {
+                search.isEmpty || ($0.name + " " + $0.city + " " + $0.country).localizedCaseInsensitiveContains(search)
+            }.sorted { $0.city.localizedStandardCompare($1.city) == .orderedAscending }) { meetup in
+                Button {
+                    selection = meetup.id
+                    dismiss()
+                } label: {
+                    HStack {
+                        MeetupAvatar(meetup: meetup, size: 36)
+                        VStack(alignment: .leading) {
+                            Text(meetup.name)
+                            Text(meetup.city + " · " + meetup.country).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if selection == meetup.id { Image(systemName: "checkmark").foregroundStyle(Color.accentColor) }
+                    }
+                }.buttonStyle(.plain)
+            }
+        }
+        .searchable(text: $search)
+        .navigationTitle("Choose your home meetup")
+        .overlay {
+            if store.meetups.isEmpty {
+                ContentUnavailableView("state.notFound", systemImage: "person.3", description: Text("home.favorites.body"))
+            }
         }
     }
 }

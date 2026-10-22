@@ -15,6 +15,7 @@ let package = Package(
     targets: [
         .target(name: "MeetupCore"),
         .target(name: "MeetupNostr", dependencies: [
+            "MeetupCore",
             .product(name: "P256K", package: "swift-secp256k1"),
             .product(name: "CryptoSwift", package: "CryptoSwift")
         ]),

@@ -428,6 +428,7 @@ final class AppStore {
         do {
             try await identity.reset()
             try learning.reset()
+            try ProfilePictureStore.resetFiles(in: directory)
             #if os(iOS)
             try KeychainStore.delete(account: "local-public-profile-v1")
             #endif

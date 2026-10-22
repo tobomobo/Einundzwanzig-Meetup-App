@@ -141,7 +141,7 @@ struct EventDetailView: View {
             Section("event.actions") {
                 NativeCalendarButton(event: event)
                 if let url = event.url { Link("event.openPortal", destination: url); ShareLink(item: url) }
-                NavigationLink("nav.chat") { NativeChatDirectoryView() }
+                NavigationLink("nav.chat") { NativeChatDirectoryView(meetupID: event.meetupID) }
                 if let id = Int(event.id.replacingOccurrences(of: "portal-", with: "")) {
                     PortalRSVPView(eventID: id)
                 } else if let address = event.nostrAddress {

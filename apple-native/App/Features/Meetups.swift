@@ -227,7 +227,7 @@ struct MeetupDetailView: View {
             Section("resource.links") {
                 if let url = meetup.portalURL { Link("resource.portal", destination: url); ShareLink(item: url) }
                 if let url = meetup.telegramURL { Link("resource.telegram", destination: url) }
-                NavigationLink("nav.chat", value: AppRoute.unavailable(.chat))
+                NavigationLink("nav.chat") { NativeChatDirectoryView(meetupID: meetup.id) }
             }
         }
         .navigationTitle(meetup.city)
