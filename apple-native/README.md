@@ -40,17 +40,36 @@ xcodebuild -project apple-native/Einundzwanzig.xcodeproj -scheme Einundzwanzig \
 
 Use `-sdk iphoneos -destination 'generic/platform=iOS'` for the device-only VisionKit path and `-sdk macosx -destination 'platform=macOS'` for Mac. Use **Upgrade** instead of Debug to compile with the original Flutter app ID (`dev.einundzwanzig.einundzwanzigMeetupApp`). Debug/Release retain `space.einundzwanzig.meetup.apple` for installation alongside Flutter.
 
+For the simulator UI suite, build and verify the local test signature first; this uses no developer certificate or device provisioning.
+
 ```sh
+xcodebuild build-for-testing \
+  -project apple-native/Einundzwanzig.xcodeproj \
+  -scheme Einundzwanzig -configuration Debug \
+  -onlyUsePackageVersionsFromResolvedFile -skipPackagePluginValidation \
+  -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+  -derivedDataPath /tmp/einundzwanzig-ui-derived-data \
+  CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY=- \
+  CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
+  CODE_SIGN_ENTITLEMENTS=Configuration/SimulatorUITests.entitlements
+python3 apple-native/Scripts/validate_project.py \
+  --verify-simulator-app /tmp/einundzwanzig-ui-derived-data/Build/Products/Debug-iphonesimulator/Einundzwanzig.app
+
 simulator_id=$(python3 apple-native/Scripts/select_simulator.py)
-xcodebuild test -project apple-native/Einundzwanzig.xcodeproj -scheme Einundzwanzig \
-  -configuration Debug -onlyUsePackageVersionsFromResolvedFile -skipPackagePluginValidation \
+xcodebuild test-without-building \
+  -project apple-native/Einundzwanzig.xcodeproj \
+  -scheme Einundzwanzig -configuration Debug \
+  -onlyUsePackageVersionsFromResolvedFile -skipPackagePluginValidation \
   -sdk iphonesimulator -destination "platform=iOS Simulator,id=$simulator_id" \
-  -derivedDataPath /tmp/e21-ui-tests -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO
+  -derivedDataPath /tmp/einundzwanzig-ui-derived-data \
+  -resultBundlePath /tmp/einundzwanzig-ui-tests.xcresult \
+  -parallel-testing-enabled NO -test-timeouts-enabled YES \
+  -default-test-execution-time-allowance 180 -maximum-test-execution-time-allowance 240
 ```
 
-The DEBUG-only `--ui-testing` mode isolates files and Keychain service, prohibits legacy Flutter access and replaces relay/HTTP with offline fixtures. `--reset-ui-test-data` clears only this isolated service on the first launch; relaunch preserves the fixture vault. The smoke test uses production identity and wallet controls, proves encrypted persistence/unlock and offline failure, and never publishes publicly.
+The DEBUG-only `--ui-testing` mode isolates files and Keychain service, prohibits legacy Flutter access and replaces relay/HTTP with offline fixtures. `--reset-ui-test-data` clears only this isolated service on the first launch; relaunch preserves the fixture vault. The smoke test exercises production identity and wallet controls, encrypted persistence/unlock and offline failure, and never publishes publicly.
 
-[Apple CI](../.github/workflows/apple-native.yml) runs package/store checks, project/resource validation, simulator/device/Mac unsigned SDK builds, an unsigned Upgrade build and simulator UI tests with an `.xcresult` artifact. At `bf7246b`, all five SDK builds passed: iOS simulator/device, Debug/Release macOS and original-ID Upgrade. The same run passed 125 XCTest cases (one optional skip, including three Network.framework loopback tests), 69 protocol tests and actual IdentityStore/BadgeStore/AppStore suites (8/9/24) on Mac. **Simulator UI acceptance remains open:** all three tests were blocked before launch because the embedded widget lacked `CFBundleName`. The widget metadata correction and validator guard are committed in `7018e48`; installation and UI execution require a fresh CI run. Unsigned builds do not establish signed device or installed-Flutter upgrade acceptance. [VALIDATION.md](Docs/VALIDATION.md) records exact runs and acceptance limits.
+[Apple CI](../.github/workflows/apple-native.yml) runs package/store checks, project/resource validation, five unsigned SDK builds and simulator UI tests with an `.xcresult` artifact. At `aabaa04`, all five builds passed again: iOS simulator/device, Debug/Release macOS and original-ID Upgrade. The same run passed 125 XCTest cases (one optional skip, including three Network.framework loopback tests), 69 protocol tests and actual IdentityStore/BadgeStore/AppStore suites (8/9/24) on Mac. Widget installation and app launch succeeded after `7018e48`. **Simulator UI acceptance remains open:** all three journeys stopped in onboarding because the unsigned test app's real Keychain operation returned missing entitlement `-34018`. The simulator-only test-signing correction `eb9bff1` adds local ad-hoc signing and a built-bundle entitlement guard; actual Keychain/UI verification requires the next CI run. Production storage and failure handling remain in use. Unsigned builds do not establish signed device or installed-Flutter upgrade acceptance. [VALIDATION.md](Docs/VALIDATION.md) records exact runs and acceptance limits.
 
 ## Storage and security boundaries
 
