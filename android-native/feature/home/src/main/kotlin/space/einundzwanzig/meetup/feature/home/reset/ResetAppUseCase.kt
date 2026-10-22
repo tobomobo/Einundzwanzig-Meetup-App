@@ -23,7 +23,7 @@ import javax.inject.Inject
 /** The full app reset of spec 12 §2.5.12 (`_performReset`). */
 fun interface AppResetter {
     /**
-     * Wipes everything. `false` if a mandatory step (badges, preferences) failed; the caller then
+     * Wipes everything. `false` if a mandatory step (badges, preferences, identity) failed; the caller then
      * stays on Home (Dart: the exception aborted before the navigation to Intro).
      */
     suspend fun reset(): Boolean
@@ -68,7 +68,9 @@ class ResetAppUseCase @Inject constructor(
         if (!mandatory("Einstellungen löschen") { check(store.clear()) { "KeyValueStore.clear() fehlgeschlagen" } }) {
             return@withContext false
         }
-        optional("Identität löschen") { identity.wipeAll() }
+        val identityCleared = mandatory("Identität löschen") {
+            check(identity.wipeAll()) { "Identität konnte nicht vollständig gelöscht werden" }
+        }
         optional("Portal abmelden") { portal.logout() }
         // In-memory state that a store wipe does not reset (mempool README: after the clear).
         optional("Mempool zurücksetzen") {
@@ -83,8 +85,12 @@ class ResetAppUseCase @Inject constructor(
             log.setVerbose(false)
             log.clear()
         }
-        log.info(TAG, "App zurückgesetzt.")
-        true
+        if (identityCleared) {
+            log.info(TAG, "App zurückgesetzt.")
+        } else {
+            log.error(TAG, "Zurücksetzen unvollständig: Identität konnte nicht vollständig gelöscht werden.")
+        }
+        identityCleared
     }
 
     private suspend fun optional(name: String, block: suspend () -> Unit) {

@@ -33,6 +33,7 @@
     <string name="native_backupErrHoldNotPersisted">No se pudo registrar el cambio.</string>
     <string name="native_backupErrClearNotMarked">No se pudo marcar la colección vacía.</string>
     <string name="native_backupErrProofsNotCleared">No se pudieron eliminar las pruebas de la identidad anterior.</string>
+    <string name="native_backupErrProofsNotSaved">No se pudieron guardar algunas pruebas de la copia de seguridad. Los datos ya restaurados se conservan. Carga la copia de seguridad de nuevo.</string>
     <string name="native_backupErrUnreadable">No se pudo leer el archivo.</string>
     <string name="native_backupWorking">Procesando copia de seguridad …</string>
     <string name="native_backupRuleMet">Cumplido</string>

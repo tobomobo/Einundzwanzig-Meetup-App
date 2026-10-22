@@ -71,7 +71,7 @@ sealed interface RestoreOutcome {
      *
      * @property badges number of badge entries in the file.
      * @property nostrKey the file carried a local key (`version >= 2 && nostr.has_key`).
-     * @property platformProofs raw number of platform-proof entries in the file, `null` if none.
+     * @property platformProofs number of valid platform-proof entries successfully written, `null` if none.
      * @property humanity the file carried a verified humanity proof (now pending re-verification).
      */
     data class Restored(
@@ -122,6 +122,12 @@ sealed interface RestoreError {
     /** `backupErrProofsNotCleared`. */
     data object ProofsNotCleared : RestoreError {
         override val german: String = "Die Nachweise der bisherigen Identität konnten nicht abgeräumt werden."
+    }
+
+    /** Proof persistence failed after other sections may already have been applied. */
+    data object ProofsNotSaved : RestoreError {
+        override val german: String =
+            "Einige Nachweise aus dem Backup konnten nicht gespeichert werden. Bereits übernommene Daten bleiben erhalten. Lade das Backup erneut."
     }
 
     /** `backupErrStageFailed(count)`. */

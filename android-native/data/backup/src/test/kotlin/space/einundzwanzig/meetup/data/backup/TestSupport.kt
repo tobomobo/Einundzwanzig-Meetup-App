@@ -128,6 +128,8 @@ internal class FakeAdmins(val list: MutableList<AdminEntry> = mutableListOf()) :
 }
 
 internal class FakeProofs : BackupProofs {
+    var platformWriteSucceeds = true
+    var humanityWriteSucceeds = true
     var platform: List<JsonObject> = emptyList()
     var humanity: JsonObject = DartJson.decode(
         """{"verified":false,"first_zap_at":0,"receipt_event_id":"","checked_at":0}""",
@@ -137,11 +139,13 @@ internal class FakeProofs : BackupProofs {
 
     override suspend fun platformProofEntries(): List<JsonObject> = platform
     override suspend fun replacePlatformProofs(validated: List<JsonElement>): Boolean {
+        if (!platformWriteSucceeds) return false
         val keep = PlatformProofBackup.restorable(validated)
         if (keep.isNotEmpty()) platform = keep.map { it.jsonObject }
         return true
     }
     override suspend fun unionPlatformProofs(validated: List<JsonElement>): Boolean {
+        if (!platformWriteSucceeds) return false
         val union = PlatformProofBackup.union(platform, PlatformProofBackup.restorable(validated))
         if (union.isNotEmpty()) platform = union
         return true
@@ -150,7 +154,7 @@ internal class FakeProofs : BackupProofs {
     override suspend fun humanityVerifiedPref(): Boolean = humanityVerified
     override suspend fun restoreHumanity(proof: JsonObject, additive: Boolean): Boolean {
         restoredHumanity += proof to additive
-        return true
+        return humanityWriteSucceeds
     }
 }
 

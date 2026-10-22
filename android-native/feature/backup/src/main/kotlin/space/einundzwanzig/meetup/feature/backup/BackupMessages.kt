@@ -65,6 +65,7 @@ object BackupMessages {
         RestoreError.HoldNotPersisted -> resources.getString(R.string.native_backupErrHoldNotPersisted)
         RestoreError.ClearNotMarked -> resources.getString(R.string.native_backupErrClearNotMarked)
         RestoreError.ProofsNotCleared -> resources.getString(R.string.native_backupErrProofsNotCleared)
+        RestoreError.ProofsNotSaved -> resources.getString(R.string.native_backupErrProofsNotSaved)
         is RestoreError.StageFailed -> resources.getQuantityString(R.plurals.native_backupErrStageFailed, error.count, error.count)
         RestoreError.KeyUnreadable -> resources.getString(R.string.native_backupErrKeyUnreadable)
         RestoreError.KeyNotTaken -> resources.getString(R.string.native_backupErrKeyNotTaken)

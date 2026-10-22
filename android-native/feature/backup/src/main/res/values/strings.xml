@@ -29,6 +29,7 @@
     <string name="native_backupErrHoldNotPersisted">Der Wechsel konnte nicht festgehalten werden.</string>
     <string name="native_backupErrClearNotMarked">Die leere Sammlung konnte nicht vorgemerkt werden.</string>
     <string name="native_backupErrProofsNotCleared">Die Nachweise der bisherigen Identität konnten nicht abgeräumt werden.</string>
+    <string name="native_backupErrProofsNotSaved">Einige Nachweise aus dem Backup konnten nicht gespeichert werden. Bereits übernommene Daten bleiben erhalten. Lade das Backup erneut.</string>
     <string name="native_backupErrUnreadable">Die Datei konnte nicht gelesen werden.</string>
     <string name="native_backupWorking">Backup wird verarbeitet …</string>
     <string name="native_backupRuleMet">Erfüllt</string>

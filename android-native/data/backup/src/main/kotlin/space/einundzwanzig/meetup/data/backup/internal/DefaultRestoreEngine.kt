@@ -6,6 +6,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import space.einundzwanzig.meetup.core.common.DefaultDispatcher
@@ -247,18 +248,20 @@ internal class DefaultRestoreEngine @Inject constructor(
             shape.adminRegistry?.let { restoreAdmins(it) }
             // `my_vouches` of older backups is ignored on purpose.
 
-            val platformRaw = shape.platformProofs
-            if (platformRaw != null && platformRaw.isNotEmpty()) restorePlatformProofs(platformRaw, additive)
+            val platformProofs = shape.platformProofs?.let(RestorePolicy::validatedPlatformProofs).orEmpty()
+            var proofsSaved = restorePlatformProofs(platformProofs, additive)
 
             val humanityAlready = shape.humanityAlready
             val humanityJson = shape.humanity
             if (!humanityAlready && humanityJson != null && shape.humanityVerified) {
                 if (!proofs.restoreHumanity(humanityJson, additive)) {
+                    proofsSaved = false
                     log.warn(TAG_SERVICE, "Humanity-Proof aus dem Backup nicht gespeichert.")
                 }
             }
 
             if (!badgesSaved) throw RestoreFailure(RestoreError.BadgesNotSaved(restored.size))
+            if (!proofsSaved) throw RestoreFailure(RestoreError.ProofsNotSaved)
 
             log.info(TAG_RESTORE, "Restore abgeschlossen; Schreiben bestätigt. ${restored.size} Einträge verarbeitet.")
             return if (additive) {
@@ -267,7 +270,7 @@ internal class DefaultRestoreEngine @Inject constructor(
                 RestoreOutcome.Restored(
                     badges = restored.size,
                     nostrKey = shape.hasKey,
-                    platformProofs = platformRaw?.size?.takeIf { it > 0 },
+                    platformProofs = platformProofs.size.takeIf { it > 0 },
                     humanity = shape.humanityVerified && !humanityAlready,
                 )
             }
@@ -476,14 +479,11 @@ internal class DefaultRestoreEngine @Inject constructor(
     }
 
     /** Spec 08 §8.9: format-checked entries only, stored verbatim. */
-    private suspend fun restorePlatformProofs(raw: JsonArray, additive: Boolean) {
-        val validated = RestorePolicy.validatedPlatformProofs(raw)
-        val ok = when {
-            additive -> proofs.unionPlatformProofs(validated)
-            validated.isNotEmpty() -> proofs.replacePlatformProofs(validated)
-            else -> true
-        }
+    private suspend fun restorePlatformProofs(validated: List<JsonElement>, additive: Boolean): Boolean {
+        if (validated.isEmpty()) return true
+        val ok = if (additive) proofs.unionPlatformProofs(validated) else proofs.replacePlatformProofs(validated)
         if (!ok) log.warn(TAG_SERVICE, "Plattform-Proofs aus dem Backup nicht gespeichert.")
+        return ok
     }
 
     internal companion object {

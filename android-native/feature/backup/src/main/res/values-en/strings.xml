@@ -29,6 +29,7 @@
     <string name="native_backupErrHoldNotPersisted">The switch could not be recorded.</string>
     <string name="native_backupErrClearNotMarked">The empty collection could not be marked.</string>
     <string name="native_backupErrProofsNotCleared">The proofs of the previous identity could not be removed.</string>
+    <string name="native_backupErrProofsNotSaved">Some proofs from the backup could not be saved. Data already restored is retained. Load the backup again.</string>
     <string name="native_backupErrUnreadable">The file could not be read.</string>
     <string name="native_backupWorking">Processing backup …</string>
     <string name="native_backupRuleMet">Met</string>

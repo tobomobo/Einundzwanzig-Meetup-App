@@ -4,6 +4,7 @@ import android.content.res.Resources
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
@@ -65,7 +66,7 @@ class BackupMessagesTest {
     fun `every restore error has the Flutter German text`() {
         val errors = listOf(
             RestoreError.SwitchPending, RestoreError.HoldNotPersisted, RestoreError.ClearNotMarked,
-            RestoreError.ProofsNotCleared, RestoreError.StageFailed(3), RestoreError.KeyUnreadable,
+            RestoreError.ProofsNotCleared, RestoreError.ProofsNotSaved, RestoreError.StageFailed(3), RestoreError.KeyUnreadable,
             RestoreError.KeyNotTaken, RestoreError.BadgesNotSaved(2), RestoreError.Other("io"),
         )
         errors.forEach { assertEquals(it.german, BackupMessages.restoreErrorText(res, it)) }
@@ -107,6 +108,24 @@ class BackupMessagesTest {
             "1 Badge aus dem Backup konnte nicht gespeichert werden, der Rest wurde übernommen.",
             BackupMessages.restoreErrorText(res, RestoreError.BadgesNotSaved(1)),
         )
+    }
+
+    @Test
+    @Config(qualifiers = "en")
+    fun `incomplete proof restore uses an actionable English error`() {
+        val message = BackupMessages.snackbar(res, BackupMessage.ImportFailed(ImportFailure.Restore(RestoreError.ProofsNotSaved)))
+        assertEquals(Tone.Error, message.tone)
+        assertTrue(message.text.contains("Some proofs from the backup could not be saved."))
+        assertTrue(message.text.contains("Load the backup again."))
+    }
+
+    @Test
+    @Config(qualifiers = "es")
+    fun `incomplete proof restore uses an actionable Spanish error`() {
+        val message = BackupMessages.snackbar(res, BackupMessage.ImportFailed(ImportFailure.Restore(RestoreError.ProofsNotSaved)))
+        assertEquals(Tone.Error, message.tone)
+        assertTrue(message.text.contains("No se pudieron guardar algunas pruebas"))
+        assertTrue(message.text.contains("Carga la copia de seguridad de nuevo."))
     }
 
     @Test

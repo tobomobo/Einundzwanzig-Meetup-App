@@ -515,16 +515,63 @@ class RestoreEngineTest {
     }
 
     @Test
-    fun `platform proofs - replace writes only valid ones, count is the raw file count`() = runTest {
+    fun `platform proofs - replace reports only valid entries whose write succeeded`() = runTest {
         val h = BackupHarness()
         val sig = "ab".repeat(64)
         val json = """{"version":5,"user":{},"badges":[],"platform_proofs":[
             {"platform":"telegram","username":"a","proof_sig":"$sig","created_at":1},
             {"platform":"x","username":"b","proof_sig":"kurz","created_at":2}]}"""
         val out = h.engine.restore(doc(json), yes) as RestoreOutcome.Restored
-        assertEquals(2, out.platformProofs)
+        assertEquals(1, out.platformProofs)
         assertEquals(listOf("telegram"), h.proofs.platform.map { it["platform"]!!.jsonPrimitive.content })
-        assertEquals("Profil, 0 Badges, 2 Plattform-Proofs", out.germanItems)
+        assertEquals("Profil, 0 Badges, 1 Plattform-Proofs", out.germanItems)
+    }
+
+    @Test
+    fun `failed platform write reports incomplete restore and allows a retry without losing badges`() = runTest {
+        val h = BackupHarness()
+        val json = """{"version":5,"user":{},"badges":${badgesJson(badge("new"))},
+            "platform_proofs":[{"platform":"telegram","username":"a","proof_sig":"${"ab".repeat(64)}","created_at":1}],
+            "humanity_proof":{"verified":true,"first_zap_at":5,"receipt_event_id":"r","checked_at":6}}"""
+        h.proofs.platformWriteSucceeds = false
+
+        assertEquals(RestoreOutcome.Failed(RestoreError.ProofsNotSaved), h.engine.restore(doc(json), yes))
+        assertEquals(listOf("new"), h.repo.loadBadges().map { it.id })
+        assertTrue(h.proofs.platform.isEmpty())
+        assertEquals(1, h.proofs.restoredHumanity.size)
+        assertEquals("end", h.sync.calls.last())
+
+        h.proofs.platformWriteSucceeds = true
+        val retried = h.engine.restore(doc(json), yes) as RestoreOutcome.Restored
+        assertEquals(1, retried.platformProofs)
+        assertTrue(retried.humanity)
+        assertEquals(listOf("new"), h.repo.loadBadges().map { it.id })
+    }
+
+    @Test
+    fun `failed additive platform write does not report a successful merge`() = runTest {
+        val h = BackupHarness()
+        val k = KeyPair.generate()
+        h.withLocalKey(k, badge("old"))
+        h.proofs.platformWriteSucceeds = false
+        val json = """{"version":5,"user":{},"badges":${badgesJson(badge("new"))},"nostr":{"npub":"${k.npub}"},
+            "platform_proofs":[{"platform":"telegram","username":"a","proof_sig":"${"ab".repeat(64)}","created_at":1}]}"""
+
+        assertEquals(RestoreOutcome.Failed(RestoreError.ProofsNotSaved), h.engine.restore(doc(json), yes))
+        assertEquals(setOf("old", "new"), h.repo.loadBadges().map { it.id }.toSet())
+        assertEquals("end", h.sync.calls.last())
+    }
+
+    @Test
+    fun `failed humanity write does not report the proof restored`() = runTest {
+        val h = BackupHarness()
+        h.proofs.humanityWriteSucceeds = false
+        val json = """{"version":5,"user":{},"badges":[],
+            "humanity_proof":{"verified":true,"first_zap_at":5,"receipt_event_id":"r","checked_at":6}}"""
+
+        assertEquals(RestoreOutcome.Failed(RestoreError.ProofsNotSaved), h.engine.restore(doc(json), yes))
+        assertEquals(1, h.proofs.restoredHumanity.size)
+        assertEquals("end", h.sync.calls.last())
     }
 
     @Test
