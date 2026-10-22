@@ -201,6 +201,7 @@ struct ProfileEditView: View {
     @State private var npub = ""
     @State private var fullName = ""
     @State private var homeMeetupID = ""
+    @State private var homeWasChosen = false
     @State private var telegramHandle = ""
     @State private var twitterHandle = ""
     @State private var loaded = false
@@ -214,7 +215,7 @@ struct ProfileEditView: View {
                 TextField("Telegram handle", text: $telegramHandle).autocorrectionDisabled()
                 TextField("Twitter handle", text: $twitterHandle).autocorrectionDisabled()
                 NavigationLink {
-                    HomeMeetupPickerView(selection: $homeMeetupID)
+                    HomeMeetupPickerView(selection: Binding(get: { homeMeetupID }, set: { homeMeetupID = $0; homeWasChosen = true }))
                 } label: {
                     LabeledContent("Home meetup") {
                         Text(store.meetups.first(where: { $0.id == homeMeetupID })?.name ?? homeMeetupID)
@@ -230,15 +231,27 @@ struct ProfileEditView: View {
                 NavigationLink("integration.proofs") { TrustProofsView() }
                 NavigationLink("integration.humanity") { TrustProofsView() }
             }
-            Button("action.save") { if store.saveProfile(nickname: nickname, npub: npub, fullName: fullName, homeMeetupID: homeMeetupID, favoriteMeetupIDs: UserContinuity.ordered(([homeMeetupID].filter { !$0.isEmpty }) + store.preferences.favoriteIDs.sorted()), telegramHandle: telegramHandle, twitterHandle: twitterHandle) { dismiss() } }
+            Button("action.save") {
+                let selection = UserContinuity.favoriteSelection(home: homeMeetupID, explicitlyChosen: homeWasChosen,
+                    favorites: store.preferences.favoriteIDs, orderedFavorites: store.profile.favoriteMeetupIDs, meetups: store.meetups)
+                if store.saveProfile(nickname: nickname, npub: npub, fullName: fullName, homeMeetupID: selection.home,
+                    favoriteMeetupIDs: selection.favorites, telegramHandle: telegramHandle, twitterHandle: twitterHandle) { dismiss() }
+            }
                 .disabled(nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .formStyle(.grouped)
         .navigationTitle("profile.title")
+        .onChange(of: store.preferences.favoriteIDs) {
+            let selection = UserContinuity.favoriteSelection(home: homeMeetupID, explicitlyChosen: false,
+                favorites: store.preferences.favoriteIDs, orderedFavorites: store.profile.favoriteMeetupIDs, meetups: store.meetups)
+            homeMeetupID = selection.home; homeWasChosen = false
+        }
         .onAppear {
             guard !loaded else { return }; loaded = true
             nickname = store.profile.nickname; npub = store.profile.npub; fullName = store.profile.fullName
-            homeMeetupID = store.profile.homeMeetupID; telegramHandle = store.profile.telegramHandle; twitterHandle = store.profile.twitterHandle
+            homeMeetupID = UserContinuity.favoriteSelection(home: store.profile.homeMeetupID, explicitlyChosen: false,
+                favorites: store.preferences.favoriteIDs, orderedFavorites: store.profile.favoriteMeetupIDs, meetups: store.meetups).home
+            telegramHandle = store.profile.telegramHandle; twitterHandle = store.profile.twitterHandle
         }
     }
 }

@@ -74,6 +74,25 @@ public struct NostrPublicProfileLookup: Sendable {
                                   fetchedAt: profiles.isEmpty ? (cached?.fetchedAt ?? 0) : now)
     }
 
+    /// Revalidate and merge independently completed reads without reviving an
+    /// older avatar or extending its lifetime using an unrelated stale reply.
+    public func merge(current: NostrPublicProfile?, incoming: NostrPublicProfile?, publicKey: String,
+                      now: Int = Int(Date().timeIntervalSince1970)) async -> NostrPublicProfile? {
+        let currentProfile = await valid(current?.profile, owner: publicKey, kind: 0, now: now)
+        let incomingProfile = await valid(incoming?.profile, owner: publicKey, kind: 0, now: now)
+        let currentRelays = await valid(current?.relayList, owner: publicKey, kind: 10002, now: now)
+        let incomingRelays = await valid(incoming?.relayList, owner: publicKey, kind: 10002, now: now)
+        let profile = Self.newest([currentProfile, incomingProfile].compactMap { $0 })
+        let relays = Self.newest([currentRelays, incomingRelays].compactMap { $0 })
+        guard profile != nil || relays != nil else { return nil }
+        let times = [(current, currentProfile), (incoming, incomingProfile)].compactMap { candidate, verified -> Int? in
+            guard let candidate, let profile, verified?.id == profile.id,
+                  candidate.fetchedAt >= 0, candidate.fetchedAt <= now else { return nil }
+            return candidate.fetchedAt
+        }
+        return NostrPublicProfile(profile: profile, relayList: relays, fetchedAt: times.max() ?? 0)
+    }
+
     private func query(_ owner: String, relays: [URL], now: Int) async -> [NostrEvent] {
         let filter = NostrFilter(authors: [owner], kinds: [0, 10002], until: now, limit: 2)
         guard let found = try? await relay.query(filter, relays: relays, timeout: 6) else { return [] }

@@ -8,7 +8,7 @@ import FoundationNetworking
 #endif
 
 enum ColorScheme { case light, dark }
-@MainActor final class NativeMediaPlayer {}
+@MainActor final class NativeMediaPlayer { func reset() async throws {} }
 enum NativeBackgroundRefresh { static func saveWidget(snapshot: BitcoinSnapshot) async {} }
 @MainActor enum UITestFixtureMode {
     static let enabled = false

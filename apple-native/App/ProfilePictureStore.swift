@@ -12,6 +12,7 @@ import MeetupNostr
     private var owner = ""
     private var generation = 0
     private static var resetGeneration = 0
+    private static var cacheRevisions: [String: Int] = [:]
     private static let maximumImageBytes = 5 * 1024 * 1024
 
     init(directory: URL = UITestFixtureMode.directory, relay: (any NostrRelayTransport)? = nil) {
@@ -33,17 +34,28 @@ import MeetupNostr
         let snapshot = await lookup.load(publicKey: publicKey, relays: relays, cached: cache[publicKey], force: force)
         guard epoch == generation, resetEpoch == Self.resetGeneration, !Task.isCancelled else { return }
         loading = false
-        pictureURL = snapshot?.pictureURL
-        guard let snapshot else { return }
-        // Reread after awaiting another view's lookup so different owners do
-        // not overwrite each other's public cache entries.
-        cache = readCache(); cache[publicKey] = snapshot
-        while cache.count > 32 { cache.removeValue(forKey: cache.min { $0.value.fetchedAt < $1.value.fetchedAt }!.key) }
-        while let data = try? JSONEncoder().encode(cache), data.count > 512 * 1024, cache.count > 1 {
-            cache.removeValue(forKey: cache.min { $0.value.fetchedAt < $1.value.fetchedAt }!.key)
-        }
-        if let data = try? JSONEncoder().encode(cache), data.count <= 512 * 1024 {
-            try? write(data, name: "public-profile-metadata.json")
+        // Verification suspends. A directory revision makes the final read,
+        // merge and write atomic with respect to other stores on MainActor.
+        let cacheKey = directory.standardizedFileURL.path
+        for _ in 0..<4 {
+            let revision = Self.cacheRevisions[cacheKey, default: 0]
+            cache = readCache()
+            let merged = await lookup.merge(current: cache[publicKey], incoming: snapshot, publicKey: publicKey)
+            guard epoch == generation, resetEpoch == Self.resetGeneration, !Task.isCancelled else { return }
+            guard revision == Self.cacheRevisions[cacheKey, default: 0] else { continue }
+            pictureURL = merged?.pictureURL
+            guard let merged else { return }
+            cache[publicKey] = merged
+            while cache.count > 32 { cache.removeValue(forKey: cache.min { $0.value.fetchedAt < $1.value.fetchedAt }!.key) }
+            while let data = try? JSONEncoder().encode(cache), data.count > 512 * 1024, cache.count > 1 {
+                cache.removeValue(forKey: cache.min { $0.value.fetchedAt < $1.value.fetchedAt }!.key)
+            }
+            if let data = try? JSONEncoder().encode(cache), data.count <= 512 * 1024 {
+                if (try? write(data, name: "public-profile-metadata.json")) != nil {
+                    Self.cacheRevisions[cacheKey, default: 0] += 1
+                }
+            }
+            return
         }
     }
     var selectionToken: Int { Self.resetGeneration }

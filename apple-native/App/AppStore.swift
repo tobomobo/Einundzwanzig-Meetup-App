@@ -427,6 +427,7 @@ final class AppStore {
     func resetLocalData() async {
         do {
             try await identity.reset()
+            try await media.reset()
             try learning.reset()
             try ProfilePictureStore.resetFiles(in: directory)
             #if os(iOS)
@@ -444,6 +445,7 @@ final class AppStore {
             calendarRefreshedThisSession = false
             calendarLastAttempt = nil
             bitcoin = nil
+            bitcoinDashboard = nil
             bitcoinLoading = false
             stateReadable = true
             profileReadable = true

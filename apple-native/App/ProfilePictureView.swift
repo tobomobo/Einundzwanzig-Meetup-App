@@ -86,7 +86,7 @@ struct ProfilePictureView: View {
                 kCGImageSourceThumbnailMaxPixelSize: 400
               ] as CFDictionary) else { throw LocalDataError.invalidImport }
         let output = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(output, UTType.jpeg.identifier as CFString, 1, nil) else { throw LocalDataError.invalidImport }
+        guard let destination = CGImageDestinationCreateWithData(output as CFMutableData, UTType.jpeg.identifier as CFString, 1, nil) else { throw LocalDataError.invalidImport }
         CGImageDestinationAddImage(destination, image, [kCGImageDestinationLossyCompressionQuality: 0.8] as CFDictionary)
         guard CGImageDestinationFinalize(destination) else { throw LocalDataError.invalidImport }
         return output as Data

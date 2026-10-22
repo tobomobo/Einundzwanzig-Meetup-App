@@ -17,6 +17,20 @@ enum UserContinuity {
     static func resolveFavoriteIDs(_ stored: Set<String>, among meetups: [Meetup]) -> Set<String> {
         Set(stored.map { resolveFavorite($0, among: meetups)?.id ?? $0 })
     }
+    /// A normal profile edit must not restore favorites removed elsewhere.
+    /// Explicitly choosing a new home may add that group; returning from the
+    /// favorite picker reconciles home to the first remaining selection.
+    static func favoriteSelection(home: String, explicitlyChosen: Bool, favorites: Set<String>,
+                                  orderedFavorites: [String], meetups: [Meetup]) -> (home: String, favorites: [String]) {
+        var values = ordered(orderedFavorites.filter(favorites.contains) + favorites.sorted())
+        func resolved(_ value: String) -> String { resolveFavorite(value, among: meetups)?.id ?? value }
+        if explicitlyChosen, !home.isEmpty {
+            values = ordered([home] + values.filter { resolved($0) != resolved(home) })
+            return (home, values)
+        }
+        let retained = values.contains { resolved($0) == resolved(home) }
+        return (retained ? home : values.first ?? "", values)
+    }
     static func sanitize(_ fields: [String: BackupValue]) -> [String: BackupValue] {
         var output: [String: BackupValue] = [:]
         for (key, value) in fields {

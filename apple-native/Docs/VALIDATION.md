@@ -1,5 +1,16 @@
 # Validation evidence and Apple acceptance
 
+## Feature followthrough after manual Mac testing was deferred
+
+The user requested continued feature implementation and will test on Mac later. Both PR watches are stopped; no new CI result is claimed. Current source adds organizer participation/collection export/person profile checks (`60326eb`), converter/dashboard/news behavior (`bbf59ac`), portal/calendar/chat behavior (`47302f9`) and profile pictures/Home trust/meetup choice (`70d3851`).
+
+Targeted offline checks passed against the respective source snapshots: badge store **9** plus protocol/mapping **3**; Bitcoin/converter **9**, RSS **11**, reactions/LNURL **9**; calendar/portal protocol **18** plus existing relay **7** and actual WorkflowStore **6**. Root signed public-profile lookup has **5** passing tests; actual AppStore/ProfilePictureStore has **3** new passing tests plus **1** existing profile recovery guard (8.639 seconds). Avatar tests cover disk/relaunch, owner isolation, invalid-size replacement, real reset and delayed-query/photo-import fencing. The decoder/PhotosUI itself still needs Apple acceptance.
+
+Independent integration review found five P2 edge cases. Root fixes stop profile saves from restoring removed favorites, merge concurrent signed profile results without reviving newer removals, and clear the Bitcoin dashboard on reset. The repeated actual-store profile selection passed **6 tests** in **10.315 seconds**, including two new removal/favorite regressions and the existing recovery guard (`/tmp/swift-profile-review-fixes-tests.log`). The event-specific room context and community participation relay corrections are being validated separately. Audio reset now participates in AppStore reset; platform playback/cache tests remain separate from the store adapter fixture.
+
+All **48** App/Widget/UI-test sources passed three-target syntax parsing, and the strict project/resource validator passed **1,079** equal DE/EN/ES keys. These checks are not Apple SDK typechecking or user-journey runtime evidence. Concurrent package source changes interrupted the first profile harness compile; the harness now copies an unchanged source snapshot before compilation and the repeated targeted run passed. Pins and production implementations are preserved.
+
+
 Updated 2026-10-22. Implementation host: Linux with a temporary official Swift 6.2 toolchain under `/tmp`. Portable results compile and exercise the actual production package/model/store source. Apple CI has also executed the package, Network.framework loopback and actual-store suites on Mac, as recorded below. Neither these fixture results nor syntax parsing validate the complete SwiftUI app, device Keychain, camera/location, widgets, background policy or signing/provisioning.
 
 ## Executed fixture checks

@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import MeetupNostr
+import MeetupCore
 
 private actor AvatarFixtureRelay: NostrRelayTransport {
     private let events: [NostrEvent]
@@ -71,4 +72,47 @@ extension IdentityAppStoreContinuityTests {
         #expect(store.pictureURL == nil)
         #expect(!FileManager.default.fileExists(atPath: directory.appendingPathComponent("public-profile-metadata.json").path))
     }
+    @Test func profileLateOlderAvatarCannotReplaceAnotherStoresSignedRemoval() async throws {
+        _ = try fresh()
+        let directory = UITestFixtureMode.directory
+        let signer = try LocalIdentitySigner(privateKey: Data(repeating: 0, count: 31) + Data([1]))
+        let key = try await signer.publicKey(), now = Int(Date().timeIntervalSince1970)
+        let old = try await signer.sign(kind: 0, tags: [], content: "{\"picture\":\"https://images.example/old.jpg\"}", createdAt: now - 10)
+        let removal = try await signer.sign(kind: 0, tags: [], content: "{}", createdAt: now - 1)
+        let delayed = AvatarFixtureRelay([old], delayed: true)
+        let first = ProfilePictureStore(directory: directory, relay: delayed)
+        let task = Task { await first.load(publicKey: key, relays: [], force: true) }
+        await delayed.waitStarted()
+        let second = ProfilePictureStore(directory: directory, relay: AvatarFixtureRelay([removal]))
+        await second.load(publicKey: key, relays: [], force: true)
+        #expect(second.pictureURL == nil)
+        let cacheURL = directory.appendingPathComponent("public-profile-metadata.json")
+        let removed = try JSONDecoder().decode([String: NostrPublicProfile].self, from: Data(contentsOf: cacheURL))[key]
+        await delayed.release(); await task.value
+        #expect(first.pictureURL == nil)
+        let final = try JSONDecoder().decode([String: NostrPublicProfile].self, from: Data(contentsOf: cacheURL))[key]
+        #expect(final?.profile?.id == removal.id)
+        #expect(final?.fetchedAt == removed?.fetchedAt)
+        let relaunched = ProfilePictureStore(directory: directory, relay: AvatarFixtureRelay([]))
+        await relaunched.load(publicKey: key, relays: [])
+        #expect(relaunched.pictureURL == nil)
+    }
+    @Test func profileSavingAfterFavoriteRemovalKeepsRemovalAndReconcilesHome() async throws {
+        let defaults = try fresh(), app = AppStore(legacyDefaults: defaults)
+        #expect(app.saveProfile(nickname: "Before", npub: "", homeMeetupID: "A", favoriteMeetupIDs: ["A", "B"]))
+        app.toggleFavorite("A")
+        let selection = UserContinuity.favoriteSelection(home: "A", explicitlyChosen: false,
+            favorites: app.preferences.favoriteIDs, orderedFavorites: app.profile.favoriteMeetupIDs, meetups: app.meetups)
+        #expect(selection.home == "B"); #expect(selection.favorites == ["B"])
+        #expect(app.saveProfile(nickname: "Edited", npub: "", homeMeetupID: selection.home, favoriteMeetupIDs: selection.favorites))
+        let relaunched = AppStore(legacyDefaults: defaults)
+        #expect(relaunched.profile.homeMeetupID == "B")
+        #expect(relaunched.preferences.favoriteIDs == ["B"])
+        let explicit = UserContinuity.favoriteSelection(home: "C", explicitlyChosen: true,
+            favorites: relaunched.preferences.favoriteIDs, orderedFavorites: relaunched.profile.favoriteMeetupIDs, meetups: [])
+        #expect(explicit.home == "C"); #expect(explicit.favorites == ["C", "B"])
+        let empty = UserContinuity.favoriteSelection(home: "B", explicitlyChosen: false, favorites: [], orderedFavorites: ["B"], meetups: [])
+        #expect(empty.home.isEmpty && empty.favorites.isEmpty)
+    }
+
 }
