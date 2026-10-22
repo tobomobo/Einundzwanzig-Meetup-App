@@ -104,3 +104,7 @@ the changed CI layout still requires a successful run before claiming a new prer
 - External signer apps, real NFC hardware, peer devices, Bluetooth/biometrics/passkey providers,
   organizer relay publication and live payment flows require field validation. Automated checks
   do not claim successful public writes or real financial transactions.
+
+### Gallery avatar followthrough (2026-10-22)
+
+Home and Profile now accept valid gallery images through the production Android decoder. Bounds-only `BitmapFactory.decodeStream` intentionally returns `null`; the importer now validates the opened stream and reported dimensions before decoding and storing the JPEG. Three real-bitmap Robolectric tests reproduced the previous failure and now pass, alongside four existing importer safety tests. Replacement removes the old image only after success; invalid input preserves it. See `parity/gallery-avatar-validation.json`. System photo-picker/device acceptance remains unverified in this followthrough.

@@ -88,8 +88,10 @@ internal class DefaultLocalPictureImporter(
             val source = Uri.parse(uri)
             val resolver = context.contentResolver
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            resolver.openInputStream(source)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-                ?: throw IOException("Bild nicht lesbar")
+            // A bounds-only decode returns null even for a valid image. Validate the opened
+            // stream here and the reported dimensions below, rather than that bitmap result.
+            (resolver.openInputStream(source) ?: throw IOException("Bild nicht lesbar"))
+                .use { BitmapFactory.decodeStream(it, null, bounds) }
             if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IOException("Kein Bild")
             var sample = 1
             while (bounds.outWidth / (sample * 2) >= MAX_SIZE && bounds.outHeight / (sample * 2) >= MAX_SIZE) sample *= 2
