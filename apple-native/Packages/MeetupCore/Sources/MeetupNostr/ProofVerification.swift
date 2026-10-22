@@ -79,6 +79,16 @@ public enum PersonNIP05Status: Sendable, Equatable { case absent, verified, mism
 public struct PersonIdentityEvidence: Sendable {
     public let profile: NostrPublicProfile?
     public let nip05Status: PersonNIP05Status
+    /// A signed kind-0 removal wins even when it contains no usable name.
+    /// A previously authenticated card supplies display text only, never
+    /// domain verification, badge authority or a new score.
+    public func displayName(for publicKey: String, reputation: VerifiedReputationCard?) -> String? {
+        if profile?.profile != nil { return profile?.displayName }
+        guard let reputation, reputation.event.pubkey == publicKey else { return nil }
+        let nickname = reputation.nickname.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !nickname.isEmpty, nickname.lowercased() != "anon" else { return nil }
+        return String(nickname.prefix(160))
+    }
 }
 
 public enum ProofVerifier {
@@ -121,14 +131,23 @@ public enum ProofVerifier {
               receipt.pubkey != proof.sender, receipt.pubkey != proof.recipient,
               recipientMetadata.kind == 0, recipientMetadata.pubkey == proof.recipient,
               recipientMetadata.createdAt <= now + 300, await NostrCrypto().verify(recipientMetadata) else { throw BadgeProtocolError.unauthorized }
+        guard try await recipientProvider(recipientMetadata, http: http, now: now) == receipt.pubkey else { throw BadgeProtocolError.unauthorized }
+        return proof
+    }
+    /// The signed recipient profile selects the HTTPS provider. A receipt's
+    /// own author, P tag or published aggregate never supplies this authority.
+    static func recipientProvider(_ recipientMetadata: NostrEvent, http: any ProofHTTPClient, now: Int) async throws -> String {
+        guard recipientMetadata.kind == 0, recipientMetadata.createdAt <= now + 300,
+              await NostrCrypto().verify(recipientMetadata) else { throw BadgeProtocolError.invalidSignature }
         let metadata = try BadgeWire.parse(recipientMetadata.content).object
         let address = (metadata["lud16"]?.string ?? "").components(separatedBy: "@")
         guard address.count == 2, !address[0].isEmpty, validDomain(address[1]) else { throw BadgeProtocolError.malformed }
         var url = URLComponents(); url.scheme = "https"; url.host = address[1].lowercased(); url.path = "/.well-known/lnurlp/" + address[0]
         guard let endpoint = url.url else { throw BadgeProtocolError.malformed }
         let provider = try await http.get(endpoint).object
-        guard provider["allowsNostr"]?.boolean == true, provider["nostrPubkey"]?.string.lowercased() == receipt.pubkey else { throw BadgeProtocolError.unauthorized }
-        return proof
+        guard provider["allowsNostr"]?.boolean == true, let key = provider["nostrPubkey"]?.string.lowercased(),
+              (try? NostrHex.decode(key, byteCount: 32, field: "provider")) != nil else { throw BadgeProtocolError.unauthorized }
+        return key
     }
     private static func validDomain(_ text: String) -> Bool {
         !text.isEmpty && text.utf8.count <= 253 && text.range(of: #"^[a-zA-Z0-9.-]+$"#, options: .regularExpression) != nil
@@ -166,5 +185,81 @@ public enum ProofVerifier {
             i += count
         }
         throw BadgeProtocolError.malformed
+    }
+}
+
+/// Public observations only; no amounts, counterparty identities or receipts
+/// are persisted or included in a reputation export.
+public struct PersonZapActivity: Sendable, Equatable {
+    public let publicKey: String
+    public let checkedAt: Int
+    public let windowStartedAt: Int
+    public let sentCount: Int
+    public let receivedCount: Int
+    public let uniqueRecipients: Int
+    public let uniqueSenders: Int
+    public let activeMonths: Int
+    public let incomplete: Bool
+    public let truncated: Bool
+    public var totalCount: Int { sentCount + receivedCount }
+}
+
+public struct PersonZapActivityLoader: Sendable {
+    public let relay: any NostrRelayTransport
+    public let http: any ProofHTTPClient
+    public init(relay: any NostrRelayTransport, http: any ProofHTTPClient) { self.relay = relay; self.http = http }
+    public func load(publicKey: String, relays: [URL], now: Int) async throws -> PersonZapActivity {
+        _ = try NostrHex.decode(publicKey, byteCount: 32, field: "person")
+        let since = max(0, now - 180 * 86400), selectedRelays = Array(relays.prefix(3))
+        var incomplete = false, truncated = false, bytes = 0
+        var candidates: [String: HumanityReceipt] = [:]
+        // Separate filters are essential: many receipts omit P. P is only an
+        // index hint; attribution comes from the signed nested request.
+        for tag in ["p", "P"] {
+            try Task.checkCancellation()
+            let filter = NostrFilter(kinds: [9735], since: since, until: now, limit: 100, tags: [tag: [publicKey]])
+            do {
+                let raw = try await relay.query(filter, relays: selectedRelays, timeout: 8)
+                if raw.count >= 100 { truncated = true }
+                for event in raw.prefix(100) {
+                    try Task.checkCancellation()
+                    let size = (try? JSONEncoder().encode(event).count) ?? 2_097_153
+                    guard size <= 2_097_152 - bytes else { truncated = true; continue }
+                    bytes += size
+                    guard filter.matches(event), candidates[event.id] == nil,
+                          let proof = try? await ProofVerifier.localReceipt(event, now: now),
+                          proof.sender == publicKey || proof.recipient == publicKey,
+                          proof.sender != proof.recipient,
+                          event.pubkey != proof.sender, event.pubkey != proof.recipient else { continue }
+                    candidates[event.id] = proof
+                }
+            } catch is CancellationError { throw CancellationError() }
+            catch { incomplete = true }
+        }
+        var verified: [HumanityReceipt] = []
+        let recipients = Set(candidates.values.map(\.recipient)).sorted()
+        if recipients.count > 15 { truncated = true }
+        for recipient in recipients.prefix(15) {
+            try Task.checkCancellation()
+            let filter = NostrFilter(authors: [recipient], kinds: [0], limit: 20)
+            do {
+                let raw = try await relay.query(filter, relays: selectedRelays, timeout: 6)
+                var metadata: NostrEvent?
+                for event in raw.prefix(20).sorted(by: { $0.createdAt == $1.createdAt ? $0.id < $1.id : $0.createdAt > $1.createdAt }) {
+                    if filter.matches(event), event.createdAt <= now + 300, await NostrCrypto().verify(event) { metadata = event; break }
+                }
+                guard let metadata else { incomplete = true; continue }
+                let provider = try await ProofVerifier.recipientProvider(metadata, http: http, now: now)
+                verified += candidates.values.filter { $0.recipient == recipient && $0.receipt.pubkey == provider }
+            } catch is CancellationError { throw CancellationError() }
+            catch { incomplete = true }
+        }
+        try Task.checkCancellation()
+        let sent = verified.filter { $0.sender == publicKey }, received = verified.filter { $0.recipient == publicKey }
+        let dates = verified.map(\.timestamp), span = (dates.max() ?? 0) - (dates.min() ?? 0)
+        return PersonZapActivity(publicKey: publicKey, checkedAt: now, windowStartedAt: since,
+            sentCount: sent.count, receivedCount: received.count, uniqueRecipients: Set(sent.map(\.recipient)).count,
+            uniqueSenders: Set(received.map(\.sender)).count, activeMonths: min(24, Int(ceil(Double(span) / Double(30 * 86400)))),
+            incomplete: incomplete, truncated: truncated)
     }
 }

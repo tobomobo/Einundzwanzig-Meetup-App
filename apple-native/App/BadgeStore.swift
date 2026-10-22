@@ -419,7 +419,7 @@ import MeetupNostr
         let other: String? = trimmed.isEmpty ? nil : try await SocialNetwork.personPublicKey(trimmed, now: Self.now)
         try assertCurrent(epoch, key: key)
         socialLoadingDepth = 0
-        let result = try await SocialGraphLoader(relay: relay).load(owner: key, target: other, organizers: registry.publicKeys,
+        let result = try await SocialGraphLoader(relay: other == nil ? relay : publicRelay).load(owner: key, target: other, organizers: registry.publicKeys,
             previous: social, forceFull: forceFull, relays: relays, now: Self.now) { [weak self] snapshot, depth in
                 await MainActor.run {
                     guard let self, self.generation == epoch, self.publicKey == key else { return }
@@ -452,7 +452,7 @@ import MeetupNostr
         guard parts.count == 5 else { throw BadgeProtocolError.malformed }
         let author = try NIP19.decodePublicKey(parts[1])
         let filter = NostrFilter(authors: [author], kinds: [30078], limit: 20, tags: ["d": [ReputationCard.dTag]])
-        guard let event = await newestVerified(try await relay.query(filter, relays: relays, timeout: 8), filter: filter) else { throw BadgeProtocolError.invalidSignature }
+        guard let event = await newestVerified(try await publicRelay.query(filter, relays: relays, timeout: 8), filter: filter) else { throw BadgeProtocolError.invalidSignature }
         let proof = try await PlatformIdentityProof.verify(text, reputation: event, expectedUsername: expectedUsername, now: Self.now)
         try assertCurrent(epoch, key: key); return proof
     }
@@ -463,6 +463,20 @@ import MeetupNostr
         let result = try await ProofVerifier.personIdentity(publicKey: person, relay: publicRelay, relays: relays, http: proofHTTP, now: Self.now)
         try assertCurrent(epoch, key: key)
         return result
+    }
+    func personZapActivity(_ target: String) async throws -> PersonZapActivity {
+        let (_, key, epoch) = try begin(); defer { finish(epoch) }
+        let person = try await SocialNetwork.personPublicKey(target, now: Self.now)
+        try assertCurrent(epoch, key: key)
+        let result = try await PersonZapActivityLoader(relay: publicRelay, http: proofHTTP).load(publicKey: person, relays: relays, now: Self.now)
+        try assertCurrent(epoch, key: key)
+        return result
+    }
+    func reputationImageSummary(nickname: String) throws -> ReputationImageSummary {
+        guard !walletUnreadable else { throw BadgeStoreError.unreadableWallet }
+        guard walletLoaded, signer != nil, !publicKey.isEmpty else { throw BadgeStoreError.noSigner }
+        try assertCurrent(generation, key: publicKey)
+        return ReputationImageSummary(publicKey: publicKey, nickname: nickname, trust: trust)
     }
     func checkNIP05(_ identifier: String, author: String? = nil) async throws -> Bool {
         let (_, key, epoch) = try begin(); defer { finish(epoch) }
@@ -513,17 +527,18 @@ import MeetupNostr
         for badge in badgeEvidence ?? [] {
             guard let source = try? await BadgeSecurity.verify(badge.sigContent, now: Self.now, checkExpiry: false, checkRolling: false) else { continue }
             if let address = source.eventAddress, let filter = try? BadgeEventAuthority.filter(for: address),
-               let events = try? await relay.query(filter, relays: relays, timeout: 8), let event = await newestVerified(events, filter: filter) {
+               let events = try? await publicRelay.query(filter, relays: relays, timeout: 8), let event = await newestVerified(events, filter: filter) {
                 if await BadgeEventAuthority.verify(address: address, signer: source.event.pubkey, issuedAt: source.event.createdAt, event: event, registry: registry, now: Self.now) { authorizedSources.insert(source.event.id) }
             } else if source.eventAddress == nil, let portalAuthority, (try? await portalAuthority(source)) == true { authorizedSources.insert(source.event.id) }
             try assertCurrent(epoch, key: key)
         }
+        let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         let result: VerifiedReputationCard
-        if input.hasPrefix("21v3:") { result = try await ReputationCard.verifyQR(input, badges: badgeEvidence, registry: registry, authorizedSources: authorizedSources, now: Self.now) }
+        if text.hasPrefix("21v3:") { result = try await ReputationCard.verifyQR(text, badges: badgeEvidence, registry: registry, authorizedSources: authorizedSources, now: Self.now) }
         else {
-            let author = input.hasPrefix("npub1") ? try NIP19.decodePublicKey(input) : input
+            let author = try await SocialNetwork.personPublicKey(text, now: Self.now)
             let filter = NostrFilter(authors: [author], kinds: [30078], limit: 20, tags: ["d": [ReputationCard.dTag]])
-            guard let event = await newestVerified(try await relay.query(filter, relays: relays, timeout: 8), filter: filter) else { throw BadgeProtocolError.invalidSignature }
+            guard let event = await newestVerified(try await publicRelay.query(filter, relays: relays, timeout: 8), filter: filter) else { throw BadgeProtocolError.invalidSignature }
             result = try await ReputationCard.verifyEvent(event, badges: badgeEvidence, registry: registry, authorizedSources: authorizedSources, now: Self.now)
         }
         try assertCurrent(epoch, key: key); return result

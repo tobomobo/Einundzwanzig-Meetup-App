@@ -89,3 +89,21 @@ public enum ReputationCard {
                                       badgeProof: hash, proofVersion: version, badgeEvidenceVerified: verified)
     }
 }
+
+/// A deliberately small snapshot for the visible share-card preview. It has
+/// no raw collection, attendance, platform handles or private profile fields.
+public struct ReputationImageSummary: Sendable, Equatable {
+    public let publicKey: String
+    public let nickname: String
+    public let score: Double
+    public let level: String
+    public let badgeCount: Int
+    public let meetupCount: Int
+    public let signerCount: Int
+    public let accountAgeDays: Int
+    public init(publicKey: String, nickname: String, trust: TrustScore) {
+        self.publicKey = publicKey; self.nickname = String(nickname.prefix(80))
+        score = trust.total; level = trust.level; badgeCount = trust.badgeCount
+        meetupCount = trust.meetupCount; signerCount = trust.signerCount; accountAgeDays = trust.accountAgeDays
+    }
+}
