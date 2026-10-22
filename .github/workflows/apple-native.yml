@@ -122,10 +122,24 @@ jobs:
           CODE_SIGNING_ALLOWED=NO
           build
 
+      - name: Build isolated iOS UI tests with simulator ad-hoc signing
+        run: |
+          xcodebuild build-for-testing \
+            -project apple-native/Einundzwanzig.xcodeproj \
+            -scheme Einundzwanzig -configuration Debug \
+            -onlyUsePackageVersionsFromResolvedFile -skipPackagePluginValidation \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath /tmp/einundzwanzig-ui-derived-data \
+            CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY=- \
+            CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
+            CODE_SIGN_ENTITLEMENTS=Configuration/SimulatorUITests.entitlements
+          python3 apple-native/Scripts/validate_project.py \
+            --verify-simulator-app /tmp/einundzwanzig-ui-derived-data/Build/Products/Debug-iphonesimulator/Einundzwanzig.app
+
       - name: Run isolated iOS app identity, wallet and offline smoke tests
         run: |
           simulator_id=$(python3 apple-native/Scripts/select_simulator.py)
-          xcodebuild test \
+          xcodebuild test-without-building \
             -project apple-native/Einundzwanzig.xcodeproj \
             -scheme Einundzwanzig -configuration Debug \
             -onlyUsePackageVersionsFromResolvedFile -skipPackagePluginValidation \
@@ -133,8 +147,7 @@ jobs:
             -derivedDataPath /tmp/einundzwanzig-ui-derived-data \
             -resultBundlePath /tmp/einundzwanzig-ui-tests.xcresult \
             -parallel-testing-enabled NO -test-timeouts-enabled YES \
-            -default-test-execution-time-allowance 180 -maximum-test-execution-time-allowance 240 \
-            CODE_SIGNING_ALLOWED=NO
+            -default-test-execution-time-allowance 180 -maximum-test-execution-time-allowance 240
 
       - name: Preserve simulator smoke test results
         if: always()

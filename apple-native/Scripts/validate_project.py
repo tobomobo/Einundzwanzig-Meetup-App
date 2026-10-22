@@ -2,7 +2,9 @@
 """Validate the checked-in Apple project using only the Python standard library.
 
 Run from any directory: python3 apple-native/Scripts/validate_project.py
-CI additionally uses --require-route-matrix. No Xcode, Swift, or network is needed.
+CI additionally uses --require-route-matrix. No Xcode, Swift, or network is needed
+for static checks. --verify-simulator-app separately inspects an actual signed
+simulator bundle using Apple's codesign tool on Mac.
 This checks project structure and declared resources, not compilation, signing,
 runtime behavior, translations, or the visual quality/decoded pixels of PNGs.
 """
@@ -19,6 +21,7 @@ import plistlib
 import re
 import shlex
 import struct
+import subprocess
 import sys
 import xml.etree.ElementTree as ET
 import zlib
@@ -643,6 +646,53 @@ def validate_plists(project):
     require(bool(info.get("NSLocationWhenInUseUsageDescription")) and bool(info.get("NSLocationUsageDescription")), "iOS/macOS foreground location descriptions required")
 
 
+def validate_simulator_test_signing(project):
+    entitlement_path = "Configuration/SimulatorUITests.entitlements"
+    identifier = "E21UITESTS.$(PRODUCT_BUNDLE_IDENTIFIER)"
+    require(load_plist(project.apple / entitlement_path) == {"application-identifier": identifier, "keychain-access-groups": [identifier]}, "simulator UI entitlements must contain only the synthetic per-product identifier and default Keychain group")
+    for settings in (*project.effective.values(), *project.widget_effective.values()):
+        require("SimulatorUITests" not in settings.get("CODE_SIGN_ENTITLEMENTS", ""), "simulator UI entitlements must not enter production build configurations")
+    workflow = read_text(project.apple.parent / ".github/workflows/apple-native.yml")
+    steps = re.split(r"(?m)^      - name: ", workflow)
+    marker = f"CODE_SIGN_ENTITLEMENTS={entitlement_path}"
+    signing_steps = [step for step in steps if marker in step]
+    require(len(signing_steps) == 1, "exactly one simulator UI build step must supply test entitlements")
+    build = signing_steps[0]
+    for token in ("Build isolated iOS UI tests with simulator ad-hoc signing\n", "xcodebuild build-for-testing", "-configuration Debug", "-sdk iphonesimulator", "-destination 'generic/platform=iOS Simulator'", "--verify-simulator-app"):
+        require(token in build, f"simulator UI signing step must contain {token!r}")
+    tokens = shlex.split(build.replace("\\\n", " "))
+    for token in ("CODE_SIGNING_ALLOWED=YES", "CODE_SIGNING_REQUIRED=YES", "CODE_SIGN_IDENTITY=-", "CODE_SIGN_STYLE=Manual", "DEVELOPMENT_TEAM="):
+        require(token in tokens, f"simulator UI signing step must contain the exact argument {token!r}")
+    runs = [step for step in steps if step.startswith("Run isolated iOS app identity, wallet and offline smoke tests\n")]
+    require(len(runs) == 1 and "xcodebuild test-without-building" in runs[0] and "-sdk iphonesimulator" in runs[0] and "CODE_SIGNING_ALLOWED=NO" not in runs[0], "UI tests must run the previously verified simulator build without rebuilding it unsigned")
+    require(workflow.count("CODE_SIGNING_ALLOWED=NO") == 5 and "CODE_SIGNING_ALLOWED=NO" not in build, "the five generic SDK build gates must remain unsigned")
+
+
+def validate_simulator_signature_metadata(info, entitlements, description, expected_identifier):
+    require(info.get("CFBundleSupportedPlatforms") == ["iPhoneSimulator"], "UI signing verification accepts only iOS simulator bundles")
+    require(info.get("CFBundleIdentifier") == expected_identifier, "UI signing verification accepts only the preview app and its widget")
+    require("Signature=adhoc" in description, "simulator UI bundle must have an ad-hoc signature")
+    identifier = "E21UITESTS." + expected_identifier
+    require(entitlements.get("application-identifier") == identifier, "signed simulator application-identifier must match its synthetic per-product identifier")
+    require(entitlements.get("keychain-access-groups") == [identifier], "signed simulator Keychain group must match its own application identifier")
+    require(not entitlements.get("com.apple.developer.team-identifier"), "simulator fixture signing must not claim an owner development team")
+
+
+def verify_simulator_app(app):
+    # Inspect the built signature, not merely its input plist, per Apple's guidance:
+    # https://developer.apple.com/documentation/security/errsecmissingentitlement
+    require(sys.platform == "darwin", "actual simulator signature verification requires Apple's codesign tool on Mac")
+    app_identifier = "space.einundzwanzig.meetup.apple"
+    for bundle, identifier in ((app, app_identifier), (app / "PlugIns/EinundzwanzigBitcoinWidget.appex", app_identifier + ".widget")):
+        info = load_plist(bundle / "Info.plist")
+        require(info.get("CFBundleSupportedPlatforms") == ["iPhoneSimulator"], "refusing non-simulator bundle before signature inspection")
+        subprocess.run(["/usr/bin/codesign", "--verify", "--strict", str(bundle)], check=True, capture_output=True)
+        signed = subprocess.run(["/usr/bin/codesign", "--display", "--verbose=2", "--entitlements", ":-", str(bundle)], check=True, capture_output=True)
+        entitlements = dictionary(plistlib.loads(signed.stdout), "signed simulator entitlements")
+        validate_simulator_signature_metadata(info, entitlements, signed.stderr.decode("utf-8", "replace"), identifier)
+    return "app and widget are ad-hoc signed with their simulator-only Keychain identities; no device provisioning claimed"
+
+
 def validate_scheme(project):
     directory = project.apple / "Einundzwanzig.xcodeproj/xcshareddata/xcschemes"
     schemes = sorted(directory.glob("*.xcscheme"))
@@ -873,6 +923,7 @@ def validate_route_matrix(apple, required):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--require-route-matrix", action="store_true", help="fail if the 57-route parity matrix is absent (CI)")
+    parser.add_argument("--verify-simulator-app", type=Path, help="inspect actual ad-hoc app/widget signatures on Mac; no signing or mutation")
     args = parser.parse_args(argv)
     apple = Path(__file__).resolve().parents[1]
     errors = []
@@ -880,7 +931,7 @@ def main(argv=None):
     def run(label, action):
         try:
             detail = action()
-        except (Invalid, OSError, UnicodeError, ValueError, TypeError, RecursionError, ET.ParseError, plistlib.InvalidFileException) as error:
+        except (Invalid, OSError, UnicodeError, ValueError, TypeError, RecursionError, ET.ParseError, plistlib.InvalidFileException, subprocess.CalledProcessError) as error:
             errors.append((label, str(error)))
             print(f"FAIL {label}: {error}", file=sys.stderr)
             return False
@@ -888,6 +939,9 @@ def main(argv=None):
             return True
         print(f"PASS {label}" + (f": {detail}" if detail else ""))
         return True
+
+    if args.verify_simulator_app:
+        return 0 if run("actual simulator UI signing and Keychain entitlement metadata", lambda: verify_simulator_app(args.verify_simulator_app)) else 1
 
     project = None
 
@@ -903,6 +957,7 @@ def main(argv=None):
         config_ok = run("Debug/Release/Upgrade app + widget effective settings for all three SDKs", lambda: validate_configurations(project))
         if config_ok:
             run("manual Info.plist and macOS entitlements", lambda: validate_plists(project))
+            run("simulator-only UI signing configuration", lambda: validate_simulator_test_signing(project))
         if membership_ok:
             run("localization syntax, duplicates and key parity", lambda: validate_localizations(project))
         run("shared scheme and app target IDs", lambda: validate_scheme(project))
