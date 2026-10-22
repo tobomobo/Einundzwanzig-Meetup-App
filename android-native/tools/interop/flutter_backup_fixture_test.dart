@@ -141,7 +141,10 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late CapturingPicker picker;
   setUp(() {
+    // This manually invoked Flutter test lives beside the native interop tools.
+    // ignore: invalid_use_of_visible_for_testing_member
     SharedPreferences.setMockInitialValues({});
+    // ignore: invalid_use_of_visible_for_testing_member
     FlutterSecureStorage.setMockInitialValues({});
     MeetupBadge.badgesUnreadable = false;
     MeetupBadge.onBadgesSaved = null;
