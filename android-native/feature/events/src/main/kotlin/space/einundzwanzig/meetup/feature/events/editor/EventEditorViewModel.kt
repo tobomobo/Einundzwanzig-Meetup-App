@@ -24,8 +24,10 @@ import space.einundzwanzig.meetup.data.issuance.event.EventBadgeAuthService
 import space.einundzwanzig.meetup.data.issuance.event.EventBadgeRight
 import space.einundzwanzig.meetup.data.profile.blossom.BlossomUploadService
 import space.einundzwanzig.meetup.feature.events.common.BadgeImagePreparer
+import space.einundzwanzig.meetup.feature.events.R
 import space.einundzwanzig.meetup.feature.events.common.UiMessage
 import space.einundzwanzig.meetup.feature.events.common.UiText
+import space.einundzwanzig.meetup.feature.events.common.UnreadableImageException
 import space.einundzwanzig.meetup.feature.events.common.ZoneProvider
 import java.time.Duration
 import java.time.Instant
@@ -184,6 +186,7 @@ class EventEditorViewModel @Inject constructor(
         if (state.value.uploading) return
         mutableState.update { it.copy(uploading = true) }
         viewModelScope.launch {
+            var unreadable = false
             val result = try {
                 val file = imagePreparer.prepare(uri)
                 try {
@@ -193,6 +196,9 @@ class EventEditorViewModel @Inject constructor(
                 }
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: UnreadableImageException) {
+                unreadable = true
+                space.einundzwanzig.meetup.data.profile.blossom.UploadResult.failure("")
             } catch (e: Exception) {
                 space.einundzwanzig.meetup.data.profile.blossom.UploadResult.failure(e.message ?: e.toString())
             } finally {
@@ -202,7 +208,13 @@ class EventEditorViewModel @Inject constructor(
                 mutableState.update { it.copy(badgeImage = result.url.orEmpty()) }
             } else {
                 messageChannel.send(
-                    UiMessage(UiText.res(L10nR.string.evBadgeUploadFailed, result.error.orEmpty()), Tone.Error),
+                    UiMessage(
+                        UiText.res(
+                            L10nR.string.evBadgeUploadFailed,
+                            if (unreadable) UiText.res(R.string.native_events_image_unreadable) else result.error.orEmpty(),
+                        ),
+                        Tone.Error,
+                    ),
                 )
             }
         }

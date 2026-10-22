@@ -43,7 +43,7 @@ class BackupHostTest {
     fun tearDown() = scope.cancel()
 
     private fun mount() {
-        val vm = BackupHostViewModel(h.coordinator)
+        val vm = BackupHostViewModel(h.coordinator, Dispatchers.Unconfined)
         rule.setContent { EinundzwanzigTheme { if (mounted) BackupHost(snackbar, vm) } }
         rule.waitForIdle()
     }

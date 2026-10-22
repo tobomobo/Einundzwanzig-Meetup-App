@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="native_network_graph_description">Network graph with %1$d direct contacts</string>
+    <plurals name="native_network_graph_description">
+        <item quantity="one">Network graph with %1$d direct contact</item>
+        <item quantity="other">Network graph with %1$d direct contacts</item>
+    </plurals>
     <string name="native_network_copied">Copied</string>
     <string name="native_network_retrying">Resending</string>
     <string name="native_network_open_details">Open details</string>

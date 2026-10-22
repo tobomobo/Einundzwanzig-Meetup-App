@@ -149,6 +149,12 @@ class BackupCoordinator @Inject internal constructor(
     // ---------------------------------------------------------------- export (spec 08 §2.4)
 
     private suspend fun runExport(): Boolean {
+        // Like the restore path: without a mounted host nobody renders the password dialog, and
+        // waiting for it would keep the busy guard set until the process dies.
+        if (attachment == null) {
+            log.warn(TAG_APP, "Backup: keine Oberfläche für den Passwortdialog")
+            return false
+        }
         val password = askPassword(isExport = true) ?: return false
         val ready = try {
             setLoading(true)
@@ -181,6 +187,8 @@ class BackupCoordinator @Inject internal constructor(
                 throw e
             } catch (e: Exception) {
                 log.debug(TAG_APP, "Speicherdialog nicht verfuegbar: ${e.message}")
+                // Do not leave an empty or partial .21bkp at the chosen location.
+                documents.delete(uri)
             }
         }
 

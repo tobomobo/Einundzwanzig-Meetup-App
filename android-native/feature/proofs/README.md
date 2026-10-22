@@ -45,3 +45,9 @@ Tours: none (spec 06 §2.7: no active tour steps on these screens).
 
 Native-only strings (`native_*`, de/en/es) cover the platform hints, service messages
 (spec 06 §2.6) and a few accessibility labels.
+
+## Tests
+
+41 tests in 5 classes: PlatformProofsScreenTest (12), PlatformProofsViewModelTest (11),
+HumanityProofScreenTest (6), HumanityProofViewModelTest (8), DefaultReputationRepublisherTest (4).
+The Robolectric UI tests run with `qualifiers=de-w411dp-h891dp` and scroll the lazy list where needed.

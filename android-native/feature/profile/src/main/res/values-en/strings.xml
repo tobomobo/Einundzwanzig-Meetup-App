@@ -5,6 +5,7 @@
         <item quantity="other">%1$d active relays</item>
     </plurals>
     <string name="native_relay_remove">Remove</string>
+    <string name="native_relay_remove_a11y">Remove %1$s</string>
     <string name="native_relay_enabled">Relay enabled</string>
     <string name="native_relay_disabled">Relay disabled</string>
     <string name="native_nostr_label">Nostr</string>
@@ -18,6 +19,7 @@
     <string name="native_list_joiner">" and "</string>
     <string name="native_auth_show_key">Please confirm your identity to show the key</string>
     <string name="native_auth_export_key">Please confirm your identity to export the key</string>
+    <string name="native_auth_unavailable">Identity confirmation is not available here</string>
     <string name="native_meetup_favorite">Favorite</string>
     <string name="native_meetup_not_favorite">Not a favorite</string>
     <string name="native_bunker_qr">QR code for pairing with the signer</string>

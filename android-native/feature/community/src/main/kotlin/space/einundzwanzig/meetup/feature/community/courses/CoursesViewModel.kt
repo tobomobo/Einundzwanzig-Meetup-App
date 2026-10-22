@@ -28,7 +28,6 @@ data class PortalListItem(
     val id: Int?,
     val name: String,
     val description: String,
-    val image: String,
     val links: List<String>,
 ) {
     companion object {
@@ -38,7 +37,6 @@ data class PortalListItem(
                 id = PortalFields.intId(e),
                 name = PortalFields.listName(e),
                 description = desc,
-                image = PortalFields.pImg(e),
                 links = PortalFields.extractLinks(desc),
             )
         }

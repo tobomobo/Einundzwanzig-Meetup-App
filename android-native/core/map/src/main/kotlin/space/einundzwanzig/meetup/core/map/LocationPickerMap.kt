@@ -24,7 +24,6 @@ fun LocationPickerMap(
     tileStyle: MapTileStyle = MapTileStyle.Standard,
     contentDescription: String? = null,
 ) {
-    val pinLabel = stringResource(R.string.native_map_picked_location)
     OsmMap(
         cameraState = cameraState,
         modifier = modifier,
@@ -39,7 +38,10 @@ fun LocationPickerMap(
                 Marker(
                     position = picked,
                     anchor = MarkerAnchor.PinTip,
-                    contentDescription = "$pinLabel: ${picked.format(LocationPicker.COORDINATE_DIGITS)}",
+                    contentDescription = stringResource(
+                        R.string.native_map_picked_location_at,
+                        picked.format(LocationPicker.COORDINATE_DIGITS),
+                    ),
                 ) { DropPinMarker() }
             }
         }

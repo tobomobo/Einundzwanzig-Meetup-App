@@ -1,7 +1,10 @@
 package space.einundzwanzig.meetup.feature.badges.common
 
 import android.content.res.Resources
+import space.einundzwanzig.meetup.data.badges.claim.ClaimFailure
 import space.einundzwanzig.meetup.data.badges.security.ExpiryInfo
+import space.einundzwanzig.meetup.data.badges.security.VerifyFailure
+import space.einundzwanzig.meetup.data.issuance.scan.ClaimInfo
 import space.einundzwanzig.meetup.data.issuance.scan.ScanStrings
 import space.einundzwanzig.meetup.data.issuance.session.SessionRemaining
 import space.einundzwanzig.meetup.feature.badges.R
@@ -33,6 +36,8 @@ internal class ResourceScanStrings(private val res: Resources) : ScanStrings {
     override fun mvEventHasNoBadge(event: String): String = res.getString(L10nR.string.mvEventHasNoBadge, event)
     override fun mvEventNotFound(): String = res.getString(L10nR.string.mvEventNotFound)
     override fun expiry(info: ExpiryInfo): String = BadgeTexts.expiry(res, info)
+    override fun claimFailed(info: ClaimInfo.Failed): String =
+        res.getString(R.string.native_claim_failed, BadgeTexts.claimFailure(res, info.reason, info.message))
 }
 
 /** Localized forms of the typed domain texts (spec 02 §2.9). */
@@ -43,6 +48,25 @@ internal object BadgeTexts {
         ExpiryInfo.NoExpiry -> res.getString(L10nR.string.verifyNoExpiry)
         is ExpiryInfo.Expired -> hm(res, info.seconds, R.string.native_expiry_expired_hm, R.string.native_expiry_expired_m)
         is ExpiryInfo.Valid -> hm(res, info.seconds, R.string.native_expiry_valid_hm, R.string.native_expiry_valid_m)
+    }
+
+    /** Localized [VerifyFailure] (the text inside `verifyErrPrefix`). */
+    fun verifyFailure(res: Resources, failure: VerifyFailure): String = when (failure) {
+        VerifyFailure.MissingData -> res.getString(R.string.native_verify_missing_data)
+        VerifyFailure.BadPubkey -> res.getString(R.string.native_verify_bad_pubkey)
+        VerifyFailure.BadSigFormat -> res.getString(R.string.native_verify_bad_sig_format)
+        is VerifyFailure.Expired -> res.getString(R.string.native_verify_expired, expiry(res, failure.expiry))
+        VerifyFailure.InvalidSignature -> res.getString(R.string.native_verify_invalid_signature)
+        VerifyFailure.LegacyRejected -> res.getString(R.string.native_verify_legacy_rejected)
+        is VerifyFailure.Error -> res.getString(R.string.native_verify_error, failure.detail)
+    }
+
+    /** Localized [ClaimFailure]; the German [fallback] when the reason is unknown. */
+    fun claimFailure(res: Resources, reason: ClaimFailure?, fallback: String): String = when (reason) {
+        null -> fallback
+        ClaimFailure.NoKey -> res.getString(R.string.native_claim_no_key)
+        ClaimFailure.TimestampMismatch -> res.getString(R.string.native_claim_timestamp)
+        is ClaimFailure.Error -> res.getString(R.string.native_claim_error, reason.detail)
     }
 
     /** `MeetupSession.remainingTimeString` in the current locale. */

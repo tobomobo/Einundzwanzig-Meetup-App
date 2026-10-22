@@ -33,6 +33,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,6 +55,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import space.einundzwanzig.meetup.core.camera.QrImageResult
 import space.einundzwanzig.meetup.core.camera.QrScanner
+import space.einundzwanzig.meetup.core.camera.QrScannerState
 import space.einundzwanzig.meetup.core.camera.rememberQrImagePicker
 import space.einundzwanzig.meetup.core.camera.rememberQrScannerState
 import space.einundzwanzig.meetup.core.navigation.LocalNavigator
@@ -83,6 +87,16 @@ internal data class ReputationScannerUiState(
     val isDecodingImage: Boolean = false,
 )
 
+/**
+ * Saves the hit flags across recreation: `QrScannerState.isStopped` survives it, so the demo
+ * dialog (whose dismissal resumes the scanner) must survive too. `isDecodingImage` comes from
+ * the picker and is not saved.
+ */
+internal val ReputationScannerUiStateSaver = listSaver<ReputationScannerUiState, Boolean>(
+    save = { listOf(it.isScanned, it.showDemoDialog) },
+    restore = { ReputationScannerUiState(isScanned = it[0], showDemoDialog = it[1]) },
+)
+
 internal sealed interface ReputationScannerAction {
     data object PickFromGallery : ReputationScannerAction
     data object DismissDemo : ReputationScannerAction
@@ -92,8 +106,15 @@ internal sealed interface ReputationScannerAction {
  * Stateful entry of [ReputationScanner][space.einundzwanzig.meetup.core.navigation.ReputationScanner]
  * (`SecureQRScanner`, spec 04 §2.3). Every reputation hit replaces this screen with the result.
  */
+/** Camera slot of [ReputationScannerRoute]: the real [QrScanner]; tests pass a fake that feeds codes. */
+internal typealias ReputationCameraSlot = @Composable (onResult: (String) -> Boolean, state: QrScannerState, enabled: Boolean) -> Unit
+
 @Composable
-internal fun ReputationScannerRoute() {
+internal fun ReputationScannerRoute(
+    scanner: ReputationCameraSlot = { onResult, scannerState, enabled ->
+        QrScanner(onResult = onResult, state = scannerState, enabled = enabled)
+    },
+) {
     val navigator = LocalNavigator.current
     val appHost = LocalAppSnackbarHostState.current
     val localHost = remember { SnackbarHostState() }
@@ -101,7 +122,12 @@ internal fun ReputationScannerRoute() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val scannerState = rememberQrScannerState()
-    var state by remember { mutableStateOf(ReputationScannerUiState()) }
+    var state by rememberSaveable(stateSaver = ReputationScannerUiStateSaver) { mutableStateOf(ReputationScannerUiState()) }
+    // Safety net: a stopped scanner without a pending hit (e.g. restored state) would never
+    // deliver again, so resume it.
+    LaunchedEffect(Unit) {
+        if (scannerState.isStopped && !state.isScanned && !state.showDemoDialog) scannerState.resume()
+    }
 
     fun handle(hit: ScanHit): Boolean = when (hit) {
         ScanHit.Demo -> {
@@ -154,10 +180,10 @@ internal fun ReputationScannerRoute() {
         onBack = navigator::back,
         snackbarHost = { if (appHost == null) AppSnackbarHost(localHost) },
         camera = {
-            QrScanner(
-                onResult = { raw -> !state.isScanned && handle(ReputationScanLogic.classify(raw)) },
-                state = scannerState,
-                enabled = !state.showDemoDialog,
+            scanner(
+                { raw -> !state.isScanned && handle(ReputationScanLogic.classify(raw)) },
+                scannerState,
+                !state.showDemoDialog,
             )
         },
     )

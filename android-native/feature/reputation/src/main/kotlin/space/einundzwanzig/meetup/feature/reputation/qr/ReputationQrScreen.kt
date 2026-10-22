@@ -1,5 +1,6 @@
 package space.einundzwanzig.meetup.feature.reputation.qr
 
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
@@ -127,15 +128,21 @@ internal object ReputationQrTags {
     const val OPEN_SCANNER = "rep_qr_open_scanner"
 }
 
-/** Localized text of a publish result (spec 04 §2.10 `repPublish*`). */
+/** String resource and format args of a publish result (spec 04 §2.10 `repPublish*`). */
+internal fun PublishResult.toUiText(): Pair<Int, Array<Any>> = when (this) {
+    PublishResult.NoKey -> R.string.native_repPublishNoKey to emptyArray()
+    PublishResult.NoBadges -> R.string.native_repPublishNoBadges to emptyArray()
+    PublishResult.UpToDate -> R.string.native_repPublishUpToDate to emptyArray()
+    is PublishResult.Sent -> R.string.native_repPublishOk to arrayOf(relayCount)
+    is PublishResult.NoRelay -> R.string.native_repPublishNoRelay to emptyArray()
+    is PublishResult.Error -> R.string.native_repPublishError to arrayOf(cause.message ?: cause.toString())
+}
+
+/** Localized text of a publish result. */
 @Composable
-internal fun publishResultText(result: PublishResult): String = when (result) {
-    PublishResult.NoKey -> stringResource(R.string.native_repPublishNoKey)
-    PublishResult.NoBadges -> stringResource(R.string.native_repPublishNoBadges)
-    PublishResult.UpToDate -> stringResource(R.string.native_repPublishUpToDate)
-    is PublishResult.Sent -> stringResource(R.string.native_repPublishOk, result.relayCount)
-    is PublishResult.NoRelay -> stringResource(R.string.native_repPublishNoRelay)
-    is PublishResult.Error -> stringResource(R.string.native_repPublishError, result.cause.message ?: result.cause.toString())
+internal fun publishResultText(result: PublishResult): String {
+    val (res, args) = result.toUiText()
+    return stringResource(res, *args)
 }
 
 /** Stateful entry of [ReputationQr][space.einundzwanzig.meetup.core.navigation.ReputationQr] (spec 04 §2.1). */
@@ -205,13 +212,9 @@ internal fun ReputationQrRoute(viewModel: ReputationQrViewModel = hiltViewModel(
     )
 }
 
-private fun publishMessage(context: android.content.Context, result: PublishResult): String = when (result) {
-    PublishResult.NoKey -> context.getString(R.string.native_repPublishNoKey)
-    PublishResult.NoBadges -> context.getString(R.string.native_repPublishNoBadges)
-    PublishResult.UpToDate -> context.getString(R.string.native_repPublishUpToDate)
-    is PublishResult.Sent -> context.getString(R.string.native_repPublishOk, result.relayCount)
-    is PublishResult.NoRelay -> context.getString(R.string.native_repPublishNoRelay)
-    is PublishResult.Error -> context.getString(R.string.native_repPublishError, result.cause.message ?: result.cause.toString())
+private fun publishMessage(context: android.content.Context, result: PublishResult): String {
+    val (res, args) = result.toUiText()
+    return context.getString(res, *args)
 }
 
 @Composable
@@ -465,12 +468,13 @@ private fun StatTile(icon: ImageVector, value: Int, label: String, color: Color,
         modifier = modifier
             .background(MaterialTheme.colorScheme.surfaceContainer, shape)
             .border(1.dp, color.copy(alpha = 0.2f), shape)
-            .padding(vertical = 14.dp),
+            .padding(vertical = 14.dp)
+            .semantics(mergeDescendants = true) {},
     ) {
         Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
         Spacer(Modifier.height(4.dp))
         Text(value.toString(), color = color, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
-        Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, maxLines = 1)
+        Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 4.dp))
     }
 }
 

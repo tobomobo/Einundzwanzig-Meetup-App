@@ -2,7 +2,10 @@ package space.einundzwanzig.meetup.feature.reputation.common
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
+import space.einundzwanzig.meetup.data.proofs.nip05.Nip05DomainType
 import space.einundzwanzig.meetup.data.proofs.platform.VerifyMessage
+import space.einundzwanzig.meetup.data.proofs.zap.ZapActivity
+import space.einundzwanzig.meetup.data.trust.layers.Nip05DomainKind
 import space.einundzwanzig.meetup.feature.reputation.R
 
 /**
@@ -40,3 +43,42 @@ internal fun verifyMessage(message: VerifyMessage): String = when (message) {
     VerifyMessage.NpubNoBindings -> stringResource(R.string.native_rvMsgNpubNoBindings)
     is VerifyMessage.Error -> stringResource(R.string.native_rvMsgError, message.detail)
 }
+
+/** Localized Dart `ZapStats.activityLabel` (German literal in Flutter and :data:proofs). */
+@Composable
+internal fun zapActivityLabel(activity: ZapActivity): String = stringResource(
+    when (activity) {
+        ZapActivity.NONE -> R.string.native_zapActivityNone
+        ZapActivity.LITTLE -> R.string.native_zapActivityLittle
+        ZapActivity.REGULAR -> R.string.native_zapActivityRegular
+        ZapActivity.VERY_ACTIVE -> R.string.native_zapActivityVeryActive
+    },
+)
+
+/**
+ * Localized label of a German activity text from :data:trust `ZapLayerInput.activityLabel`
+ * (same literals as [ZapActivity.german]); unknown text is shown as is.
+ */
+@Composable
+internal fun zapActivityLabel(german: String): String =
+    ZapActivity.entries.firstOrNull { it.german == german }?.let { zapActivityLabel(it) } ?: german
+
+/** Localized Dart `Nip05Result.domainLabel`; `""` for UNKNOWN (as in Flutter). */
+@Composable
+internal fun nip05DomainLabel(type: Nip05DomainType): String = when (type) {
+    Nip05DomainType.COMMUNITY -> stringResource(R.string.native_nip05Community)
+    Nip05DomainType.CUSTOM -> stringResource(R.string.native_nip05Custom)
+    Nip05DomainType.PUBLIC_PROVIDER -> stringResource(R.string.native_nip05PublicProvider)
+    Nip05DomainType.UNKNOWN -> ""
+}
+
+/** [nip05DomainLabel] for the :data:trust layer input kind. */
+@Composable
+internal fun nip05DomainLabel(kind: Nip05DomainKind): String = nip05DomainLabel(
+    when (kind) {
+        Nip05DomainKind.COMMUNITY -> Nip05DomainType.COMMUNITY
+        Nip05DomainKind.CUSTOM -> Nip05DomainType.CUSTOM
+        Nip05DomainKind.PUBLIC_PROVIDER -> Nip05DomainType.PUBLIC_PROVIDER
+        Nip05DomainKind.UNKNOWN -> Nip05DomainType.UNKNOWN
+    },
+)

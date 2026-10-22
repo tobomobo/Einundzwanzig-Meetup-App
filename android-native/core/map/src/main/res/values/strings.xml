@@ -6,7 +6,7 @@
     <string name="native_map_description">Karte</string>
     <string name="native_map_zoom_in">Hineinzoomen</string>
     <string name="native_map_zoom_out">Herauszoomen</string>
-    <string name="native_map_picked_location">Gewählter Ort</string>
+    <string name="native_map_picked_location_at">Gewählter Ort: %1$s</string>
     <string name="native_map_pan_north">Karte nach Norden verschieben</string>
     <string name="native_map_pan_south">Karte nach Süden verschieben</string>
     <string name="native_map_pan_east">Karte nach Osten verschieben</string>

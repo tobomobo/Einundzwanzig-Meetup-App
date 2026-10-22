@@ -15,6 +15,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.exclude
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -237,36 +242,51 @@ fun ChatScreen(
                 scrollBehavior = scrollBehavior,
             )
         },
-        snackbarHost = { AppSnackbarHost(snackbarHostState) },
+        // Lift snackbars above the keyboard (send failures fire while the IME is open); the Scaffold
+        // already clears the system bars, so only the part of the IME beyond them is added.
+        snackbarHost = {
+            AppSnackbarHost(
+                snackbarHostState,
+                Modifier.windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.systemBars)),
+            )
+        },
     ) { padding ->
-        Column(
+        BoxWithConstraints(
             Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .consumeWindowInsets(padding)
                 .imePadding(),
         ) {
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-                val body = when {
-                    state.loading -> ChatBody.Loading
-                    state.messages.isEmpty() -> ChatBody.Empty
-                    else -> ChatBody.Messages
-                }
-                AnimatedContent(
-                    targetState = body,
-                    transitionSpec = { fadeIn() togetherWith fadeOut() },
-                    label = "chatBody",
-                ) { b ->
-                    when (b) {
-                        ChatBody.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            AppLoadingIndicator(modifier = Modifier.testTag(ChatTestTags.LOADING))
+            // The footer may take at most half the height (scrolling beyond), so the message list
+            // never collapses on small screens, at large font scales or with the keyboard open.
+            val footerMaxHeight = maxHeight * 0.5f
+            Column(Modifier.fillMaxSize()) {
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    val body = when {
+                        state.loading -> ChatBody.Loading
+                        state.messages.isEmpty() -> ChatBody.Empty
+                        else -> ChatBody.Messages
+                    }
+                    AnimatedContent(
+                        targetState = body,
+                        transitionSpec = { fadeIn() togetherWith fadeOut() },
+                        label = "chatBody",
+                    ) { b ->
+                        when (b) {
+                            ChatBody.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                AppLoadingIndicator(
+                                    modifier = Modifier.testTag(ChatTestTags.LOADING),
+                                    contentDescription = stringResource(L10nR.string.loading),
+                                )
+                            }
+                            ChatBody.Empty -> ChatEmpty(state.isEvent)
+                            ChatBody.Messages -> MessageList(state, clock, onAction)
                         }
-                        ChatBody.Empty -> ChatEmpty(state.isEvent)
-                        ChatBody.Messages -> MessageList(state, clock, onAction)
                     }
                 }
+                ChatFooter(state, onAction, Modifier.heightIn(max = footerMaxHeight))
             }
-            ChatFooter(state, onAction)
         }
     }
 
@@ -406,21 +426,27 @@ private fun MessageRow(m: ChatMessageItem, clock: ChatClock, onAction: (ChatActi
 }
 
 @Composable
-private fun ChatFooter(state: ChatUiState, onAction: (ChatAction) -> Unit) {
+private fun ChatFooter(state: ChatUiState, onAction: (ChatAction) -> Unit, modifier: Modifier = Modifier) {
     when {
         // Membership unknown: deliberately no join button yet.
         state.loading -> Spacer(Modifier.height(24.dp))
-        !state.member -> JoinFooter(state.joining, onAction)
-        else -> Composer(state.input, state.sending, onAction)
+        !state.member -> JoinFooter(state.joining, onAction, modifier)
+        // The text field scrolls internally once it is height-capped.
+        else -> Composer(state.input, state.sending, onAction, modifier)
     }
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun JoinFooter(joining: Boolean, onAction: (ChatAction) -> Unit) {
+private fun JoinFooter(joining: Boolean, onAction: (ChatAction) -> Unit, modifier: Modifier = Modifier) {
     val primary = MaterialTheme.colorScheme.primary
     val joinLabel = stringResource(L10nR.string.chatJoin)
-    Column(Modifier.fillMaxWidth().padding(16.dp)) {
+    Column(
+        modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+    ) {
         Text(
             text = stringResource(L10nR.string.chatJoinHint),
             style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp),
@@ -481,11 +507,11 @@ private fun JoinFooter(joining: Boolean, onAction: (ChatAction) -> Unit) {
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun Composer(input: String, sending: Boolean, onAction: (ChatAction) -> Unit) {
+private fun Composer(input: String, sending: Boolean, onAction: (ChatAction) -> Unit, modifier: Modifier = Modifier) {
     val primary = MaterialTheme.colorScheme.primary
     val sendLabel = stringResource(R.string.native_chat_send)
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(start = 12.dp, top = 4.dp, end = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.Bottom,
@@ -542,9 +568,11 @@ private fun Composer(input: String, sending: Boolean, onAction: (ChatAction) -> 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun AuthorSheet(author: ChatAuthor, onAction: (ChatAction) -> Unit) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
     ModalBottomSheet(
         onDismissRequest = { onAction(ChatAction.DismissAuthor) },
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
     ) {
         Column(
@@ -570,7 +598,8 @@ private fun AuthorSheet(author: ChatAuthor, onAction: (ChatAction) -> Unit) {
             Spacer(Modifier.height(10.dp))
             val copyLabel = stringResource(L10nR.string.chatCopyNpub)
             Surface(
-                onClick = { onAction(ChatAction.CopyNpub) },
+                // Animate the sheet out first; CopyNpub then clears the author (removes the sheet).
+                onClick = { scope.launch { sheetState.hide() }.invokeOnCompletion { onAction(ChatAction.CopyNpub) } },
                 shape = RoundedCornerShape(9.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
                 border = BorderStroke(Dimens.Hairline, MaterialTheme.colorScheme.outlineVariant),

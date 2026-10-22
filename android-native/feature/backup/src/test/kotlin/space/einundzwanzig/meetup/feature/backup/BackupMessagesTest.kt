@@ -96,4 +96,40 @@ class BackupMessagesTest {
         val r = RestoreOutcome.Restored(badges = 1, nostrKey = true, platformProofs = null, humanity = false)
         assertEquals("✅ Backup loaded! Profile, 1 badge, Nostr key restored.", BackupMessages.snackbar(res, BackupMessage.Loaded(r)).text)
     }
+
+    @Test
+    fun `restore error counts use plurals`() {
+        assertEquals(
+            "1 Badge aus dem Backup konnte nicht vorbereitet werden.",
+            BackupMessages.restoreErrorText(res, RestoreError.StageFailed(1)),
+        )
+        assertEquals(
+            "1 Badge aus dem Backup konnte nicht gespeichert werden, der Rest wurde übernommen.",
+            BackupMessages.restoreErrorText(res, RestoreError.BadgesNotSaved(1)),
+        )
+    }
+
+    @Test
+    @Config(qualifiers = "en")
+    fun `english restore error counts use plurals`() {
+        assertEquals("1 badge from the backup could not be prepared.", BackupMessages.restoreErrorText(res, RestoreError.StageFailed(1)))
+        assertEquals("3 badges from the backup could not be prepared.", BackupMessages.restoreErrorText(res, RestoreError.StageFailed(3)))
+        assertEquals(
+            "1 badge from the backup could not be saved. Everything else was restored.",
+            BackupMessages.restoreErrorText(res, RestoreError.BadgesNotSaved(1)),
+        )
+    }
+
+    @Test
+    @Config(qualifiers = "es")
+    fun `spanish restore error counts use plurals`() {
+        assertEquals(
+            "No se pudo preparar 1 insignia de la copia de seguridad.",
+            BackupMessages.restoreErrorText(res, RestoreError.StageFailed(1)),
+        )
+        assertEquals(
+            "No se pudieron guardar 2 insignias de la copia de seguridad. Todo lo demás se restauró.",
+            BackupMessages.restoreErrorText(res, RestoreError.BadgesNotSaved(2)),
+        )
+    }
 }

@@ -16,13 +16,25 @@
     </plurals>
     <string name="native_backupItemHumanity">prueba de humanidad</string>
     <string name="native_backupErrSwitchPending">Un cambio de identidad aún no ha terminado. Vuelve a cargar la copia de seguridad de la nueva identidad.</string>
-    <string name="native_backupErrStageFailed">No se pudieron preparar %1$d insignias de la copia de seguridad.</string>
+    <!-- args: count:int -->
+    <plurals name="native_backupErrStageFailed">
+        <item quantity="one">No se pudo preparar %1$d insignia de la copia de seguridad.</item>
+        <item quantity="many">No se pudieron preparar %1$d insignias de la copia de seguridad.</item>
+        <item quantity="other">No se pudieron preparar %1$d insignias de la copia de seguridad.</item>
+    </plurals>
     <string name="native_backupErrKeyUnreadable">La clave de la copia de seguridad no se puede leer ahora. Tu colección no cambia.</string>
     <string name="native_backupErrKeyNotTaken">La clave de la copia de seguridad no se aplicó. Tu colección no cambia.</string>
-    <string name="native_backupErrBadgesNotSaved">No se pudieron guardar %1$d insignias de la copia de seguridad. Todo lo demás se restauró.</string>
+    <!-- args: count:int -->
+    <plurals name="native_backupErrBadgesNotSaved">
+        <item quantity="one">No se pudo guardar %1$d insignia de la copia de seguridad. Todo lo demás se restauró.</item>
+        <item quantity="many">No se pudieron guardar %1$d insignias de la copia de seguridad. Todo lo demás se restauró.</item>
+        <item quantity="other">No se pudieron guardar %1$d insignias de la copia de seguridad. Todo lo demás se restauró.</item>
+    </plurals>
     <string name="native_backupErrHoldNotPersisted">No se pudo registrar el cambio.</string>
     <string name="native_backupErrClearNotMarked">No se pudo marcar la colección vacía.</string>
     <string name="native_backupErrProofsNotCleared">No se pudieron eliminar las pruebas de la identidad anterior.</string>
     <string name="native_backupErrUnreadable">No se pudo leer el archivo.</string>
     <string name="native_backupWorking">Procesando copia de seguridad …</string>
+    <string name="native_backupRuleMet">Cumplido</string>
+    <string name="native_backupRuleNotMet">No cumplido</string>
 </resources>

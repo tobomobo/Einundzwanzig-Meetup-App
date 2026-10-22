@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -54,6 +55,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -74,6 +76,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import space.einundzwanzig.meetup.core.navigation.LocalNavigator
 import space.einundzwanzig.meetup.core.ui.component.AppLargeTopBar
 import space.einundzwanzig.meetup.core.ui.component.AppLoadingIndicator
@@ -156,6 +159,7 @@ fun ValueForValueScreen(
             Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .consumeWindowInsets(padding)
                 .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 40.dp)
@@ -327,7 +331,9 @@ private fun AmountField(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NoWalletSheet(invoice: String, onCopy: () -> Unit, onDismiss: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
             Modifier
                 .fillMaxWidth()
@@ -360,7 +366,12 @@ private fun NoWalletSheet(invoice: String, onCopy: () -> Unit, onDismiss: () -> 
                     .padding(12.dp),
             )
             Spacer(Modifier.height(12.dp))
-            Button(onClick = onCopy, modifier = Modifier.fillMaxWidth().height(52.dp), shape = CircleShape) {
+            Button(
+                // Animate the sheet out first (Flutter Navigator.pop), then copy + snackbar.
+                onClick = { scope.launch { sheetState.hide() }.invokeOnCompletion { onCopy() } },
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = CircleShape,
+            ) {
                 Icon(Icons.Rounded.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(L10nR.string.v4vCopyInvoice))

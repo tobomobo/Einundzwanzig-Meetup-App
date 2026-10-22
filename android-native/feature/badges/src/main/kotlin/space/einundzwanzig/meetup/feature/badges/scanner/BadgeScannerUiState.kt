@@ -1,6 +1,7 @@
 package space.einundzwanzig.meetup.feature.badges.scanner
 
 import space.einundzwanzig.meetup.data.badges.model.MeetupBadge
+import space.einundzwanzig.meetup.data.badges.security.VerifyFailure
 import space.einundzwanzig.meetup.data.issuance.nfc.NfcPayloadError
 import space.einundzwanzig.meetup.data.issuance.scan.FoundInfo
 import space.einundzwanzig.meetup.data.issuance.scan.PendingBadge
@@ -20,7 +21,8 @@ interface ScannerLabels {
  * @property processing a scan is being verified (block height, registry, claim signing).
  * @property readingNfc NFC reader mode is on.
  * @property result non-null = confirmation view (`_success == true`).
- * @property saving the blocking "locating" indicator of `_confirmSaveBadge`.
+ * @property busy the blocking indicator of `_confirmSaveBadge` (locating) or of the
+ *   co-attendance publish; `null` = not shown.
  */
 data class BadgeScannerUiState(
     val nfcEnabled: Boolean = false,
@@ -28,9 +30,27 @@ data class BadgeScannerUiState(
     val processing: Boolean = false,
     val readingNfc: Boolean = false,
     val result: ScanResultUi? = null,
-    val saving: Boolean = false,
+    val busy: BusyKind? = null,
     val dialog: ScannerDialog? = null,
 )
+
+/** What the blocking indicator announces. */
+enum class BusyKind {
+    /** Location check + save (`_confirmSaveBadge`). */
+    LOCATING,
+
+    /** Co-attendance publish to the relays. */
+    PUBLISHING,
+}
+
+/** Typed reason of [ScanStatus.Rejected] that the UI localizes (spec 02 §2.9). */
+sealed interface RejectReason {
+    /** Signature, format, expiry or v1 rejection. */
+    data class Verify(val failure: VerifyFailure) : RejectReason
+
+    /** Wrongly typed rolling fields `n`/`ts` (`NonceStatus.MALFORMED`). */
+    data object RollingQrMalformed : RejectReason
+}
 
 /** The scanner view's status line. */
 sealed interface ScanStatus {
@@ -52,8 +72,11 @@ sealed interface ScanStatus {
     /** `verifyErrQrExpired(message)`. */
     data class NonceExpired(val validation: NonceValidation) : ScanStatus
 
-    /** `verifyErrPrefix(message)` (signature, format, expiry, malformed fields). */
-    data class Rejected(val message: String) : ScanStatus
+    /**
+     * `verifyErrPrefix(text)` (signature, format, expiry, malformed fields): the text is the
+     * localized [reason]; the German/technical [message] only when [reason] is `null`.
+     */
+    data class Rejected(val message: String, val reason: RejectReason? = null) : ScanStatus
 
     /** NFC record could not be read (`verifyErr*`). */
     data class NfcRejected(val error: NfcPayloadError) : ScanStatus

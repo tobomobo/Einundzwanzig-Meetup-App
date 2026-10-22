@@ -1,6 +1,11 @@
 package space.einundzwanzig.meetup.feature.chat
 
 import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewmodel.CreationExtras
+import kotlin.reflect.KClass
 import app.cash.turbine.test
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -42,6 +47,29 @@ class ChatViewModelTest {
 
     private fun TestScope.vm(target: ChatTarget = room, saved: SavedStateHandle = SavedStateHandle()): ChatViewModel =
         ChatViewModel(target, saved, chat, eventChat, people, time).also { advanceUntilIdle() }
+
+    @Test
+    fun `clearing the view model closes the live subscription and stops read marks`() = runTest(dispatcher) {
+        chat.messages = listOf(msg("1", BOB, "hi", nowSeconds - 10))
+        val store = ViewModelStore()
+        val factory = object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: KClass<T>, extras: CreationExtras): T {
+                @Suppress("UNCHECKED_CAST")
+                return ChatViewModel(room, SavedStateHandle(), chat, eventChat, people, time) as T
+            }
+        }
+        ViewModelProvider.create(store, factory)[ChatViewModel::class]
+        advanceUntilIdle()
+        assertTrue(chat.liveOpen)
+        val marksBefore = chat.marks.size
+        // What the per-entry ViewModelStore decorator does when the chat is popped.
+        store.clear()
+        advanceUntilIdle()
+        assertFalse(chat.liveOpen)
+        chat.live.send(msg("2", BOB, "unseen", nowSeconds))
+        advanceUntilIdle()
+        assertEquals(marksBefore, chat.marks.size)
+    }
 
     @Test
     fun `room title falls back to h and subtitle kind is room`() = runTest(dispatcher) {

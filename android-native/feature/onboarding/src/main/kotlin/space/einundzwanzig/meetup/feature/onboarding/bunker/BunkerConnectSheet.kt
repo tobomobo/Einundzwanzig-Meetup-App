@@ -188,14 +188,14 @@ fun BunkerSheetContent(state: BunkerSheetState, onAction: (BunkerAction) -> Unit
                         } else {
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.inverseSurface,
+                                color = MaterialTheme.extendedColors.qrBackground,
                                 modifier = Modifier.align(Alignment.CenterHorizontally),
                             ) {
                                 QrCode(
                                     content = uri,
                                     size = 200.dp,
-                                    backgroundColor = MaterialTheme.colorScheme.inverseSurface,
-                                    moduleColor = MaterialTheme.colorScheme.inverseOnSurface,
+                                    backgroundColor = MaterialTheme.extendedColors.qrBackground,
+                                    moduleColor = MaterialTheme.extendedColors.qrModule,
                                     contentDescription = stringResource(R.string.native_onboarding_bunker_qr),
                                     modifier = Modifier.testTag(BunkerTags.QR),
                                 )

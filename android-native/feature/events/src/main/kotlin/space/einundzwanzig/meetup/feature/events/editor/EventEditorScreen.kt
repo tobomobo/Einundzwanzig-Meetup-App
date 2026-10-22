@@ -47,6 +47,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DisplayMode
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledIconButton
@@ -78,6 +79,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -461,9 +463,13 @@ private fun EditorDatePicker(
     val firstMillis = first.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
     val lastMillis = last.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
     val clamped = initial.coerceIn(first, last)
+    // The calendar grid does not scroll: on short windows (landscape, split screen) it would push
+    // OK/Abbrechen out of the dialog, so start with the compact text input there (toggle stays).
+    val compact = LocalConfiguration.current.screenHeightDp < COMPACT_PICKER_HEIGHT_DP
     val pickerState = rememberDatePickerState(
         initialSelectedDateMillis = clamped.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
         yearRange = first.year..last.year,
+        initialDisplayMode = if (compact) DisplayMode.Input else DisplayMode.Picker,
         selectableDates = object : SelectableDates {
             override fun isSelectableDate(utcTimeMillis: Long): Boolean = utcTimeMillis in firstMillis..lastMillis
             override fun isSelectableYear(year: Int): Boolean = year in first.year..last.year
@@ -485,9 +491,12 @@ private fun EditorDatePicker(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(L10nR.string.actionCancel)) } },
     ) {
-        DatePicker(state = pickerState)
+        DatePicker(state = pickerState, showModeToggle = true)
     }
 }
+
+/** Below this window height the date picker opens in [DisplayMode.Input]. */
+private const val COMPACT_PICKER_HEIGHT_DP = 560
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

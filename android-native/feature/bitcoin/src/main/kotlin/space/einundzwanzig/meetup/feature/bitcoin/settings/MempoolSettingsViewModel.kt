@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import space.einundzwanzig.meetup.core.common.ApplicationScope
+import space.einundzwanzig.meetup.core.common.log.DiagnosticLog
 import space.einundzwanzig.meetup.data.mempool.HostTestFailure
 import space.einundzwanzig.meetup.data.mempool.MempoolConfig
 import space.einundzwanzig.meetup.data.mempool.MempoolHosts
@@ -89,6 +91,7 @@ class MempoolSettingsViewModel @Inject constructor(
     private val config: MempoolConfig,
     private val mempool: MempoolService,
     @ApplicationScope private val appScope: CoroutineScope,
+    private val log: DiagnosticLog,
 ) : ViewModel() {
 
     // Seeded synchronously (the config is normally loaded at app start), so the persisted card is
@@ -150,19 +153,33 @@ class MempoolSettingsViewModel @Inject constructor(
 
     private fun select(mode: MempoolMode) {
         userTouched = true
-        local.update { it.copy(mode = mode, testResult = null) }
+        // A running test belongs to the previous host: drop it so its result cannot appear under
+        // the newly selected card.
+        testJob?.cancel()
+        testJob = null
+        local.update { it.copy(mode = mode, testing = false, testResult = null) }
         val custom = local.value.customText
         if (mode == MempoolMode.CUSTOM && !MempoolHosts.looksValid(custom)) return
-        appScope.launch { persist(mode, custom) }
+        appScope.launch(start = CoroutineStart.UNDISPATCHED) { persist(mode, custom) }
     }
 
     /**
      * Persists [mode] and forgets the dashboard of the old source. Runs in the application scope so
-     * popping the screen right after a tap cannot cancel it half-way.
+     * popping the screen right after a tap cannot cancel it half-way. Callers start it
+     * [CoroutineStart.UNDISPATCHED], so each write reaches the config's FIFO write lock
+     * synchronously in tap order (the last tapped card is the one that is saved).
+     *
+     * @return `true` when the write went through.
      */
-    private suspend fun persist(mode: MempoolMode, custom: String) {
+    private suspend fun persist(mode: MempoolMode, custom: String): Boolean = try {
         config.setMode(mode, custom)
         mempool.clearLastDashboard()
+        true
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log.warn(TAG, "Mempool-Quelle nicht speicherbar", e)
+        false
     }
 
     private fun saveCustom() {
@@ -172,9 +189,9 @@ class MempoolSettingsViewModel @Inject constructor(
             local.update { it.copy(testResult = MempoolTestResult.InvalidUrl) }
             return
         }
-        val write = appScope.async { persist(MempoolMode.CUSTOM, custom) }
+        val write = appScope.async(start = CoroutineStart.UNDISPATCHED) { persist(MempoolMode.CUSTOM, custom) }
         viewModelScope.launch {
-            write.await()
+            if (!write.await()) return@launch
             local.update {
                 it.copy(customText = config.persistedHost, customRevision = it.customRevision + 1, testResult = null)
             }
@@ -198,3 +215,5 @@ class MempoolSettingsViewModel @Inject constructor(
         }
     }
 }
+
+private const val TAG = "Mempool"

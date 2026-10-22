@@ -130,6 +130,8 @@ class PlayerV4vGlossaryScreenTest {
         rule.onNodeWithText(s(L10nR.string.v4vNoWalletTitle)).assertExists()
         rule.onNodeWithText("lnbc21n1xyz").assertExists()
         rule.onNodeWithText(s(L10nR.string.v4vCopyInvoice)).performClick()
+        // The sheet animates out first, then the copy action is dispatched.
+        rule.waitForIdle()
         assertEquals(listOf<ValueForValueAction>(ValueForValueAction.CopyInvoice), actions)
     }
 

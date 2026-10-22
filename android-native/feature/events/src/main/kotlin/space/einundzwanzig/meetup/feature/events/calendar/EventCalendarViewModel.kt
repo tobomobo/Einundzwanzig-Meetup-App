@@ -214,13 +214,16 @@ class EventCalendarViewModel @AssistedInject constructor(
         }
     }
 
-    /** Dart `_load()`: merged items for the current community/worldwide mode. */
-    fun load() {
+    /**
+     * Dart `_load()`: merged items for the current community/worldwide mode. [force] refetches the
+     * meetup dates past their 60 s cache (refresh, pull-to-refresh, after publishing).
+     */
+    fun load(force: Boolean = false) {
         loadJob?.cancel()
         mutableState.update { it.copy(loading = true) }
         loadJob = viewModelScope.launch {
             val worldwide = state.value.worldwide
-            val items = repository.load(worldwide)
+            val items = repository.load(worldwide, force)
             mutableState.update { it.copy(loading = false, items = items, now = now()).refiltered() }
         }
     }
@@ -243,7 +246,7 @@ class EventCalendarViewModel @AssistedInject constructor(
                 mutableState.update { it.copy(worldwide = !it.worldwide) }
                 load()
             }
-            EventCalendarAction.Refresh -> if (!state.value.loading) load()
+            EventCalendarAction.Refresh -> if (!state.value.loading) load(force = true)
             is EventCalendarAction.OpenDetails -> openDetails(action.item)
             EventCalendarAction.CloseDetails -> mutableState.update {
                 it.copy(details = null, confirmCancel = false, helperEditor = null)

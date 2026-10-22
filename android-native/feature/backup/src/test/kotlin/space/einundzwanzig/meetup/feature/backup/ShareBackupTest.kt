@@ -3,6 +3,7 @@ package space.einundzwanzig.meetup.feature.backup
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -25,7 +26,7 @@ class ShareBackupTest {
     fun `older backups are deleted and the name is sanitized`() = runTest {
         File(dir, "old.21bkp").writeText("old")
         var shared: File? = null
-        val result = shareBackup(context, "a/b\\c.21bkp", "data".toByteArray()) { file ->
+        val result = shareBackup(context, "a/b\\c.21bkp", "data".toByteArray(), Dispatchers.Unconfined) { file ->
             shared = file
             ShareResult.Success(null)
         }
@@ -39,7 +40,7 @@ class ShareBackupTest {
     @Test
     fun `dismissed share deletes the file`() = runTest {
         var shared: File? = null
-        val result = shareBackup(context, "x.21bkp", "data".toByteArray()) { file ->
+        val result = shareBackup(context, "x.21bkp", "data".toByteArray(), Dispatchers.Unconfined) { file ->
             shared = file
             assertTrue(file.exists())
             ShareResult.Dismissed

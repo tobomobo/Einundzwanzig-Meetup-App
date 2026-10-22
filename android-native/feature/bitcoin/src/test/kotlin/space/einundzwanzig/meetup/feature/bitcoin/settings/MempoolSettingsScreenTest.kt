@@ -22,6 +22,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import space.einundzwanzig.meetup.core.navigation.LocalNavigator
 import space.einundzwanzig.meetup.core.navigation.Navigator
+import space.einundzwanzig.meetup.feature.bitcoin.FakeLog
 import space.einundzwanzig.meetup.feature.bitcoin.FakeMempoolConfig
 import space.einundzwanzig.meetup.feature.bitcoin.FakeMempoolService
 import androidx.test.core.app.ApplicationProvider
@@ -98,7 +99,7 @@ class MempoolSettingsScreenTest {
     @Test
     fun `route shows the saved snackbar after saving`() {
         val config = FakeMempoolConfig()
-        val vm = MempoolSettingsViewModel(config, FakeMempoolService(), CoroutineScope(Dispatchers.Unconfined))
+        val vm = MempoolSettingsViewModel(config, FakeMempoolService(), CoroutineScope(Dispatchers.Unconfined), FakeLog())
         rule.setContent {
             EinundzwanzigTheme {
                 CompositionLocalProvider(LocalNavigator provides NoopNavigator) { MempoolSettingsRoute(vm) }

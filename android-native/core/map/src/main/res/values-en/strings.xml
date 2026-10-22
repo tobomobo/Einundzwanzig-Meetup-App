@@ -5,7 +5,7 @@
     <string name="native_map_description">Map</string>
     <string name="native_map_zoom_in">Zoom in</string>
     <string name="native_map_zoom_out">Zoom out</string>
-    <string name="native_map_picked_location">Selected location</string>
+    <string name="native_map_picked_location_at">Selected location: %1$s</string>
     <string name="native_map_pan_north">Pan map north</string>
     <string name="native_map_pan_south">Pan map south</string>
     <string name="native_map_pan_east">Pan map east</string>

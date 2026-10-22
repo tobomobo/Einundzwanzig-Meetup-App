@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import space.einundzwanzig.meetup.core.navigation.LocalNavigator
 import space.einundzwanzig.meetup.core.navigation.VerifyPerson
@@ -95,6 +96,10 @@ internal fun MyNetworkRoute(viewModel: MyNetworkViewModel = hiltViewModel()) {
     val context = LocalContext.current
     val resources = LocalResources.current
     val snackbar = remember { SnackbarHostState() }
+    LifecycleStartEffect(viewModel) {
+        viewModel.onStart()
+        onStopOrDispose { }
+    }
     LaunchedEffect(viewModel) {
         viewModel.events.collect { ev ->
             when (ev) {

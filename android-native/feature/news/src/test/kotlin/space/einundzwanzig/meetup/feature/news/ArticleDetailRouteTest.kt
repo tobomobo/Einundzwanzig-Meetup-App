@@ -9,6 +9,7 @@ import android.os.Bundle
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -29,6 +30,8 @@ import space.einundzwanzig.meetup.core.navigation.Navigator
 import space.einundzwanzig.meetup.core.navigation.NewsArticleDetails
 import space.einundzwanzig.meetup.core.ui.theme.EinundzwanzigTheme
 import space.einundzwanzig.meetup.data.news.NewsArticles
+import space.einundzwanzig.meetup.data.news.ZapError
+import space.einundzwanzig.meetup.data.news.ZapResult
 import space.einundzwanzig.meetup.feature.news.detail.ArticleDetailAction
 import space.einundzwanzig.meetup.feature.news.detail.ArticleDetailRoute
 import space.einundzwanzig.meetup.feature.news.detail.ArticleDetailTestTags
@@ -53,13 +56,17 @@ class ArticleDetailRouteTest {
         override fun startActivity(intent: Intent?, options: Bundle?) = throw ActivityNotFoundException("none")
     }
 
-    private fun show(content: String? = "## Text"): ArticleDetailViewModel {
+    private fun show(
+        content: String? = "## Text",
+        reactions: FakeReactions = FakeReactions(),
+        zaps: FakeZaps = FakeZaps(),
+    ): ArticleDetailViewModel {
         val vm = ArticleDetailViewModel(
             NewsArticleDetails(a.id, 0),
             store,
             FakeNewsService(content = content),
-            FakeReactions(),
-            FakeZaps(),
+            reactions,
+            zaps,
             AppLogger,
         )
         rule.setContent {
@@ -89,6 +96,43 @@ class ArticleDetailRouteTest {
         rule.waitForIdle()
         rule.onNodeWithTag(ArticleDetailTestTags.INVOICE_SHEET).assertExists()
         rule.onNodeWithText("lnbc1invoice").assertExists()
+    }
+
+    @Test
+    fun `zap failure shows the newsZapNoAddress snackbar`() {
+        show(zaps = FakeZaps(ZapResult.Failure(ZapError.NoLightningAddress)))
+        rule.onNodeWithTag(ArticleDetailTestTags.ZAP).performScrollTo().performClick()
+        rule.onNodeWithTag(ArticleDetailTestTags.zapAmount(21)).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText(app.getString(L10nR.string.newsZapNoAddress)).assertIsDisplayed()
+    }
+
+    @Test
+    fun `link-only article explains newsZapNoAddress on zap`() {
+        val linkOnly = article("l", id = "https://media.einundzwanzig.space/a/l")
+        store.update(listOf(linkOnly))
+        val zaps = FakeZaps()
+        val vm = ArticleDetailViewModel(
+            NewsArticleDetails(linkOnly.id, 0), store, FakeNewsService(content = null), FakeReactions(), zaps, AppLogger,
+        )
+        rule.setContent {
+            CompositionLocalProvider(LocalNavigator provides navigator) {
+                EinundzwanzigTheme { ArticleDetailRoute(NewsArticleDetails(linkOnly.id, 0), vm) }
+            }
+        }
+        rule.onNodeWithTag(ArticleDetailTestTags.ZAP).performScrollTo().performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText(app.getString(L10nR.string.newsZapNoAddress)).assertIsDisplayed()
+        rule.onNodeWithTag(ArticleDetailTestTags.ZAP_SHEET).assertDoesNotExist()
+        assertEquals(emptyList<ZapCall>(), zaps.calls)
+    }
+
+    @Test
+    fun `like failure shows the newsLikeFailed snackbar`() {
+        show(reactions = FakeReactions(likeResult = false))
+        rule.onNodeWithTag(ArticleDetailTestTags.LIKE).performScrollTo().performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText(app.getString(L10nR.string.newsLikeFailed)).assertIsDisplayed()
     }
 
     @Test

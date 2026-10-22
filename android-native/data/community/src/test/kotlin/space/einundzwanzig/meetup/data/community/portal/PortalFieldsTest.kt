@@ -126,7 +126,7 @@ class PortalFieldsTest {
             ),
         )
         assertEquals("b", l.bio)
-        assertEquals(1, l.courses.size)
+        assertEquals(listOf(PortalCourseRef(id = 1, name = "K", image = "")), l.courses)
         assertEquals(listOf("Website", "X (Twitter)", "Nostr", "Portal"), l.links.map { it.label })
         assertEquals(
             listOf("https://bob.de", "https://x.com/bobx", "https://njump.me/npub1abc", "https://portal/l/1"),

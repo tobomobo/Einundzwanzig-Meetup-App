@@ -1,5 +1,6 @@
 package space.einundzwanzig.meetup.data.issuance.scan
 
+import space.einundzwanzig.meetup.data.badges.claim.ClaimFailure
 import space.einundzwanzig.meetup.data.badges.model.MeetupBadge
 import space.einundzwanzig.meetup.data.badges.security.ExpiryInfo
 import space.einundzwanzig.meetup.data.badges.security.VerifyResult
@@ -31,8 +32,11 @@ sealed interface ScanOutcome {
      * The payload has fields of the wrong JSON type: wrongly typed rolling fields `n`/`ts`
      * (detail `Ungültiges Rolling-QR-Format.`) or verified fields (Dart threw inside
      * `_processFoundTagData` and the scan silently stopped). Show `verifyErrPrefix(detail)`.
+     *
+     * @property rollingQrFormat `true` for wrongly typed rolling fields (NonceStatus.MALFORMED),
+     *   so the UI can show a localized text instead of the German [detail].
      */
-    data class Malformed(val detail: String) : ScanOutcome
+    data class Malformed(val detail: String, val rollingQrFormat: Boolean = false) : ScanOutcome
 
     /** The organizer scanned his own code: `"✗ ${verifyCantSelfBadge}${verifyAskScan}"`. Nothing stored. */
     data object SelfScan : ScanOutcome
@@ -70,8 +74,11 @@ sealed interface ClaimInfo {
     /** `mvBadgeBound`. */
     data object Bound : ClaimInfo
 
-    /** `"⚠ Binding: $message"` ([message] is the claim service's German reason). */
-    data class Failed(val message: String) : ClaimInfo
+    /**
+     * `"⚠ Binding: $message"` ([message] is the claim service's German reason; [reason] the
+     * typed one the UI localizes via [ScanStrings.claimFailed]).
+     */
+    data class Failed(val message: String, val reason: ClaimFailure? = null) : ClaimInfo
 }
 
 /** Signer recognition shown in the confirmation card (spec 02 §2.1 step 10, §8.7, §8.8). */
@@ -138,7 +145,7 @@ data class FoundInfo(
         when (claim) {
             ClaimInfo.None -> Unit
             ClaimInfo.Bound -> sb.append(strings.mvBadgeBound())
-            is ClaimInfo.Failed -> sb.append("⚠ Binding: ").append(claim.message)
+            is ClaimInfo.Failed -> sb.append(strings.claimFailed(claim))
         }
         val admin = strings.adminCheck(adminCheck)
         if (admin.isNotEmpty()) sb.append("\n\n").append(admin)
@@ -170,6 +177,9 @@ interface ScanStrings {
     fun mvEventCreatorNotAuthorized(event: String): String
     fun mvEventHasNoBadge(event: String): String
     fun mvEventNotFound(): String
+
+    /** The failed-binding line; default: the German Flutter text `"⚠ Binding: $message"`. */
+    fun claimFailed(info: ClaimInfo.Failed): String = "⚠ Binding: " + info.message
 
     /** Localized expiry ("Gültig noch 3h 12min"); default: the hard-coded German Flutter text. */
     fun expiry(info: ExpiryInfo): String = info.toGermanString()

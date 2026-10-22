@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -63,6 +62,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -147,7 +147,17 @@ private fun IdentityConfirmDialog(
     val accent = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
     AlertDialog(
         onDismissRequest = onDismiss,
-        icon = { Icon(icon, contentDescription = null, tint = accent) },
+        icon = {
+            if (destructive) {
+                ShapedIcon(
+                    icon,
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                    container = MaterialTheme.colorScheme.errorContainer,
+                )
+            } else {
+                ShapedIcon(icon)
+            }
+        },
         title = { Text(title, color = if (destructive) accent else MaterialTheme.colorScheme.onSurface) },
         text = { Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant) },
         confirmButton = {
@@ -160,7 +170,6 @@ private fun IdentityConfirmDialog(
                 Text(dismissLabel, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
-        shape = RoundedCornerShape(12.dp),
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = false),
     )
@@ -344,6 +353,7 @@ private fun PasswordField(
 @Composable
 private fun RuleRow(ok: Boolean, text: String) {
     val reduced = rememberReducedMotion()
+    val state = stringResource(if (ok) R.string.native_backupRuleMet else R.string.native_backupRuleNotMet)
     val color by animateColorAsState(
         if (ok) MaterialTheme.extendedColors.success else MaterialTheme.colorScheme.onSurfaceVariant,
         label = "ruleColor",
@@ -357,7 +367,12 @@ private fun RuleRow(ok: Boolean, text: String) {
         verticalAlignment = Alignment.Top,
         modifier = Modifier
             .fillMaxWidth()
-            .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+            // The state description carries "met"/"not met" for TalkBack; it changes when the rule
+            // flips, which also makes the polite live region announce the row.
+            .semantics(mergeDescendants = true) {
+                stateDescription = state
+                liveRegion = LiveRegionMode.Polite
+            },
     ) {
         Icon(
             imageVector = if (ok) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
@@ -375,13 +390,17 @@ private fun RuleRow(ok: Boolean, text: String) {
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun ShapedIcon(icon: ImageVector, tint: Color = MaterialTheme.colorScheme.onPrimaryContainer) {
+private fun ShapedIcon(
+    icon: ImageVector,
+    tint: Color = MaterialTheme.colorScheme.onPrimaryContainer,
+    container: Color = MaterialTheme.colorScheme.primaryContainer,
+) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .size(56.dp)
             .clip(MaterialShapes.Cookie9Sided.toShape())
-            .background(MaterialTheme.colorScheme.primaryContainer),
+            .background(container),
     ) {
         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(26.dp))
     }

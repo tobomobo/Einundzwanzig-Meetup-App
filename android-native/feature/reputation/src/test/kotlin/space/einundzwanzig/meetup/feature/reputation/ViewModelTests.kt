@@ -16,6 +16,8 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import space.einundzwanzig.meetup.data.reputation.qr.ReputationQrCodec
+import space.einundzwanzig.meetup.data.socialgraph.coattendance.PresenceCheck
 import space.einundzwanzig.meetup.data.identity.profile.UserProfile
 import space.einundzwanzig.meetup.data.proofs.platform.ProofVerifyResult
 import space.einundzwanzig.meetup.data.proofs.platform.VerifyLevel
@@ -235,6 +237,17 @@ class ReputationScanResultViewModelTest : MainDispatcherTest() {
     }
 
     @Test
+    fun `S-8 code signed by another key loads the layers for the signer, not the claimed npub`() = runTest(dispatcher) {
+        val (code, keyB) = mismatchQr()
+        val source = FakeReputationDataSource()
+        val vm = ReputationScanResultViewModel(code, source)
+        val result = vm.state.value.result as QrParseResult.Verified
+        assertTrue(result.identityMismatch)
+        advanceUntilIdle()
+        assertEquals(listOf("h:$keyB"), source.layerHexes)
+    }
+
+    @Test
     fun `tampered and legacy codes are invalid and load nothing`() = runTest(dispatcher) {
         val source = FakeReputationDataSource()
         val tampered = ReputationScanResultViewModel(Vectors.tamperedQrString, source)
@@ -288,6 +301,28 @@ class ReputationVerifyViewModelTest : MainDispatcherTest() {
         assertEquals(VerifyLevel.INVALID, vm.state.value.result!!.level)
         assertTrue(source.layerHexes.isEmpty())
         assertNull(vm.state.value.layersInput)
+    }
+
+    @Test
+    fun `paste during a running verification replaces it with the pasted input`() = runTest(dispatcher) {
+        val gate = CompletableDeferred<Unit>()
+        val source = FakeReputationDataSource().apply {
+            verify = { input ->
+                if (input == "slow") gate.await()
+                ProofVerifyResult(VerifyLevel.PARTIAL, VerifyMessage.NpubWithBindings, npub = input, reputation = reputationEvent())
+            }
+        }
+        val vm = ReputationVerifyViewModel("slow", source)
+        advanceUntilIdle()
+        assertTrue(vm.state.value.isVerifying)
+        vm.onAction(ReputationVerifyAction.Paste(Vectors.signerNpub))
+        advanceUntilIdle()
+        assertEquals(listOf("slow", Vectors.signerNpub), source.verifyInputs)
+        assertEquals(Vectors.signerNpub, vm.state.value.result!!.npub)
+        assertFalse(vm.state.value.isVerifying)
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(Vectors.signerNpub, vm.state.value.result!!.npub)
     }
 
     @Test
@@ -347,6 +382,29 @@ class VerifyPersonViewModelTest : MainDispatcherTest() {
         advanceUntilIdle()
         assertEquals(OTHER_NPUB, vm.state.value.input)
         assertEquals(1, source.presenceCalls.size)
+    }
+
+    @Test
+    fun `scan during a pending check gives the result for the scanned npub`() = runTest(dispatcher) {
+        val gate = CompletableDeferred<Unit>()
+        val source = FakeReputationDataSource().apply {
+            presence = { _, target ->
+                if (target == Vectors.signerNpub) gate.await()
+                PresenceCheck(target, 1, listOf(Vectors.signerNpub, target), emptySet(), true, 0)
+            }
+        }
+        val vm = VerifyPersonViewModel(Vectors.signerNpub, source)
+        advanceUntilIdle()
+        assertTrue(vm.state.value.checking)
+        vm.onAction(VerifyPersonAction.Scanned(OTHER_NPUB))
+        advanceUntilIdle()
+        assertEquals(OTHER_NPUB, vm.state.value.input)
+        assertEquals(OTHER_NPUB, vm.state.value.result!!.targetNpub)
+        assertFalse(vm.state.value.checking)
+        assertEquals(2, source.presenceCalls.size)
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(OTHER_NPUB, vm.state.value.result!!.targetNpub)
     }
 
     @Test

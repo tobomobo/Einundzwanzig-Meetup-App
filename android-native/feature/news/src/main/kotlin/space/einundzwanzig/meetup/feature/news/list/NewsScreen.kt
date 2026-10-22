@@ -90,7 +90,6 @@ internal object NewsTestTags {
 fun NewsRoute(
     markAsRead: Boolean,
     viewModel: NewsViewModel = hiltViewModel<NewsViewModel, NewsViewModel.Factory>(
-        key = "news-$markAsRead",
         creationCallback = { it.create(markAsRead) },
     ),
 ) {

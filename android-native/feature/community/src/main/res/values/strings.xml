@@ -9,6 +9,5 @@
     <string name="native_community_clear_search">Suche löschen</string>
     <string name="native_community_add_to_calendar">In den Kalender übernehmen</string>
     <string name="native_community_open_link">Link öffnen</string>
-    <string name="native_community_now_playing">Läuft gerade</string>
     <string name="native_community_seek">Position im Song</string>
 </resources>

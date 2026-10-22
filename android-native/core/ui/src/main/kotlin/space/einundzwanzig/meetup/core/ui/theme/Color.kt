@@ -20,6 +20,7 @@ object BrandColors {
     val Nostr = Color(0xFF8B5CF6)
     val PurpleLight = Color(0xFFBE96F2)
     val DuellGold = Color(0xFFFFC93C)
+    val Amber = Color(0xFFFFC107)
     val Green = Color(0xFF22C55E)
     val Red = Color(0xFFE53935)
 
@@ -55,6 +56,19 @@ data class ExtendedColors(
     val purple: Color,
     /** SatoshiDuell logo gold (`0xFFFFC93C`). */
     val duellGold: Color,
+    /** Flutter `Colors.amber` (`#FFC107`): warning / caution accent, distinct from [community] gold. */
+    val amber: Color,
+    /**
+     * QR card / quiet zone. Fixed light in every theme: scanners need dark modules on a light
+     * background (inverted codes are not reliably read), so this does not follow the scheme.
+     */
+    val qrBackground: Color = Color.White,
+    /** QR modules on [qrBackground]. */
+    val qrModule: Color = Color.Black,
+    /** Text/icons on `colorScheme.scrim` (black in both themes), e.g. hints over a camera preview. */
+    val onScrim: Color = Color.White,
+    /** Flutter `cOrangeLight` accent on `colorScheme.scrim` / dark image overlays (same in both themes). */
+    val bitcoinOnScrim: Color = BrandColors.OrangeLight,
 )
 
 internal val DarkExtendedColors = ExtendedColors(
@@ -71,6 +85,7 @@ internal val DarkExtendedColors = ExtendedColors(
     bitcoin = BrandColors.Orange,
     purple = BrandColors.Purple,
     duellGold = BrandColors.DuellGold,
+    amber = BrandColors.Amber,
 )
 
 internal val LightExtendedColors = ExtendedColors(
@@ -87,6 +102,7 @@ internal val LightExtendedColors = ExtendedColors(
     bitcoin = Color(0xFFB85F00),
     purple = Color(0xFF7B2CBF),
     duellGold = Color(0xFF8F6A00),
+    amber = Color(0xFFA36F00),
 )
 
 val LocalExtendedColors = staticCompositionLocalOf { DarkExtendedColors }

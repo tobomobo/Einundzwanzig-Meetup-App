@@ -57,6 +57,35 @@ object MeetupDatesLogic {
     }
 
     /**
+     * Per-date data of [filter] computed once ([searchKey]) so a list can be re-filtered on every
+     * keystroke without resolving each date against the meetup directory again.
+     */
+    data class SearchKey(val titleLower: String, val locationLower: String, val resolvedMeetupId: String?)
+
+    /** [SearchKey] of [date]: Dart-lowercased title/location and `MeetupEventMatcher.resolve(date, meetups)?.id`. */
+    fun searchKey(date: MeetupDate, meetups: List<Meetup>): SearchKey =
+        SearchKey(date.title.dartLower(), date.location.dartLower(), MeetupEventMatcher.resolve(date, meetups)?.id)
+
+    /**
+     * [filter] over precomputed [keys] (same rules); returns the indexes of the kept entries in
+     * order. `filterPrepared(dates.map { searchKey(it, m) }, …)` keeps exactly the dates of
+     * `filter(dates, …, m)`.
+     */
+    fun filterPrepared(
+        keys: List<SearchKey>,
+        query: String,
+        initialSearch: String?,
+        initialMeetupId: String?,
+    ): List<Int> {
+        val q = query.dartLower()
+        val exact = initialMeetupId != null && q == (initialSearch ?: "").dartLower()
+        return keys.indices.filter { i ->
+            val k = keys[i]
+            if (exact) k.resolvedMeetupId == initialMeetupId else k.titleLower.contains(q) || k.locationLower.contains(q)
+        }
+    }
+
+    /**
      * Dart `_matchMeetup`: among [meetups] whose `city.trim().toLowerCase()` has at least 3
      * characters and occurs in `"$title $location".toLowerCase()`, the one with the LONGEST city
      * (first wins on equal length), else `null`. Callers may cache per `"$title|$location"`.

@@ -36,4 +36,7 @@
     <string name="native_portal_qa_podcast">Podcast</string>
     <string name="native_portal_qa_shoutout">Shoutout</string>
     <string name="native_portal_qa_donate">Spenden</string>
+    <string name="native_nearby_locating">Standort wird ermittelt …</string>
+    <string name="native_meetups_save_failed">Favoriten konnten nicht gespeichert werden.</string>
+    <string name="native_meetups_load_failed_sub">Ohne Verzeichnis können keine Favoriten gespeichert werden. Bitte prüfe deine Verbindung.</string>
 </resources>

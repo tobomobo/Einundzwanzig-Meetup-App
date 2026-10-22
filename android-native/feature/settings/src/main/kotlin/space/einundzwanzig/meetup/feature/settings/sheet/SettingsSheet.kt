@@ -1,5 +1,6 @@
 package space.einundzwanzig.meetup.feature.settings.sheet
 
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -55,6 +57,7 @@ import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -67,9 +70,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -80,6 +86,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import space.einundzwanzig.meetup.core.navigation.DiagnosticLog
 import space.einundzwanzig.meetup.core.navigation.LocalNavigator
@@ -90,9 +98,9 @@ import space.einundzwanzig.meetup.core.navigation.ValueForValue
 import space.einundzwanzig.meetup.core.ui.component.LocalAppSnackbarHostState
 import space.einundzwanzig.meetup.core.ui.component.Tone
 import space.einundzwanzig.meetup.core.ui.component.showAppSnackbar
-import space.einundzwanzig.meetup.core.ui.guide.FinishTourOnDispose
 import space.einundzwanzig.meetup.core.ui.guide.GuideTour
 import space.einundzwanzig.meetup.core.ui.guide.GuideWindowHost
+import space.einundzwanzig.meetup.core.ui.guide.LocalGuideController
 import space.einundzwanzig.meetup.core.ui.guide.LocalGuideTargetRegistry
 import space.einundzwanzig.meetup.core.ui.guide.StartTourEffect
 import space.einundzwanzig.meetup.core.ui.guide.guideAnchor
@@ -156,7 +164,12 @@ private const val V4V_TITLE = "V4V"
  * Keep it in the composition of the hosting screen and toggle [visible]: the sheet closes before
  * it navigates (Flutter `pop` then `push`) and the "Tour wiederholen" snackbar is shown after it
  * has closed. Runs the settings tour (§2.9.1) 650 ms after the first opening; closing the sheet
- * ends the tour and marks it completed.
+ * ends the tour and marks it completed. A configuration change (language switch, rotation)
+ * neither ends nor restarts a running tour; the host must keep [visible] across it
+ * (`rememberSaveable` or ViewModel state).
+ *
+ * Sheet height: a fixed 92 % sheet without a partially expanded stop (Flutter: draggable 50–95 %,
+ * opening at 85 %); dragging it down closes it. See the module README.
  *
  * @param onDismissRequest the sheet was closed (set [visible] to false).
  * @param onResetApp "App zurücksetzen": the caller runs the reset flow of spec 12 §2.5.12
@@ -196,9 +209,21 @@ fun SettingsSheet(
 
     if (!visible) return
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    // Flutter: Navigator.pop(sheet) first, then the action.
+    // Remembered below the `visible` check, so every opening starts with a fresh `false`.
+    var closing by remember { mutableStateOf(false) }
+
+    // Flutter: Navigator.pop(sheet) first, then the action. Only the first tap counts (Flutter
+    // removes the sheet at once). A hide animation interrupted by a touch still closes the sheet;
+    // if the host itself left the composition (scope cancelled), nothing runs.
     fun closeThen(block: () -> Unit) {
-        scope.launch { sheetState.hide() }.invokeOnCompletion {
+        if (closing) return
+        closing = true
+        scope.launch {
+            try {
+                sheetState.hide()
+            } catch (e: CancellationException) {
+                if (!isActive) throw e
+            }
             currentDismiss()
             block()
         }
@@ -213,10 +238,9 @@ fun SettingsSheet(
     ) {
         GuideWindowHost(Modifier.fillMaxHeight(0.92f)) {
             if (LocalGuideTargetRegistry.current != null) {
-                StartTourEffect(GuideTour.Settings, delayMillis = SettingsTour.START_DELAY_MS) { SettingsTour.steps() }
-                FinishTourOnDispose(GuideTour.Settings)
+                SettingsTourEffects()
             }
-            SettingsSheetContent(state = state, backupBusy = backupBusy) { action ->
+            SettingsSheetContent(state = state, backupBusy = backupBusy, enabled = !closing) { action ->
                 when (action) {
                     SettingsSheetAction.OpenProfile -> closeThen { navigator.navigate(ProfileEdit) }
                     SettingsSheetAction.CreateBackup -> closeThen { backup.launchExport() }
@@ -233,6 +257,27 @@ fun SettingsSheet(
                     is SettingsSheetAction.SetThemeMode -> viewModel.setThemeMode(action.mode)
                 }
             }
+        }
+    }
+}
+
+/**
+ * Starts the settings tour after opening and finishes it when the sheet closes — but not when
+ * the activity is only recreated (language change, rotation): the app-wide guide keeps running
+ * and the recreated sheet must neither finish nor restart it from step 0.
+ */
+@Composable
+private fun SettingsTourEffects() {
+    val guide = LocalGuideController.current
+    val activity = LocalActivity.current
+    // Read once per composition entry: a tour already running (after recreation) is kept.
+    val alreadyRunning = remember { guide.activeTour == GuideTour.Settings }
+    StartTourEffect(GuideTour.Settings, enabled = !alreadyRunning, delayMillis = SettingsTour.START_DELAY_MS, controller = guide) {
+        SettingsTour.steps()
+    }
+    DisposableEffect(guide, activity) {
+        onDispose {
+            if (activity?.isChangingConfigurations != true) guide.finishIfActive(GuideTour.Settings)
         }
     }
 }
@@ -257,6 +302,7 @@ fun SettingsSheetContent(
     state: SettingsSheetUiState,
     modifier: Modifier = Modifier,
     backupBusy: Boolean = false,
+    enabled: Boolean = true,
     onAction: (SettingsSheetAction) -> Unit,
 ) {
     var languageDialog by rememberSaveable { mutableStateOf(false) }
@@ -285,6 +331,7 @@ fun SettingsSheetContent(
                     accent = primary,
                     title = stringResource(L10nR.string.settingsProfile),
                     subtitle = stringResource(L10nR.string.settingsProfileSub),
+                    interactive = enabled,
                     modifier = Modifier.guideAnchor(SettingsTour.PROFILE).testTag(SettingsSheetTags.PROFILE),
                     onClick = { onAction(SettingsSheetAction.OpenProfile) },
                 )
@@ -297,6 +344,7 @@ fun SettingsSheetContent(
                     title = stringResource(L10nR.string.settingsBackup),
                     subtitle = stringResource(L10nR.string.settingsBackupSub),
                     enabled = !backupBusy,
+                    interactive = enabled,
                     modifier = Modifier.guideAnchor(SettingsTour.BACKUP).testTag(SettingsSheetTags.BACKUP),
                     onClick = { onAction(SettingsSheetAction.CreateBackup) },
                 )
@@ -307,6 +355,7 @@ fun SettingsSheetContent(
                     title = stringResource(L10nR.string.settingsBackupLoad),
                     subtitle = stringResource(L10nR.string.settingsBackupLoadSub),
                     enabled = !backupBusy,
+                    interactive = enabled,
                     modifier = Modifier.testTag(SettingsSheetTags.RESTORE),
                     onClick = { onAction(SettingsSheetAction.RestoreBackup) },
                 )
@@ -318,6 +367,7 @@ fun SettingsSheetContent(
                     accent = purple,
                     title = stringResource(L10nR.string.settingsRelays),
                     subtitle = stringResource(L10nR.string.settingsRelaysSub),
+                    interactive = enabled,
                     modifier = Modifier.guideAnchor(SettingsTour.RELAYS).testTag(SettingsSheetTags.RELAYS),
                     onClick = { onAction(SettingsSheetAction.OpenRelays) },
                 )
@@ -327,6 +377,7 @@ fun SettingsSheetContent(
                     accent = primary,
                     title = stringResource(L10nR.string.settingsMempool),
                     subtitle = stringResource(L10nR.string.settingsMempoolSub),
+                    interactive = enabled,
                     modifier = Modifier.testTag(SettingsSheetTags.MEMPOOL),
                     onClick = { onAction(SettingsSheetAction.OpenMempool) },
                 )
@@ -338,6 +389,7 @@ fun SettingsSheetContent(
                     accent = green,
                     title = stringResource(L10nR.string.settingsLanguageTitle),
                     subtitle = "${AppLocales.flagFor(state.locale)}  ${AppLocales.displayName(state.locale)}",
+                    interactive = enabled,
                     modifier = Modifier.guideAnchor(SettingsTour.LANGUAGE).testTag(SettingsSheetTags.LANGUAGE),
                     onClick = { languageDialog = true },
                 )
@@ -347,12 +399,14 @@ fun SettingsSheetContent(
                     accent = green,
                     title = stringResource(L10nR.string.settingsCurrencyTitle),
                     subtitle = "${state.currency} · ${currencyName(state.currency)}",
+                    interactive = enabled,
                     modifier = Modifier.testTag(SettingsSheetTags.CURRENCY),
                     onClick = { currencyDialog = true },
                 )
                 RowDivider()
                 HapticRow(
                     enabled = state.hapticEnabled,
+                    interactive = enabled,
                     modifier = Modifier.guideAnchor(SettingsTour.HAPTIC).testTag(SettingsSheetTags.HAPTIC),
                     onToggle = { onAction(SettingsSheetAction.SetHaptic(it)) },
                 )
@@ -364,6 +418,7 @@ fun SettingsSheetContent(
                     accent = gold,
                     title = stringResource(L10nR.string.settingsLogTitle),
                     subtitle = stringResource(L10nR.string.settingsLogSub),
+                    interactive = enabled,
                     modifier = Modifier.testTag(SettingsSheetTags.LOG),
                     onClick = { onAction(SettingsSheetAction.OpenLog) },
                 )
@@ -373,6 +428,7 @@ fun SettingsSheetContent(
                     accent = primary,
                     title = stringResource(L10nR.string.settingsRestartGuide),
                     subtitle = stringResource(L10nR.string.settingsRestartGuideSub),
+                    interactive = enabled,
                     modifier = Modifier.guideAnchor(SettingsTour.RESTART).testTag(SettingsSheetTags.RESTART),
                     onClick = { onAction(SettingsSheetAction.RestartTours) },
                 )
@@ -384,17 +440,19 @@ fun SettingsSheetContent(
                     accent = primary,
                     title = V4V_TITLE,
                     subtitle = stringResource(L10nR.string.v4vSectionSubtitle),
+                    interactive = enabled,
                     modifier = Modifier.testTag(SettingsSheetTags.V4V),
                     onClick = { onAction(SettingsSheetAction.OpenV4V) },
                 )
             }
             GroupGap()
-            SettingsGroup(stringResource(L10nR.string.settingsSecDanger), danger = true) {
+            SettingsGroup(stringResource(L10nR.string.settingsSecDanger)) {
                 SettingsRow(
                     icon = Icons.Rounded.DeleteForever,
                     accent = red,
                     title = stringResource(L10nR.string.settingsReset),
                     subtitle = stringResource(L10nR.string.settingsResetSub),
+                    interactive = enabled,
                     danger = true,
                     modifier = Modifier.guideAnchor(SettingsTour.RESET).testTag(SettingsSheetTags.RESET),
                     onClick = { onAction(SettingsSheetAction.ResetApp) },
@@ -467,7 +525,7 @@ private fun SheetHeader() {
 private fun GroupGap() = Spacer(Modifier.height(18.dp))
 
 @Composable
-private fun SettingsGroup(label: String, danger: Boolean = false, content: @Composable () -> Unit) {
+private fun SettingsGroup(label: String, content: @Composable () -> Unit) {
     val shape = RoundedCornerShape(16.dp)
     Column {
         Text(
@@ -476,13 +534,13 @@ private fun SettingsGroup(label: String, danger: Boolean = false, content: @Comp
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 1.4.sp,
-            color = if (danger) MaterialTheme.colorScheme.error.copy(alpha = 0.8f) else MaterialTheme.extendedColors.textTertiary,
+            color = MaterialTheme.extendedColors.textTertiary,
         )
         Column(
             Modifier
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.surfaceContainer, shape)
-                .border(0.5.dp, if (danger) MaterialTheme.colorScheme.error.copy(alpha = 0.3f) else MaterialTheme.colorScheme.outlineVariant, shape)
+                .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant, shape)
                 .padding(vertical = 2.dp),
         ) { content() }
     }
@@ -530,13 +588,15 @@ private fun SettingsRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    /** `false` while the sheet is closing: ignores taps without greying the row out. */
+    interactive: Boolean = true,
     danger: Boolean = false,
 ) {
     Row(
         modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .clickable(enabled = enabled && interactive, role = Role.Button, onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -553,12 +613,12 @@ private fun SettingsRow(
 }
 
 @Composable
-private fun HapticRow(enabled: Boolean, modifier: Modifier, onToggle: (Boolean) -> Unit) {
+private fun HapticRow(enabled: Boolean, interactive: Boolean, modifier: Modifier, onToggle: (Boolean) -> Unit) {
     Row(
         modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
-            .toggleable(value = enabled, role = Role.Switch, onValueChange = onToggle)
+            .toggleable(value = enabled, enabled = interactive, role = Role.Switch, onValueChange = onToggle)
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -588,25 +648,32 @@ private fun ThemeRow(selected: ThemeMode, onSelect: (ThemeMode) -> Unit) {
         Triple(ThemeMode.LIGHT, Icons.Rounded.LightMode, R.string.native_settings_theme_light),
         Triple(ThemeMode.SYSTEM, Icons.Rounded.SettingsSuggest, R.string.native_settings_theme_system),
     )
+    val title = stringResource(R.string.native_settings_theme_title)
+    // Large font scales: use the full row width so the labels fit (they wrap instead of ellipsizing).
+    val inset = if (LocalDensity.current.fontScale > 1.3f) 0.dp else 50.dp
     Column(Modifier.fillMaxWidth().testTag(SettingsSheetTags.THEME).padding(horizontal = 14.dp, vertical = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             RowIcon(Icons.Rounded.Palette, MaterialTheme.extendedColors.success)
             Spacer(Modifier.width(14.dp))
-            Text(stringResource(R.string.native_settings_theme_title), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         }
         Spacer(Modifier.height(10.dp))
         Row(
-            Modifier.fillMaxWidth().padding(start = 50.dp),
+            Modifier.fillMaxWidth().padding(start = inset).selectableGroup(),
             horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             options.forEachIndexed { index, (mode, icon, label) ->
                 val checked = mode == selected
+                // TalkBack: "Erscheinungsbild: Dunkel" plus the checked state of the toggle.
+                val description = "$title: ${stringResource(label)}"
                 ToggleButton(
                     checked = checked,
                     onCheckedChange = { if (!checked) onSelect(mode) },
                     modifier = Modifier
                         .weight(1f)
                         .heightIn(min = 48.dp)
+                        .semantics { contentDescription = description }
                         .testTag(SettingsSheetTags.theme(mode)),
                     shapes = when (index) {
                         0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
@@ -616,7 +683,12 @@ private fun ThemeRow(selected: ThemeMode, onSelect: (ThemeMode) -> Unit) {
                 ) {
                     Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text(stringResource(label), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        stringResource(label),
+                        modifier = Modifier.clearAndSetSemantics { },
+                        fontSize = 12.sp,
+                        textAlign = TextAlign.Center,
+                    )
                 }
             }
         }

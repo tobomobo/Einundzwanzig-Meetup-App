@@ -19,6 +19,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import space.einundzwanzig.meetup.data.badges.model.MeetupBadge
+import space.einundzwanzig.meetup.data.badges.security.ExpiryInfo
+import space.einundzwanzig.meetup.data.badges.security.VerifyFailure
 import space.einundzwanzig.meetup.data.badges.security.VerifyResult
 import space.einundzwanzig.meetup.data.issuance.nfc.NfcPayloadError
 import space.einundzwanzig.meetup.data.issuance.scan.PendingBadge
@@ -32,6 +34,8 @@ import space.einundzwanzig.meetup.feature.badges.nfc.NfcReadResult
 import space.einundzwanzig.meetup.feature.badges.scanner.BadgeScannerAction
 import space.einundzwanzig.meetup.feature.badges.scanner.BadgeScannerEvent
 import space.einundzwanzig.meetup.feature.badges.scanner.BadgeScannerViewModel
+import space.einundzwanzig.meetup.feature.badges.scanner.BusyKind
+import space.einundzwanzig.meetup.feature.badges.scanner.RejectReason
 import space.einundzwanzig.meetup.feature.badges.scanner.ScanResultUi
 import space.einundzwanzig.meetup.feature.badges.scanner.ScanStatus
 import space.einundzwanzig.meetup.feature.badges.scanner.ScannerDialog
@@ -132,8 +136,21 @@ class BadgeScannerViewModelTest {
         val model = create()
         model.scan(ScanOutcome.VerificationFailed(VerifyResult(false, 2, "", message = "Signatur ungültig!")))
         assertEquals(ScanStatus.Rejected("Signatur ungültig!"), model.state.value.status)
-        model.scan(ScanOutcome.Malformed("Ungültiges Rolling-QR-Format."))
-        assertEquals(ScanStatus.Rejected("Ungültiges Rolling-QR-Format."), model.state.value.status)
+        model.scan(ScanOutcome.Malformed("Feld x hat falschen Typ"))
+        assertEquals(ScanStatus.Rejected("Feld x hat falschen Typ"), model.state.value.status)
+    }
+
+    @Test
+    fun `typed rejection reasons are passed on for localization`() = runTest(dispatcher) {
+        val model = create()
+        val expired = VerifyFailure.Expired(ExpiryInfo.Expired(2 * 3600 + 3 * 60))
+        model.scan(ScanOutcome.VerificationFailed(VerifyResult(false, 2, "", message = "Tag abgelaufen! …", reason = expired)))
+        assertEquals(ScanStatus.Rejected("Tag abgelaufen! …", RejectReason.Verify(expired)), model.state.value.status)
+        model.scan(ScanOutcome.Malformed("Ungültiges Rolling-QR-Format.", rollingQrFormat = true))
+        assertEquals(
+            ScanStatus.Rejected("Ungültiges Rolling-QR-Format.", RejectReason.RollingQrMalformed),
+            model.state.value.status,
+        )
     }
 
     @Test
@@ -184,7 +201,7 @@ class BadgeScannerViewModelTest {
         assertEquals(listOf(collection), published)
         assertEquals(listOf(ScannerSnackbar.SAVED), snackbars)
         assertEquals(BadgeScannerEvent.OpenWallet, events.last())
-        assertFalse(model.state.value.saving)
+        assertNull(model.state.value.busy)
     }
 
     @Test
@@ -205,7 +222,13 @@ class BadgeScannerViewModelTest {
         model.onAction(BadgeScannerAction.AddToWallet)
         assertEquals(ScannerDialog.CoAttendanceOptIn(saved), model.state.value.dialog)
         assertFalse(BadgeScannerEvent.OpenWallet in events)
+        save.publishGate = CompletableDeferred()
         model.onAction(BadgeScannerAction.CoAttendanceAnswered(true))
+        // The blocking indicator announces the publish, not a location check.
+        assertEquals(BusyKind.PUBLISHING, model.state.value.busy)
+        assertFalse(BadgeScannerEvent.OpenWallet in events)
+        save.publishGate!!.complete(Unit)
+        assertNull(model.state.value.busy)
         assertEquals(listOf(saved), save.published)
         assertEquals(listOf(ScannerSnackbar.SAVED, ScannerSnackbar.CO_ATTENDANCE_PUBLISHED), snackbars)
         assertEquals(BadgeScannerEvent.OpenWallet, events.last())
@@ -290,7 +313,7 @@ class BadgeScannerViewModelTest {
         save.confirmError = IllegalStateException("disk")
         model.onAction(BadgeScannerAction.AddToWallet)
         assertEquals(listOf(ScannerSnackbar.SAVE_FAILED), snackbars)
-        assertFalse(model.state.value.saving)
+        assertNull(model.state.value.busy)
     }
 
     @Test

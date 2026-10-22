@@ -65,6 +65,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import space.einundzwanzig.meetup.core.common.dart.dartTrim
+import space.einundzwanzig.meetup.data.badges.text.DartString
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -474,7 +476,7 @@ internal fun SectionHeader(degree: Int, total: Int, modifier: Modifier = Modifie
         },
     )
     SectionCaption(
-        "${title.uppercase()} · $total",
+        "${DartString.upper(title)} · $total",
         degreeColor(degree),
         modifier.padding(start = 2.dp, top = 14.dp, end = 2.dp, bottom = 8.dp),
     )
@@ -586,11 +588,11 @@ internal fun ShowAllRow(degree: Int, total: Int, onClick: () -> Unit, modifier: 
     }
 }
 
-/** Centered "Niemand gefunden" / "—" when no section matches. */
+/** Centered "Niemand gefunden" / "—" when no section matches (same Dart trim rule as `sections`). */
 @Composable
 internal fun NoResults(query: String, modifier: Modifier = Modifier) {
     Text(
-        if (query.isNotBlank()) stringResource(L10nR.string.mnNoResults) else "—",
+        if (query.dartTrim().isNotEmpty()) stringResource(L10nR.string.mnNoResults) else "—",
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 28.dp),

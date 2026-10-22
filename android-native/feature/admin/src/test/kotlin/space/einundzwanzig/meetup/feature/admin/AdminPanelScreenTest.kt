@@ -201,7 +201,16 @@ class AdminPanelScreenTest {
         rule.onNodeWithText(s(L10nR.string.gpsPickMeetup)).assertExists()
         rule.onNodeWithText(s(L10nR.string.gpsDistanceKm, "1.3")).assertExists()
         rule.onNodeWithText("Kitzingen").performClick()
+        // The sheet animates out first, then reports the pick.
+        rule.waitForIdle()
         assertEquals(listOf<AdminPanelAction>(AdminPanelAction.NearbyPicked(b)), actions)
+    }
+
+    @Test
+    fun `portal picker tolerates duplicate meetups from the portal`() {
+        val wue = meetup("Würzburg")
+        show(idle.copy(dialog = AdminDialog.PortalPicker(PortalMeetupPicker.order(listOf(wue, wue), emptySet()))))
+        rule.onAllNodesWithText("Würzburg").assertCountEquals(2)
     }
 
     @Test

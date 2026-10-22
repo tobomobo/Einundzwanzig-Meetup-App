@@ -185,8 +185,11 @@ class BadgeScannerViewModel internal constructor(
         when (outcome) {
             ScanOutcome.ReviewDemo -> _state.update { it.copy(dialog = ScannerDialog.ReviewDemo) }
             is ScanOutcome.NonceRejected -> reject(ScanStatus.NonceExpired(outcome.validation))
-            is ScanOutcome.VerificationFailed -> reject(ScanStatus.Rejected(outcome.result.message))
-            is ScanOutcome.Malformed -> reject(ScanStatus.Rejected(outcome.detail))
+            is ScanOutcome.VerificationFailed ->
+                reject(ScanStatus.Rejected(outcome.result.message, outcome.result.reason?.let(RejectReason::Verify)))
+            is ScanOutcome.Malformed -> reject(
+                ScanStatus.Rejected(outcome.detail, RejectReason.RollingQrMalformed.takeIf { outcome.rollingQrFormat }),
+            )
             is ScanOutcome.NfcRejected -> reject(ScanStatus.NfcRejected(outcome.error))
             ScanOutcome.SelfScan -> reject(ScanStatus.SelfScan)
             is ScanOutcome.AlreadyCollected -> {
@@ -212,8 +215,8 @@ class BadgeScannerViewModel internal constructor(
             send(BadgeScannerEvent.Close)
             return
         }
-        if (_state.value.saving) return
-        _state.update { it.copy(saving = true) }
+        if (_state.value.busy != null) return
+        _state.update { it.copy(busy = BusyKind.LOCATING) }
         viewModelScope.launch {
             val outcome = try {
                 saveUseCase.confirm(found.pending)
@@ -221,11 +224,11 @@ class BadgeScannerViewModel internal constructor(
                 throw e
             } catch (e: Exception) {
                 log.error(TAG, "Badge speichern fehlgeschlagen", e)
-                _state.update { it.copy(saving = false) }
+                _state.update { it.copy(busy = null) }
                 snackbar(ScannerSnackbar.SAVE_FAILED)
                 return@launch
             }
-            _state.update { it.copy(saving = false) }
+            _state.update { it.copy(busy = null) }
             onSaveOutcome(found, outcome)
         }
     }
@@ -281,9 +284,10 @@ class BadgeScannerViewModel internal constructor(
             send(BadgeScannerEvent.OpenWallet)
             return
         }
-        // The publish outlives the screen like Flutter's awaited call before the replace; the
-        // wallet opens once the relays answered so the result snackbar follows the save one.
-        _state.update { it.copy(saving = true) }
+        // Like Flutter's awaited call before the replace: the screen stays (blocking "publishing"
+        // indicator) until the relays answered, then the wallet opens so the result snackbar
+        // follows the save one. Runs in viewModelScope: leaving the screen cancels the publish.
+        _state.update { it.copy(busy = BusyKind.PUBLISHING) }
         viewModelScope.launch {
             val count = try {
                 saveUseCase.publishCoAttendance(dialog.badge)
@@ -293,7 +297,7 @@ class BadgeScannerViewModel internal constructor(
                 log.warn(TAG, "Co-Attendance-Veröffentlichung fehlgeschlagen", e)
                 0
             }
-            _state.update { it.copy(saving = false) }
+            _state.update { it.copy(busy = null) }
             snackbar(if (count > 0) ScannerSnackbar.CO_ATTENDANCE_PUBLISHED else ScannerSnackbar.CO_ATTENDANCE_FAILED)
             send(BadgeScannerEvent.OpenWallet)
         }

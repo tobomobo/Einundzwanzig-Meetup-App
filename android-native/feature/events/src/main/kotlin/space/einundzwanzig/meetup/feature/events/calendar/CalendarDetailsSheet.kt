@@ -47,12 +47,16 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -384,9 +388,16 @@ fun CancelEventDialog(title: String, onAction: (EventCalendarAction) -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HelperEditorSheet(editor: HelperEditorState, onAction: (EventCalendarAction) -> Unit) {
+    val saving by rememberUpdatedState(editor.saving)
     ModalBottomSheet(
         onDismissRequest = { onAction(EventCalendarAction.CloseHelperEditor) },
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        // While saving the VM ignores CloseHelperEditor: keep the sheet from hiding meanwhile, or it
+        // would linger as an invisible window that swallows touches.
+        sheetState = rememberModalBottomSheetState(
+            skipPartiallyExpanded = true,
+            confirmValueChange = { it != SheetValue.Hidden || !saving },
+        ),
+        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = !editor.saving),
         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
     ) {

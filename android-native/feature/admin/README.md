@@ -26,7 +26,19 @@ flow until the user answers. Picker ordering/filtering is in `PortalMeetupPicker
 The session check runs on every resume (the first resume right after composition is the initial
 check; a running check is replaced, never duplicated). Failures of the location lookup, the
 session wipe or the admin info never crash the app: they are logged and, where the user acted,
-shown as the `wotErrorShort` snackbar while the session state is still cleared.
+shown as the `wotErrorShort` snackbar while the session state is still cleared. Wiping an
+auto-expired session during the check is background work: a failure is only logged (Dart
+`_checkSession` shows nothing either).
+
+Organizer co-attendance failures during session creation are swallowed intentionally by
+`OrganizerSessionService` (Dart `CoAttendanceService.recordOrganizerAttendance` catches internally).
+
+## Deliberate deviations from Dart
+
+- The snackbar argument is `e.message` (falling back to `e.toString()`), not Dart's
+  `e.toString()`: Kotlin's `toString()` prefixes the fully qualified exception class name.
+- The active session card also shows the session's meetup name under the status row (native
+  addition, not in spec 05 §2.2.1).
 
 ## Tests
 

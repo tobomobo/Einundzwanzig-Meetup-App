@@ -115,9 +115,11 @@ fun AppLargeTopBar(
     actions: @Composable RowScope.() -> Unit = {},
     scrollBehavior: TopAppBarScrollBehavior? = null,
     colors: TopAppBarColors = AppTopBarDefaults.colors(),
+    /** Applied to the title text only (e.g. a guided-tour anchor on just the title). */
+    titleModifier: Modifier = Modifier,
 ) {
     LargeFlexibleTopAppBar(
-        title = { Text(title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        title = { Text(title, modifier = titleModifier, maxLines = 2, overflow = TextOverflow.Ellipsis) },
         modifier = modifier,
         subtitle = subtitle?.let { { Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis) } },
         navigationIcon = { if (onBack != null) BackNavigationButton(onBack) },

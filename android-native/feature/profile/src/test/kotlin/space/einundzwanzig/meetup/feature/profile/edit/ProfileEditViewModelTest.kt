@@ -375,7 +375,7 @@ class ProfileEditViewModelTest {
         assertNull(vm.state.value.pendingAuth)
         assertFalse(vm.state.value.isExporting)
         assertNull(vm.state.value.dialog)
-        assertEquals(L10nR.string.errorGeneric, snackbars.last().resId())
+        assertEquals(space.einundzwanzig.meetup.feature.profile.R.string.native_auth_unavailable, snackbars.last().resId())
         assertEquals(Tone.Error, snackbars.last().tone)
     }
 

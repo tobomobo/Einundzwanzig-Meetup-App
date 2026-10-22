@@ -20,6 +20,8 @@ dependencies {
 
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.core.ktx)
+    // EXIF orientation of the gallery pick before the badge image is re-encoded.
+    implementation(libs.androidx.exifinterface)
 
     testImplementation(libs.androidx.compose.ui.test.junit4)
 }

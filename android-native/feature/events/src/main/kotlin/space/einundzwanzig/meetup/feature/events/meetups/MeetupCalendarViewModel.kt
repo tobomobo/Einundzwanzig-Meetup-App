@@ -7,6 +7,8 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.Channel
@@ -18,7 +20,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
+import space.einundzwanzig.meetup.core.common.DefaultDispatcher
+import space.einundzwanzig.meetup.core.common.log.AppLogger
 import space.einundzwanzig.meetup.core.l10n.R as L10nR
 import space.einundzwanzig.meetup.core.navigation.MeetupCalendar
 import space.einundzwanzig.meetup.core.ui.component.AppSnackbarDurations
@@ -26,7 +33,6 @@ import space.einundzwanzig.meetup.core.ui.component.Tone
 import space.einundzwanzig.meetup.data.calendar.MeetupCalendarService
 import space.einundzwanzig.meetup.data.calendar.MyEventsService
 import space.einundzwanzig.meetup.data.calendar.format.CalendarFormat
-import space.einundzwanzig.meetup.data.calendar.match.MeetupEventMatcher
 import space.einundzwanzig.meetup.data.calendar.meetups.MeetupDatesLogic
 import space.einundzwanzig.meetup.data.calendar.model.MeetupDate
 import space.einundzwanzig.meetup.data.calendar.portal.PortalRsvp
@@ -71,6 +77,22 @@ data class RsvpRowState(
     val attendees: List<Attendee>?,
 )
 
+/**
+ * The part of a [MeetupDateRow] that depends only on the dates and the meetup directory; computed
+ * once per data change off the main thread, not on every keystroke or RSVP update.
+ */
+@Immutable
+data class StaticRow(
+    val index: Int,
+    val date: MeetupDate,
+    val dayText: String,
+    val monthText: String,
+    val timeText: String,
+    val crestUrl: String,
+    val favKey: String?,
+    val searchKey: MeetupDatesLogic.SearchKey,
+)
+
 /** Details sheet of one date. */
 @Immutable
 data class MeetupDateDetails(
@@ -88,6 +110,9 @@ data class MeetupCalendarUiState(
     val details: MeetupDateDetails? = null,
     internal val dates: List<MeetupDate> = emptyList(),
     internal val meetups: List<Meetup> = emptyList(),
+    /** `true` once [dates] holds the loaded list (the spinner stays until its rows are built). */
+    internal val datesLoaded: Boolean = false,
+    internal val staticRows: List<StaticRow> = emptyList(),
     internal val favorites: List<String> = emptyList(),
     internal val rsvp: Map<Int, JsonObject> = emptyMap(),
     internal val busy: Set<Int> = emptySet(),
@@ -127,6 +152,7 @@ class MeetupCalendarViewModel @AssistedInject constructor(
     private val profiles: UserProfileRepository,
     private val portal: EventsPortal,
     private val zones: ZoneProvider,
+    @param:DefaultDispatcher private val compute: CoroutineDispatcher,
 ) : ViewModel() {
 
     @AssistedFactory
@@ -139,6 +165,12 @@ class MeetupCalendarViewModel @AssistedInject constructor(
 
     private val messageChannel = Channel<UiMessage>(Channel.BUFFERED)
     val messages: Flow<UiMessage> = messageChannel.receiveAsFlow()
+
+    /** Serializes favorite toggles (load → toggle → save must not interleave). */
+    private val favMutex = Mutex()
+
+    /** Serializes [refreshStatic] runs. */
+    private val staticMutex = Mutex()
 
     init {
         viewModelScope.launch {
@@ -167,18 +199,59 @@ class MeetupCalendarViewModel @AssistedInject constructor(
         val user = runCatching { profiles.load() }.getOrNull()
         meetupService.fetchMeetups()
         mutableState.update { it.copy(favorites = user?.favoriteMeetupIds.orEmpty()).rebuilt() }
+        // MeetupService.cached may have changed (stars resolve against it while `meetups` is empty).
+        refreshStatic()
     }
 
     private suspend fun loadMeetupCrests() {
         val list = meetupService.fetchMeetups().ifEmpty { meetupService.cached }
         mutableState.update { it.copy(meetups = list).rebuilt() }
+        refreshStatic()
     }
 
     private suspend fun loadEvents() {
         val dates = calendar.fetchPortalFirst()
         val initial = dates.mapNotNull { d -> d.portalEventId?.let { it to PortalRsvp.initial(d) } }.toMap()
-        mutableState.update { it.copy(loading = false, dates = dates, rsvp = initial).rebuilt() }
+        mutableState.update { it.copy(datesLoaded = true, dates = dates, rsvp = initial) }
+        refreshStatic()
         loadRsvpStatuses(dates.mapNotNull { it.portalEventId })
+    }
+
+    /**
+     * Rebuilds [StaticRow]s for the current dates and meetups on the default dispatcher. A result
+     * whose inputs changed meanwhile is dropped; the change that replaced them runs its own refresh.
+     */
+    private suspend fun refreshStatic() = staticMutex.withLock {
+        val snapshot = state.value
+        val dates = snapshot.dates
+        val meetups = snapshot.meetups
+        val rows = withContext(compute) { buildStaticRows(dates, meetups) }
+        mutableState.update {
+            if (it.dates === dates && it.meetups === meetups) {
+                it.copy(staticRows = rows, loading = !it.datesLoaded).rebuilt()
+            } else {
+                it
+            }
+        }
+    }
+
+    private fun buildStaticRows(dates: List<MeetupDate>, meetups: List<Meetup>): List<StaticRow> {
+        val zone = zones.zone()
+        val resolveAgainst = meetups.ifEmpty { meetupService.cached }
+        return dates.mapIndexed { i, d ->
+            val local = d.start.atZone(zone)
+            val key = MeetupDatesLogic.searchKey(d, resolveAgainst)
+            StaticRow(
+                index = i,
+                date = d,
+                dayText = local.dayOfMonth.toString().padStart(2, '0'),
+                monthText = local.monthValue.toString().padStart(2, '0'),
+                timeText = CalendarFormat.hhmm(d.start, zone),
+                crestUrl = MeetupDatesLogic.crestUrl(d, meetups),
+                favKey = key.resolvedMeetupId,
+                searchKey = key,
+            )
+        }
     }
 
     private suspend fun loadRsvpStatuses(ids: List<Int>) {
@@ -215,11 +288,27 @@ class MeetupCalendarViewModel @AssistedInject constructor(
 
     private fun toggleFavorite(favKey: String) {
         viewModelScope.launch {
-            val user = runCatching { profiles.load() }.getOrNull() ?: return@launch
-            val toggle = MeetupDatesLogic.toggleFavorite(user.favoriteMeetupIds, favKey, meetupService::resolveFavorite)
-            runCatching {
-                profiles.update { it.copy(favoriteMeetupIds = toggle.favorites, homeMeetupId = toggle.homeMeetupId) }
-            }.onFailure { return@launch }
+            // A quick double tap must see the first toggle's saved list, not the same stale one.
+            val toggle = favMutex.withLock {
+                val user = try {
+                    profiles.load()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    AppLogger.warn(TAG, "Favorit: Profil nicht lesbar", e)
+                    return@launch
+                }
+                val toggle = MeetupDatesLogic.toggleFavorite(user.favoriteMeetupIds, favKey, meetupService::resolveFavorite)
+                try {
+                    profiles.update { it.copy(favoriteMeetupIds = toggle.favorites, homeMeetupId = toggle.homeMeetupId) }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    AppLogger.warn(TAG, "Favorit konnte nicht gespeichert werden", e)
+                    return@launch
+                }
+                toggle
+            }
             mutableState.update { it.copy(favorites = toggle.favorites).rebuilt() }
             val label = meetupService.labelFor(favKey)
             messageChannel.send(
@@ -261,10 +350,15 @@ class MeetupCalendarViewModel @AssistedInject constructor(
     }
 
     private suspend fun doRsvp(eventId: Int, status: String) {
-        if (eventId in state.value.busy) return
-        if (!portal.tokenMatchesCurrentKey() && !ensurePortalLogin()) return
-        mutableState.update { it.copy(busy = it.busy + eventId).rebuilt() }
+        // Busy before the login, so a double tap during the portal login does not start a second one.
+        var claimed = false
+        mutableState.update {
+            claimed = eventId !in it.busy
+            if (claimed) it.copy(busy = it.busy + eventId).rebuilt() else it
+        }
+        if (!claimed) return
         val result = try {
+            if (!portal.tokenMatchesCurrentKey() && !ensurePortalLogin()) return
             portal.rsvp(eventId, status)
         } finally {
             mutableState.update { it.copy(busy = it.busy - eventId).rebuilt() }
@@ -303,29 +397,25 @@ class MeetupCalendarViewModel @AssistedInject constructor(
         }
     }
 
-    /** Recomputes the visible rows and the details sheet from the raw state. */
+    /**
+     * Maps the cached [StaticRow]s plus the cheap per-update parts (favorite, RSVP, busy, expanded,
+     * attendees) to the visible rows and the details sheet. Runs on every state change, so it must
+     * not resolve dates against the meetup directory (that is [refreshStatic]'s job).
+     */
     private fun MeetupCalendarUiState.rebuilt(): MeetupCalendarUiState {
-        val zone = zones.zone()
-        val visibleDates = MeetupDatesLogic.filter(dates, query, initialSearch, initialMeetupId, meetups)
-        val indexOf = HashMap<MeetupDate, Int>()
-        // Identity, not equality: two portal dates may compare equal (spec 10 §14 item 13).
-        val identity = java.util.IdentityHashMap<MeetupDate, Int>()
-        dates.forEachIndexed { i, d -> identity[d] = i; indexOf.putIfAbsent(d, i) }
-        val cachedMeetups = meetups.ifEmpty { meetupService.cached }
-        fun rowFor(i: Int, d: MeetupDate): MeetupDateRow {
-            val local = d.start.atZone(zone)
-            val favKey = MeetupEventMatcher.resolve(d, cachedMeetups)?.id
-            val id = d.portalEventId
+        val favoriteIds = favorites.mapNotNullTo(HashSet()) { meetupService.resolveFavorite(it)?.id }
+        fun rowFor(st: StaticRow): MeetupDateRow {
+            val id = st.date.portalEventId
             val r = id?.let { rsvp[it] }
             return MeetupDateRow(
-                index = i,
-                date = d,
-                dayText = local.dayOfMonth.toString().padStart(2, '0'),
-                monthText = local.monthValue.toString().padStart(2, '0'),
-                timeText = CalendarFormat.hhmm(d.start, zone),
-                crestUrl = MeetupDatesLogic.crestUrl(d, meetups),
-                favKey = favKey,
-                isFavorite = favKey != null && MeetupDatesLogic.isFavorite(favorites, favKey, meetupService::resolveFavorite),
+                index = st.index,
+                date = st.date,
+                dayText = st.dayText,
+                monthText = st.monthText,
+                timeText = st.timeText,
+                crestUrl = st.crestUrl,
+                favKey = st.favKey,
+                isFavorite = st.favKey != null && st.favKey in favoriteIds,
                 rsvp = id?.let {
                     RsvpRowState(
                         eventId = it,
@@ -340,10 +430,15 @@ class MeetupCalendarViewModel @AssistedInject constructor(
                 },
             )
         }
-        val rows = visibleDates.map { d -> rowFor(identity[d] ?: indexOf.getValue(d), d) }
-        val details = detailsIndex?.let { i -> dates.getOrNull(i) }?.let { d ->
-            MeetupDateDetails(rowFor(detailsIndex, d), CalendarFormat.meetupWhen(d.start, zone), sheetBusy)
+        val visible = MeetupDatesLogic.filterPrepared(staticRows.map { it.searchKey }, query, initialSearch, initialMeetupId)
+        val rows = visible.map { rowFor(staticRows[it]) }
+        val details = detailsIndex?.let { i -> staticRows.getOrNull(i) }?.let { st ->
+            MeetupDateDetails(rowFor(st), CalendarFormat.meetupWhen(st.date.start, zones.zone()), sheetBusy)
         }
         return copy(rows = rows, details = details)
+    }
+
+    private companion object {
+        const val TAG = "MeetupCalendar"
     }
 }

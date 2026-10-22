@@ -105,6 +105,34 @@ class BitcoinDashboardViewModelTest {
     }
 
     @Test
+    fun `a source change from elsewhere reloads when the screen is visible again`() = runTest(dispatcher) {
+        val vm = vm()
+        var auto = launch { vm.autoRefreshWhileVisible() }
+        runCurrent()
+        auto.cancel()
+        config.setHost(MempoolHosts.TOR)
+        advanceTimeBy(10_000)
+        auto = launch { vm.autoRefreshWhileVisible() }
+        runCurrent()
+        assertEquals(2, service.dashboardCalls)
+        auto.cancel()
+    }
+
+    @Test
+    fun `a session override (mirror fallback) does not trigger a reload`() = runTest(dispatcher) {
+        val vm = vm()
+        var auto = launch { vm.autoRefreshWhileVisible() }
+        runCurrent()
+        auto.cancel()
+        config.setSessionOverride("https://mempool.emzy.de")
+        advanceTimeBy(10_000)
+        auto = launch { vm.autoRefreshWhileVisible() }
+        runCurrent()
+        assertEquals(1, service.dashboardCalls)
+        auto.cancel()
+    }
+
+    @Test
     fun `returning after more than a minute reloads`() = runTest(dispatcher) {
         val vm = vm()
         var auto = launch { vm.autoRefreshWhileVisible() }

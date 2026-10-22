@@ -16,6 +16,7 @@ import space.einundzwanzig.meetup.data.mempool.HostTestFailure
 import space.einundzwanzig.meetup.data.mempool.MempoolHosts
 import space.einundzwanzig.meetup.data.mempool.MempoolHttpException
 import space.einundzwanzig.meetup.data.mempool.MempoolMode
+import space.einundzwanzig.meetup.feature.bitcoin.FakeLog
 import space.einundzwanzig.meetup.feature.bitcoin.FakeMempoolConfig
 import space.einundzwanzig.meetup.feature.bitcoin.FakeMempoolService
 import space.einundzwanzig.meetup.feature.bitcoin.MainDispatcherRule
@@ -28,9 +29,10 @@ class MempoolSettingsViewModelTest {
     val main = MainDispatcherRule()
 
     private val service = FakeMempoolService().apply { lastDashboard.value = dashboard() }
+    private val log = FakeLog()
 
     private fun vm(config: FakeMempoolConfig = FakeMempoolConfig()): MempoolSettingsViewModel {
-        val vm = MempoolSettingsViewModel(config, service, CoroutineScope(main.dispatcher))
+        val vm = MempoolSettingsViewModel(config, service, CoroutineScope(main.dispatcher), log)
         // uiState is WhileSubscribed: keep one subscriber (unconfined main dispatcher).
         CoroutineScope(main.dispatcher).launch { vm.uiState.collect {} }
         return vm
@@ -74,12 +76,67 @@ class MempoolSettingsViewModelTest {
     fun `mode writes run in the application scope`() {
         val config = FakeMempoolConfig()
         val appScope = TestScope(StandardTestDispatcher())
-        val vm = MempoolSettingsViewModel(config, service, appScope)
+        val vm = MempoolSettingsViewModel(config, service, appScope, log)
         vm.onAction(MempoolSettingsAction.Select(MempoolMode.TOR))
-        assertTrue(config.setHostCalls.isEmpty())
         appScope.testScheduler.advanceUntilIdle()
         assertEquals(MempoolHosts.TOR, config.persistedHost)
         assertNull(service.lastDashboard.value)
+    }
+
+    @Test
+    fun `quick taps persist in tap order so the last card wins`() {
+        val config = FakeMempoolConfig()
+        val appScope = TestScope(StandardTestDispatcher())
+        val vm = MempoolSettingsViewModel(config, service, appScope, log)
+        vm.onAction(MempoolSettingsAction.Select(MempoolMode.TOR))
+        vm.onAction(MempoolSettingsAction.Select(MempoolMode.CLEARNET))
+        appScope.testScheduler.advanceUntilIdle()
+        assertEquals(listOf(MempoolHosts.TOR, MempoolHosts.CLEARNET), config.setHostCalls)
+        assertEquals(MempoolHosts.CLEARNET, config.persistedHost)
+    }
+
+    @Test
+    fun `select and save keep their order`() {
+        val config = FakeMempoolConfig()
+        val appScope = TestScope(StandardTestDispatcher())
+        val vm = MempoolSettingsViewModel(config, service, appScope, log)
+        vm.onAction(MempoolSettingsAction.CustomChanged("https://node.local"))
+        vm.onAction(MempoolSettingsAction.SaveCustom)
+        vm.onAction(MempoolSettingsAction.Select(MempoolMode.TOR))
+        appScope.testScheduler.advanceUntilIdle()
+        assertEquals(MempoolHosts.TOR, config.persistedHost)
+    }
+
+    @Test
+    fun `failed save is logged and emits no Saved event`() = runTest {
+        val config = FakeMempoolConfig().apply { setHostError = java.io.IOException("disk") }
+        val vm = vm(config)
+        val events = mutableListOf<MempoolSettingsEvent>()
+        val job = launch { vm.uiEvents.collect { events += it } }
+        vm.onAction(MempoolSettingsAction.CustomChanged("https://node.local"))
+        vm.onAction(MempoolSettingsAction.SaveCustom)
+        testScheduler.advanceUntilIdle()
+        assertTrue(events.isEmpty())
+        assertEquals(1, log.warnings)
+        assertEquals("https://node.local", vm.state().customText)
+        job.cancel()
+    }
+
+    @Test
+    fun `selecting another card drops a running connection test`() {
+        val gate = CompletableDeferred<Int>()
+        val slow = object : space.einundzwanzig.meetup.data.mempool.MempoolService by service {
+            override suspend fun testHost(rawHost: String): Int = gate.await()
+        }
+        val vm = MempoolSettingsViewModel(FakeMempoolConfig(), slow, CoroutineScope(main.dispatcher), log)
+        CoroutineScope(main.dispatcher).launch { vm.uiState.collect {} }
+        vm.onAction(MempoolSettingsAction.Test)
+        assertTrue(vm.state().testing)
+        vm.onAction(MempoolSettingsAction.Select(MempoolMode.TOR))
+        gate.complete(912_345)
+        val s = vm.state()
+        assertFalse(s.testing)
+        assertNull(s.testResult)
     }
 
     @Test

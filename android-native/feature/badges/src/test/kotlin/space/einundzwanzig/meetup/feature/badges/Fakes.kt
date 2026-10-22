@@ -100,7 +100,10 @@ internal class FakeSaveUseCase : BadgeSaveUseCase {
         return outcomes.removeFirst()
     }
 
+    var publishGate: CompletableDeferred<Unit>? = null
+
     override suspend fun publishCoAttendance(badge: MeetupBadge): Int {
+        publishGate?.await()
         published += badge
         return coAttendanceCount
     }
@@ -173,9 +176,18 @@ internal class FakeRollingQrService(var stored: MeetupSession? = null) : Rolling
         stored = null
     }
 
-    override suspend fun getBasePayload(): JsonObject? = basePayload
+    var basePayloadCalls = 0
+
+    override suspend fun getBasePayload(): JsonObject? {
+        basePayloadCalls++
+        return basePayload
+    }
+
+    /** Per-call generation delays (virtual time), consumed in order; empty = instant. */
+    val generationDelays = ArrayDeque<Long>()
 
     override suspend fun generateQrString(session: MeetupSession): String {
+        generationDelays.removeFirstOrNull()?.let { kotlinx.coroutines.delay(it) }
         qrError?.let { throw it }
         generated++
         return "qr-$generated"

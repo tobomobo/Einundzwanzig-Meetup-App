@@ -83,6 +83,8 @@ class DetailsSheetAndHubTest {
         }
         rule.onNodeWithText("Inhalt").assertExists()
         rule.onNodeWithContentDescription(context.getString(L10nR.string.actionClose)).performClick()
+        // The close button runs the hide animation before dismissing.
+        rule.waitForIdle()
         assertEquals(1, closed)
     }
 

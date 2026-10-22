@@ -68,7 +68,7 @@ internal class DefaultBadgeScanProcessor @Inject constructor(
                 log.warn(TAG, "Rolling-QR abgelehnt: ${nonce.message}")
                 // Wrongly typed n/ts is a format error, not an expired code.
                 return if (nonce.status == NonceStatus.MALFORMED) {
-                    ScanOutcome.Malformed(nonce.message)
+                    ScanOutcome.Malformed(nonce.message, rollingQrFormat = true)
                 } else {
                     ScanOutcome.NonceRejected(nonce)
                 }
@@ -249,7 +249,7 @@ internal class DefaultBadgeScanProcessor @Inject constructor(
                 claimTimestamp = result.claimTimestamp
                 claim = ClaimInfo.Bound
             } else {
-                claim = ClaimInfo.Failed(result.message)
+                claim = ClaimInfo.Failed(result.message, result.reason)
             }
         }
 

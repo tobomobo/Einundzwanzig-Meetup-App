@@ -1,10 +1,14 @@
 package space.einundzwanzig.meetup.feature.chat
 
 import android.content.Context
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -22,6 +26,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import space.einundzwanzig.meetup.core.ui.theme.EinundzwanzigTheme
 import space.einundzwanzig.meetup.core.l10n.R as L10nR
 import java.time.Instant
@@ -60,6 +65,7 @@ class ChatScreenTest {
     fun `loading shows the indicator and no footer actions`() {
         show(ChatUiState(isEvent = false, title = "Wien"))
         rule.onNodeWithTag(ChatTestTags.LOADING).assertIsDisplayed()
+        rule.onNodeWithContentDescription(str(L10nR.string.loading)).assertIsDisplayed()
         rule.onNodeWithTag(ChatTestTags.JOIN).assertDoesNotExist()
         rule.onNodeWithTag(ChatTestTags.INPUT).assertDoesNotExist()
         rule.onNodeWithText("Wien").assertIsDisplayed()
@@ -76,6 +82,28 @@ class ChatScreenTest {
         rule.onNodeWithTag(ChatTestTags.MEMBER_LINK).performClick()
         rule.onNodeWithText(str(L10nR.string.chatJoin)).performClick()
         assertEquals(listOf(ChatAction.OpenVerein, ChatAction.Join), actions)
+    }
+
+    @Test
+    @Config(qualifiers = "w320dp-h480dp")
+    fun `small screen at font scale 2 keeps messages and the join button visible`() {
+        rule.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale = 2f)) {
+                EinundzwanzigTheme {
+                    ChatScreen(
+                        state = ChatUiState(isEvent = false, title = "Wien", loading = false, member = false, messages = messages),
+                        onAction = { actions += it },
+                        onBack = {},
+                        clock = clock,
+                    )
+                }
+            }
+        }
+        rule.onNodeWithText("Ich bin dabei").assertIsDisplayed()
+        // The capped footer scrolls; the join button stays reachable.
+        rule.onNodeWithTag(ChatTestTags.JOIN).performScrollTo().assertIsDisplayed().performClick()
+        assertEquals(ChatAction.Join, actions.last())
     }
 
     @Test
@@ -141,7 +169,9 @@ class ChatScreenTest {
         rule.onNodeWithText("Bob Builder").assertIsDisplayed()
         rule.onNodeWithText("npub1qqqqqqq…qqqqqq").assertIsDisplayed()
         rule.onNodeWithTag(ChatTestTags.NPUB_CHIP).performClick()
-        assertEquals(ChatAction.CopyNpub, actions.last())
+        // The sheet animates out first, then the copy action is sent (which removes the sheet).
+        rule.waitUntil(5_000) { actions.lastOrNull() == ChatAction.CopyNpub }
+        assertEquals(listOf(ChatAction.CopyNpub), actions)
     }
 
     @Test

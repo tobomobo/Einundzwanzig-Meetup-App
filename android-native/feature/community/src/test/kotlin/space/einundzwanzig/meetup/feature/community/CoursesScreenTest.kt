@@ -23,6 +23,7 @@ import space.einundzwanzig.meetup.core.common.dart.DartDateTime
 import space.einundzwanzig.meetup.core.ui.theme.EinundzwanzigTheme
 import space.einundzwanzig.meetup.data.community.portal.PortalCourse
 import space.einundzwanzig.meetup.data.community.portal.PortalCourseEvent
+import space.einundzwanzig.meetup.data.community.portal.PortalCourseRef
 import space.einundzwanzig.meetup.data.community.portal.PortalLecturer
 import space.einundzwanzig.meetup.data.community.portal.PortalLink
 import space.einundzwanzig.meetup.feature.community.courses.CourseDetailsAction
@@ -48,8 +49,8 @@ class CoursesScreenTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
     private fun s(id: Int) = context.getString(id)
 
-    private val item = PortalListItem(1, "Bitcoin 101", "Grundlagen", "", emptyList())
-    private val noId = PortalListItem(null, "Ohne Id", "Siehe https://b.example", "", listOf("https://b.example"))
+    private val item = PortalListItem(1, "Bitcoin 101", "Grundlagen", emptyList())
+    private val noId = PortalListItem(null, "Ohne Id", "Siehe https://b.example", listOf("https://b.example"))
 
     @Test
     fun `courses loading state`() {
@@ -154,7 +155,7 @@ class CoursesScreenTest {
             intro = "Pleb",
             bio = "Schreibt Whitepaper.",
             image = "",
-            courses = listOf(portalObject("id" to 3, "name" to "Kurs drei")),
+            courses = listOf(PortalCourseRef(id = 3, name = "Kurs drei", image = "")),
             links = listOf(PortalLink("X (Twitter)", "satoshi", "https://x.com/satoshi")),
         )
         rule.setContent { EinundzwanzigTheme { LecturerDetailsScreen(LecturerDetailsUiState(false, lecturer), { actions += it }, {}) } }

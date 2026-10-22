@@ -4,7 +4,14 @@ import androidx.activity.ComponentDialog
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.junit4.StateRestorationTester
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotFocused
@@ -55,6 +62,43 @@ class BackupDialogsTest {
         rule.onNodeWithTag(BackupTestTags.SUBMIT).assertIsEnabled().performClick()
 
         assertEquals(listOf<BackupAction>(BackupAction.SubmitPassword("short-but-long")), actions)
+    }
+
+    @Test
+    fun `rule rows announce whether they are met`() {
+        show(BackupUiState(dialog = BackupDialog.Password(isExport = true)))
+        fun ruleRow(text: String) = rule.onNode(hasText(text, substring = true), useUnmergedTree = false)
+        ruleRow("Mindestens 8 Zeichen").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Nicht erfüllt"))
+        ruleRow("Beide Eingaben stimmen überein")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Nicht erfüllt"))
+
+        rule.onNodeWithTag(BackupTestTags.PASSWORD_FIELD).performTextInput("12345678")
+        ruleRow("Mindestens 8 Zeichen").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Erfüllt"))
+        ruleRow("Beide Eingaben stimmen überein")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Nicht erfüllt"))
+
+        rule.onNodeWithTag(BackupTestTags.CONFIRM_FIELD).performTextInput("12345678")
+        ruleRow("Beide Eingaben stimmen überein")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Erfüllt"))
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite))
+    }
+
+    @Test
+    fun `password dialog survives recreation without the typed password`() {
+        val tester = StateRestorationTester(rule)
+        tester.setContent {
+            EinundzwanzigTheme { BackupDialogs(BackupUiState(dialog = BackupDialog.Password(isExport = true))) { actions += it } }
+        }
+        rule.onNodeWithTag(BackupTestTags.PASSWORD_FIELD).performTextInput("geheim123")
+        rule.onNodeWithTag(BackupTestTags.CONFIRM_FIELD).performTextInput("geheim123")
+        rule.onNodeWithTag(BackupTestTags.SUBMIT).assertIsEnabled()
+
+        tester.emulateSavedInstanceStateRestore()
+
+        rule.onNodeWithText("Backup verschlüsseln").assertIsDisplayed()
+        rule.onNodeWithTag(BackupTestTags.PASSWORD_FIELD).assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString("")))
+        rule.onNodeWithTag(BackupTestTags.CONFIRM_FIELD).assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString("")))
+        rule.onNodeWithTag(BackupTestTags.SUBMIT).assertIsNotEnabled()
     }
 
     @Test

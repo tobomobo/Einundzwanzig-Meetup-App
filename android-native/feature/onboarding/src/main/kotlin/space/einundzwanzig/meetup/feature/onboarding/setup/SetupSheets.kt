@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.sp
 import space.einundzwanzig.meetup.core.l10n.R as L10nR
 import space.einundzwanzig.meetup.core.ui.theme.extendedColors
 import space.einundzwanzig.meetup.data.meetups.FavoriteMigration
+import space.einundzwanzig.meetup.data.meetups.MeetupSearchRows
 import space.einundzwanzig.meetup.data.meetups.model.Meetup
 import space.einundzwanzig.meetup.feature.onboarding.R
 
@@ -204,30 +205,15 @@ internal fun SecureIdentitySheetContent(state: SecureSheetState, onAction: (Setu
     }
 }
 
-/** Pure row logic of the MeetupSearchSheet (spec 09 §2.5). */
+/** Picker helpers; row filter/title/subtitle come from [MeetupSearchRows] (shared with profile). */
 internal object MeetupPickerLogic {
-    fun filter(meetups: List<Meetup>, query: String): List<Meetup> {
-        val q = query.lowercase()
-        if (q.isEmpty()) return meetups
-        return meetups.filter { it.city.lowercase().contains(q) || it.name.lowercase().contains(q) }
-    }
-
-    /** Title = name when several meetups share the city (and the name is set), else the city. */
-    fun title(meetup: Meetup, all: List<Meetup>): String {
-        val sameCity = all.count { it.city.equals(meetup.city, ignoreCase = true) }
-        return if (sameCity > 1 && meetup.name.isNotEmpty()) meetup.name else meetup.city
-    }
-
-    fun subtitle(meetup: Meetup): String? =
-        meetup.name.takeIf { it.isNotEmpty() && !it.equals(meetup.city, ignoreCase = true) }
-
     /** Toggle by ID, keeping the order (first = home meetup). */
     fun toggle(selected: List<String>, id: String): List<String> =
         if (id in selected) selected - id else selected + id
 
     /** Display label of the selected IDs (Flutter joined the raw values; IDs are unreadable). */
     fun label(selected: List<String>, all: List<Meetup>): String =
-        selected.joinToString(", ") { id -> all.firstOrNull { it.id == id }?.let { title(it, all) } ?: id }
+        selected.joinToString(", ") { id -> all.firstOrNull { it.id == id }?.let { MeetupSearchRows.title(it, all) } ?: id }
 }
 
 /** MeetupSearchSheet (spec 09 §2.5): search, star toggles, "N ★" hands the list back; drag/back discards. */
@@ -259,7 +245,7 @@ internal fun MeetupPickerContent(
 ) {
     var selected by rememberSaveable(initialSelected) { mutableStateOf(FavoriteMigration.migrate(initialSelected, meetups).ids) }
     var query by rememberSaveable { mutableStateOf("") }
-    val filtered = remember(meetups, query) { MeetupPickerLogic.filter(meetups, query) }
+    val filtered = remember(meetups, query) { MeetupSearchRows.filter(meetups, query) }
     val primary = MaterialTheme.colorScheme.primary
     Column(modifier.padding(horizontal = 16.dp).imePadding()) {
         OutlinedTextField(
@@ -279,12 +265,12 @@ internal fun MeetupPickerContent(
                 ListItem(
                     headlineContent = {
                         Text(
-                            MeetupPickerLogic.title(meetup, meetups),
+                            MeetupSearchRows.title(meetup, meetups),
                             color = if (active) primary else MaterialTheme.colorScheme.onSurface,
                             fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
                         )
                     },
-                    supportingContent = MeetupPickerLogic.subtitle(meetup)?.let { { Text(it) } },
+                    supportingContent = MeetupSearchRows.subtitle(meetup)?.let { { Text(it) } },
                     trailingContent = {
                         Icon(
                             if (active) Icons.Rounded.Star else Icons.Rounded.StarBorder,

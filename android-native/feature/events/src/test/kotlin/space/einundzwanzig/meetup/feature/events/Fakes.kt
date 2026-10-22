@@ -107,8 +107,10 @@ fun meetup(id: String = "107", city: String = "München", name: String = "Einund
 
 class FakeEventCalendarRepository(var items: List<CalendarItem> = emptyList()) : EventCalendarRepository {
     val calls = mutableListOf<Boolean>()
-    override suspend fun load(worldwide: Boolean): List<CalendarItem> {
+    val forced = mutableListOf<Boolean>()
+    override suspend fun load(worldwide: Boolean, force: Boolean): List<CalendarItem> {
         calls += worldwide
+        forced += force
         return items
     }
 }
@@ -245,12 +247,17 @@ class FakeMeetupService(var meetups: List<Meetup> = listOf(meetup())) : MeetupSe
 
 class FakeProfiles(var current: UserProfile = UserProfile()) : UserProfileRepository {
     private val flow = MutableStateFlow(current)
+    /** When set, [update] suspends until it completes (simulates a slow write). */
+    var updateGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+    var failUpdate = false
     override suspend fun load(): UserProfile = current
     override suspend fun save(profile: UserProfile) {
         current = profile
         flow.value = profile
     }
     override suspend fun update(transform: (UserProfile) -> UserProfile): UserProfile {
+        updateGate?.await()
+        if (failUpdate) throw java.io.IOException("disk full")
         save(transform(current))
         return current
     }
@@ -265,9 +272,12 @@ class FakePortal : EventsPortal {
     var attendees: List<Attendee> = listOf(Attendee("npub1" + "x".repeat(58), "Satoshi"))
     val rsvps = mutableListOf<Pair<Int, String>>()
     var logins = 0
+    /** When set, [loginWithNostr] suspends until it completes. */
+    var loginGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
     override suspend fun tokenMatchesCurrentKey(): Boolean = tokenOk
     override suspend fun loginWithNostr(): PortalResult {
         logins++
+        loginGate?.await()
         if (loginResult.ok) tokenOk = true
         return loginResult
     }

@@ -73,6 +73,7 @@ class FakeDocuments : BackupDocuments {
     val written = mutableMapOf<String, String>()
     val files = mutableMapOf<String, String>()
     var writeError: Exception? = null
+    val deleted = mutableListOf<String>()
 
     override suspend fun write(uri: String, content: String) {
         writeError?.let { throw it }
@@ -81,6 +82,10 @@ class FakeDocuments : BackupDocuments {
 
     override suspend fun read(uri: String): String =
         files[uri] ?: throw BackupReadException("Datei konnte nicht gelesen werden.")
+
+    override suspend fun delete(uri: String) {
+        deleted += uri
+    }
 }
 
 class FakePlatform : BackupPlatform {

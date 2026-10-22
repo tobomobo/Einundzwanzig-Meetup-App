@@ -6,4 +6,6 @@
     <string name="native_wallet_badge_not_found">Badge no encontrado</string>
     <string name="native_wallet_badge_not_found_sub">Este badge ya no está en tu wallet.</string>
     <string name="native_wallet_close_info">Cerrar información</string>
+    <string name="native_wallet_view_compact">Compacto</string>
+    <string name="native_wallet_view_normal">Normal</string>
 </resources>

@@ -27,6 +27,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import space.einundzwanzig.meetup.core.navigation.DiagnosticLog
 import space.einundzwanzig.meetup.core.navigation.LocalNavigator
+import space.einundzwanzig.meetup.core.navigation.MempoolSettings
+import space.einundzwanzig.meetup.core.navigation.RelaySettings
+import space.einundzwanzig.meetup.core.navigation.ValueForValue
 import space.einundzwanzig.meetup.core.navigation.Navigator
 import space.einundzwanzig.meetup.core.navigation.ProfileEdit
 import space.einundzwanzig.meetup.core.ui.guide.GuideController
@@ -95,6 +98,49 @@ class SettingsSheetFlowTest {
         clickRow(SettingsSheetTags.PROFILE)
         assertEquals(1, dismissed)
         assertEquals(listOf<NavKey>(ProfileEdit), navigator.pushed)
+    }
+
+    @Test
+    fun `a double tap during the closing animation navigates only once`() {
+        show()
+        rule.onNodeWithTag(SettingsSheetTags.PROFILE).performScrollTo()
+        rule.mainClock.autoAdvance = false
+        rule.onNodeWithTag(SettingsSheetTags.PROFILE).performClick()
+        rule.mainClock.advanceTimeByFrame()
+        rule.onNodeWithTag(SettingsSheetTags.PROFILE).performClick()
+        rule.mainClock.autoAdvance = true
+        rule.waitForIdle()
+        assertEquals(1, dismissed)
+        assertEquals(listOf<NavKey>(ProfileEdit), navigator.pushed)
+    }
+
+    @Test
+    fun `a double tap on reset starts the reset flow only once`() {
+        show()
+        rule.onNodeWithTag(SettingsSheetTags.RESET).performScrollTo()
+        rule.mainClock.autoAdvance = false
+        rule.onNodeWithTag(SettingsSheetTags.RESET).performClick()
+        rule.mainClock.advanceTimeByFrame()
+        rule.onNodeWithTag(SettingsSheetTags.RESET).performClick()
+        rule.mainClock.autoAdvance = true
+        rule.waitForIdle()
+        assertEquals(1, resets)
+    }
+
+    @Test
+    fun `relays, mempool and V4V rows close the sheet and open their screens`() {
+        show()
+        clickRow(SettingsSheetTags.RELAYS)
+        assertEquals(listOf<NavKey>(RelaySettings), navigator.pushed)
+        visible = true
+        rule.waitForIdle()
+        clickRow(SettingsSheetTags.MEMPOOL)
+        assertEquals(listOf(RelaySettings, MempoolSettings), navigator.pushed)
+        visible = true
+        rule.waitForIdle()
+        clickRow(SettingsSheetTags.V4V)
+        assertEquals(listOf(RelaySettings, MempoolSettings, ValueForValue), navigator.pushed)
+        assertEquals(3, dismissed)
     }
 
     @Test

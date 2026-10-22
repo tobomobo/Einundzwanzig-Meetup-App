@@ -5,6 +5,11 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import space.einundzwanzig.meetup.core.common.TimeSource
 import space.einundzwanzig.meetup.core.common.json.DartJson
+import space.einundzwanzig.meetup.core.common.json.jsonObjectOf
+import space.einundzwanzig.meetup.core.crypto.EventIds
+import space.einundzwanzig.meetup.core.crypto.KeyPair
+import space.einundzwanzig.meetup.data.badges.security.QrSignResult
+import space.einundzwanzig.meetup.data.reputation.qr.ReputationQrCodec
 import space.einundzwanzig.meetup.data.identity.profile.UserProfile
 import space.einundzwanzig.meetup.data.proofs.nip05.Nip05Result
 import space.einundzwanzig.meetup.data.proofs.platform.ProofVerifyResult
@@ -136,3 +141,15 @@ internal fun reputationEvent(total: Int = 8, bound: Int = 8) = ReputationEvent(
     accountAgeDays = 120,
     since = "2025-03",
 )
+
+/**
+ * Spec 04 S-8: a valid 21v3 code signed by key 2 that claims key 1's npub. Returns the code and
+ * the signer's npub.
+ */
+internal fun mismatchQr(): Pair<String, String> {
+    val keyA = KeyPair.fromPrivateKeyHex("0".repeat(63) + "1")
+    val keyB = KeyPair.fromPrivateKeyHex("0".repeat(63) + "2")
+    val json = DartJson.encode(jsonObjectOf("v" to 6, "id" to jsonObjectOf("n" to "Mallory", "np" to keyA.npub)))
+    val ev = EventIds.sign(keyB, 1_760_961_600L, 21001, emptyList(), json, ByteArray(32))
+    return ReputationQrCodec.encodeSigned(json, QrSignResult(ev.sig, ev.id, ev.createdAt, ev.pubkey, true)) to keyB.npub
+}

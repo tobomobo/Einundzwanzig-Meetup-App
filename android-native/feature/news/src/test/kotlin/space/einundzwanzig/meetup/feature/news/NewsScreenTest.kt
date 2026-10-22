@@ -7,6 +7,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.hasText
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -74,6 +76,14 @@ class NewsScreenTest {
         rule.onNodeWithText(context.getString(L10nR.string.newsWriteArticle)).performClick()
         rule.onNodeWithText(context.getString(L10nR.string.newsOpenWebsite)).performClick()
         assertEquals(listOf(NewsAction.WriteArticle, NewsAction.OpenWebsite), actions)
+    }
+
+    @Test
+    fun `pull to refresh sends Refresh`() {
+        show(NewsUiState(loading = false, articles = listOf(article("a"), article("b"))))
+        rule.onNodeWithTag(NewsTestTags.LIST).performTouchInput { swipeDown() }
+        rule.waitForIdle()
+        assertEquals(listOf<NewsAction>(NewsAction.Refresh), actions)
     }
 
     @Test

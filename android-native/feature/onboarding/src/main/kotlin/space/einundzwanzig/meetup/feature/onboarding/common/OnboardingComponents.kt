@@ -36,6 +36,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -57,8 +62,9 @@ fun primaryGradient(): Brush {
 }
 
 /**
- * Brand primary button: gradient when enabled, flat surface + tertiary label when disabled, and an
- * expressive loading indicator instead of the label while [busy] (spec 01 §2.2, §2.3.2).
+ * Brand primary button: gradient when enabled (also while [busy], only the click is removed), flat
+ * surface + tertiary label when disabled, and an expressive loading indicator instead of the label
+ * while [busy] (spec 01 §2.2, §2.3.2).
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -78,6 +84,7 @@ fun GradientButton(
     val shape = RoundedCornerShape(radius)
     val interaction = remember { MutableInteractionSource() }
     val primary = MaterialTheme.colorScheme.primary
+    val loadingLabel = stringResource(R.string.native_onboarding_loading)
     Box(
         modifier
             .fillMaxWidth()
@@ -86,13 +93,24 @@ fun GradientButton(
             .then(if (glow && active) Modifier.shadow(20.dp, shape, ambientColor = primary, spotColor = primary) else Modifier)
             .clip(shape)
             .then(
-                if (active) {
+                // Busy keeps the gradient (only the click is removed) so the indicator stays visible.
+                if (enabled) {
                     Modifier.background(primaryGradient())
                 } else {
                     Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow)
                 },
             )
-            .clickable(interactionSource = interaction, indication = null, enabled = active, role = Role.Button, onClick = onClick),
+            .clickable(interactionSource = interaction, indication = null, enabled = active, role = Role.Button, onClick = onClick)
+            .then(
+                if (busy) {
+                    Modifier.semantics {
+                        contentDescription = label
+                        stateDescription = loadingLabel
+                    }
+                } else {
+                    Modifier
+                },
+            ),
         contentAlignment = Alignment.Center,
     ) {
         AnimatedContent(
@@ -101,7 +119,7 @@ fun GradientButton(
             label = "gradientButtonBusy",
         ) { isBusy ->
             if (isBusy) {
-                AppLoadingIndicator(size = 32.dp, color = MaterialTheme.colorScheme.onPrimary)
+                AppLoadingIndicator(size = 32.dp, color = if (enabled) MaterialTheme.colorScheme.onPrimary else primary)
             } else {
                 Text(
                     label,
@@ -121,20 +139,33 @@ fun onboardingTertiary(): Color = MaterialTheme.extendedColors.textTertiary
 
 /**
  * The intro / identity-setup background (spec 01 §2.2, §2.3.2): sharp photo, a brightened and
- * blurred watermark layer cross-faded in on form steps ([subtle]), a black veil and the orange top
+ * blurred watermark layer cross-faded in on form steps ([subtle]), a background-coloured veil
+ * (stronger in light mode) and the orange top
  * glow. Blur needs API 31; below that the brightened layer is used unblurred.
  */
 @Composable
 fun OnboardingBackground(subtle: Boolean, modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit = {}) {
     val spec = tween<Float>(450, easing = FastOutSlowInEasing)
     val watermark by animateFloatAsState(if (subtle) 1f else 0f, spec, label = "watermark")
-    val veil by animateFloatAsState(if (subtle) 0.55f else 0.52f, spec, label = "veil")
+    val background = MaterialTheme.colorScheme.background
+    // The veil follows the scheme: in light mode the photo becomes a light watermark so the
+    // theme-following foreground (onSurface, onSurfaceVariant) stays readable.
+    val light = background.luminance() > 0.5f
+    val veil by animateFloatAsState(
+        when {
+            light && subtle -> 0.78f
+            light -> 0.72f
+            subtle -> 0.55f
+            else -> 0.52f
+        },
+        spec,
+        label = "veil",
+    )
     val glow by animateFloatAsState(if (subtle) 0.7f else 1f, spec, label = "glow")
     val painter = painterResource(R.drawable.onboarding_intro_background)
     val brighten = remember { ColorFilter.colorMatrix(ColorMatrix().apply { setToScale(2.2f, 2.2f, 2.2f, 1f) }) }
-    val scrim = MaterialTheme.colorScheme.scrim
     val primary = MaterialTheme.colorScheme.primary
-    Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    Box(modifier.fillMaxSize().background(background)) {
         Image(painter, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         if (watermark > 0f) {
             Image(
@@ -148,7 +179,7 @@ fun OnboardingBackground(subtle: Boolean, modifier: Modifier = Modifier, content
                     .then(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Modifier.blur(4.dp) else Modifier),
             )
         }
-        Box(Modifier.fillMaxSize().background(scrim.copy(alpha = veil)))
+        Box(Modifier.fillMaxSize().background(background.copy(alpha = veil)))
         Box(
             Modifier
                 .fillMaxWidth()

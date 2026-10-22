@@ -1,5 +1,7 @@
 package space.einundzwanzig.meetup.feature.reputation.verify
 
+import space.einundzwanzig.meetup.feature.reputation.common.nip05DomainLabel
+import space.einundzwanzig.meetup.feature.reputation.common.zapActivityLabel
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
@@ -452,7 +454,7 @@ private fun lightningDetails(input: LayersInput): List<DetailRow> {
             z.receivedCount > 0,
         )
         if (z.activeMonths > 0) {
-            rows += DetailRow(stringResource(L10nR.string.rlMonthsActive, z.activeMonths.toString()), z.activityLabel, z.activeMonths >= 3)
+            rows += DetailRow(stringResource(L10nR.string.rlMonthsActive, z.activeMonths.toString()), zapActivityLabel(z.activityLabel), z.activeMonths >= 3)
         }
     }
     return rows
@@ -496,7 +498,7 @@ private fun socialDetails(s: SocialLayerInput): List<DetailRow> {
 private fun identityDetails(input: LayersInput): List<DetailRow> {
     val rows = mutableListOf<DetailRow>()
     val nip05 = input.nip05?.takeIf { it.valid }
-    if (nip05 != null) rows += DetailRow(nip05.nip05, nip05.domainLabel, true)
+    if (nip05 != null) rows += DetailRow(nip05.nip05, nip05DomainLabel(nip05.domainKind), true)
     input.platformProofs?.forEach { (key, username) ->
         val label = TrustLayersEvaluator.platformLabel(key) + if (username.isNotEmpty()) ": @$username" else ""
         rows += DetailRow(label, stringResource(L10nR.string.rlLinked), true)

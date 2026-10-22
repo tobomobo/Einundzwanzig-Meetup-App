@@ -1,5 +1,6 @@
 package space.einundzwanzig.meetup.feature.reputation.qr
 
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -215,7 +216,7 @@ internal fun ReputationCardVisual(
 
 @Composable
 private fun CardStat(value: Int, label: String, color: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.semantics(mergeDescendants = true) {}) {
         Text(value.toString(), color = color, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
         Spacer(Modifier.height(2.dp))
         Text(
@@ -224,6 +225,8 @@ private fun CardStat(value: Int, label: String, color: Color) {
             fontSize = 9.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 1.1.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

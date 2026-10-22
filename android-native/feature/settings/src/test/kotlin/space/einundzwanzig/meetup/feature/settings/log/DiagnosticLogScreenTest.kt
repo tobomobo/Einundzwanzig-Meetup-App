@@ -48,10 +48,16 @@ class DiagnosticLogScreenTest {
     @Test
     fun `renders terminal lines in the Flutter log screen format`() {
         show(DiagnosticLogUiState(entries = listOf(entry("ERROR", "Badge", "Signatur ungültig", time), entry("INFO", "System", "App 1.7.2", time))))
-        rule.onNodeWithText("${hhmmss()}  ERROR  Badge: Signatur ungültig").assertExists()
-        rule.onNodeWithText("${hhmmss()}  INFO   System: App 1.7.2").assertExists()
+        rule.onNodeWithText("${hhmmss()}  ERROR  Badge: Signatur ungültig", substring = true).assertExists()
+        rule.onNodeWithText("${hhmmss()}  INFO   System: App 1.7.2", substring = true).assertExists()
         rule.onNodeWithTag(DiagnosticLogTags.COUNT).assertTextEquals("2 Einträge")
         rule.onNodeWithText(context.getString(R.string.native_log_title)).assertExists()
+    }
+
+    @Test
+    fun `the whole log is one selectable text, so a selection can span every line`() {
+        show(DiagnosticLogUiState(entries = listOf(entry("WARN", "Chat", "a", time), entry("SEC", "Signer", "b", time))))
+        rule.onNodeWithTag(DiagnosticLogTags.LIST).assertTextEquals("${hhmmss()}  WARN   Chat: a\n${hhmmss()}  SEC    Signer: b")
     }
 
     @Test

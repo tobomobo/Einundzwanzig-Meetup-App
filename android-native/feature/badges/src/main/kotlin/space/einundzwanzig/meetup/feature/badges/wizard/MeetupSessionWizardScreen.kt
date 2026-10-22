@@ -29,8 +29,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -41,6 +44,7 @@ import space.einundzwanzig.meetup.core.navigation.NfcTagWriter
 import space.einundzwanzig.meetup.core.navigation.RollingQr
 import space.einundzwanzig.meetup.core.ui.component.AppTopBar
 import space.einundzwanzig.meetup.core.ui.theme.EinundzwanzigTheme
+import space.einundzwanzig.meetup.feature.badges.R
 import space.einundzwanzig.meetup.feature.badges.common.Gap
 import space.einundzwanzig.meetup.feature.badges.common.PrimaryActionButton
 import space.einundzwanzig.meetup.feature.badges.common.PulsingCircle
@@ -129,7 +133,7 @@ private fun StepIndicator() {
     val primary = MaterialTheme.colorScheme.primary
     val inactive = MaterialTheme.colorScheme.outlineVariant
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-        StepDot(number = 1, label = "NFC", active = true, accent = primary)
+        StepDot(number = 1, label = stringResource(R.string.native_wizard_step_nfc), active = true, accent = primary)
         Box(
             Modifier
                 .padding(horizontal = 8.dp)
@@ -137,13 +141,21 @@ private fun StepIndicator() {
                 .height(2.dp)
                 .background(inactive),
         )
-        StepDot(number = 2, label = "QR", active = false, accent = inactive)
+        StepDot(number = 2, label = stringResource(R.string.native_wizard_step_qr), active = false, accent = inactive)
     }
 }
 
 @Composable
 private fun StepDot(number: Int, label: String, active: Boolean, accent: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    val description = stringResource(R.string.native_wizard_step_description, number, STEP_COUNT, label)
+    val state = stringResource(if (active) R.string.native_wizard_step_current else R.string.native_wizard_step_pending)
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clearAndSetSemantics {
+            contentDescription = description
+            stateDescription = state
+        },
+    ) {
         Box(
             Modifier
                 .size(36.dp)
@@ -165,6 +177,8 @@ private fun StepDot(number: Int, label: String, active: Boolean, accent: Color) 
         )
     }
 }
+
+private const val STEP_COUNT = 2
 
 @Preview(name = "Session wizard", backgroundColor = 0xFF0C0C0E, showBackground = true, heightDp = 760)
 @Composable

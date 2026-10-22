@@ -11,4 +11,6 @@ dependencies {
     implementation(project(":data:identity"))
     // OsmMap, markers and snapshot for the badge world map (spec 03 §2.4).
     implementation(project(":core:map"))
+    // PortalLogoRegistry: crest URLs for MeetupCrestWatermark / MeetupCrestFace (spec 03 §2.5).
+    implementation(project(":data:meetups"))
 }

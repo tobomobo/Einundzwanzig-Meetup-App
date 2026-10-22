@@ -81,16 +81,21 @@ internal class ReputationVerifyViewModel @AssistedInject constructor(
         }
     }
 
+    private var generation = 0
+
+    /** Starts a verification; a running one is cancelled and replaced (e.g. by a paste). */
     private fun verify() {
         val input = _state.value.input.dartTrim()
-        if (input.isEmpty() || _state.value.isVerifying) return
+        if (input.isEmpty()) return
         job?.cancel()
+        val gen = ++generation
         _state.update { it.copy(isVerifying = true, result = null, layers = LiveLayers()) }
         job = viewModelScope.launch {
             val result = try {
                 source.verifyProofString(input)
             } finally {
-                _state.update { it.copy(isVerifying = false) }
+                // A superseded run must not clear the flag of the one that replaced it.
+                if (gen == generation) _state.update { it.copy(isVerifying = false) }
             }
             _state.update { it.copy(result = result) }
             val npub = result.npub

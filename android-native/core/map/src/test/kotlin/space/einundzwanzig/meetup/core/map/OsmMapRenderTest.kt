@@ -1,5 +1,6 @@
 package space.einundzwanzig.meetup.core.map
 
+import android.graphics.Color
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
@@ -60,6 +61,37 @@ class OsmMapRenderTest {
         assertNotEquals(primary, bmp.getPixel(375, 250))
         // the map background is drawn as well
         assertEquals(background, bmp.getPixel(380, 60))
+    }
+
+    @Test
+    fun `capture contains the badge marker glow outside its circle`() {
+        lateinit var snapshot: MapSnapshotState
+        var primary = 0
+        var background = 0
+        rule.setContent {
+            EinundzwanzigTheme {
+                primary = MaterialTheme.colorScheme.primary.toArgb()
+                background = MaterialTheme.colorScheme.surfaceContainer.toArgb()
+                CompositionLocalProvider(LocalOsmTileRendering provides false) {
+                    snapshot = rememberMapSnapshotState()
+                    val camera = rememberOsmCameraState(vienna, 10.0)
+                    OsmMap(camera, Modifier.size(300.dp, 200.dp).mapSnapshotArea(snapshot), showAttribution = false) {
+                        Marker(vienna) { BitcoinBadgeMarker() }
+                    }
+                }
+            }
+        }
+        rule.waitForIdle()
+        val bmp = captureOnMainLooper(snapshot, pixelRatio = 1f)!!
+        // badge centred at (150, 100), radius 20 dp; 2 dp outside the circle lies in the glow
+        assertEquals(primary, bmp.getPixel(150, 90))
+        val glow = bmp.getPixel(172, 100)
+        assertNotEquals(background, glow)
+        val bg = Color.valueOf(background)
+        val g = Color.valueOf(glow)
+        assertTrue("glow is tinted towards primary: ${Integer.toHexString(glow)}", g.red() - g.blue() > bg.red() - bg.blue() + 0.1f)
+        // the glow fades out: far outside it is plain background
+        assertEquals(background, bmp.getPixel(190, 100))
     }
 
     @Test

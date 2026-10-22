@@ -46,8 +46,9 @@ object OsmConfiguration {
             2,
             TileSourcePolicy.FLAG_NO_BULK or
                 TileSourcePolicy.FLAG_NO_PREVENTIVE or
-                TileSourcePolicy.FLAG_USER_AGENT_MEANINGFUL or
-                TileSourcePolicy.FLAG_USER_AGENT_NORMALIZED,
+                // Not FLAG_USER_AGENT_NORMALIZED: that sends osmdroid's `<package>/<versionCode>`
+                // (set only by Configuration.load()) instead of userAgentValue.
+                TileSourcePolicy.FLAG_USER_AGENT_MEANINGFUL,
         ),
     )
 

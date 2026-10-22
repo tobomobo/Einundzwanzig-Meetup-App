@@ -179,7 +179,8 @@ class NfcTagWriterViewModel @Inject constructor(
     private suspend fun startWrite() {
         val current = _state.value
         if (current.waitingForTag || current.success) return
-        if (current.home == HomeMeetupInfo.NoHome) {
+        // Flutter: `_homeMeetup == null` blocks, which includes a home id missing from the directory.
+        if (current.home !is HomeMeetupInfo.Found) {
             _events.trySend(NfcTagWriterEvent.SelectHomeMeetup)
             return
         }

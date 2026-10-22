@@ -3,7 +3,9 @@ package space.einundzwanzig.meetup.feature.events.common
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.net.Uri
+import androidx.exifinterface.media.ExifInterface
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -25,11 +27,11 @@ import space.einundzwanzig.meetup.data.meetups.portal.PortalLogoRegistry
 import space.einundzwanzig.meetup.data.meetups.portal.PortalResult
 import space.einundzwanzig.meetup.data.profile.NostrProfileService
 import java.io.File
+import java.io.IOException
 import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.max
-import kotlin.math.roundToInt
 
 /*
  * Narrow seams over the large data-layer facades, so the ViewModels can be tested with small
@@ -158,19 +160,23 @@ internal class DefaultBadgeImagePreparer @Inject constructor(
         val longest = max(bounds.outWidth, bounds.outHeight)
         var sample = 1
         while (longest / (sample * 2) >= MAX_PX) sample *= 2
+        // Phone photos are often stored landscape with an EXIF orientation tag; the JPEG re-encode
+        // drops EXIF, so the rotation is applied to the pixels (Flutter image_picker keeps it upright).
+        val orientation = runCatching {
+            resolver.openInputStream(uri)?.use {
+                ExifInterface(it).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+            }
+        }.getOrNull() ?: ExifInterface.ORIENTATION_NORMAL
         val decoded = resolver.openInputStream(uri)?.use {
             BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
-        } ?: error("Bild konnte nicht gelesen werden")
-        val scale = MAX_PX.toFloat() / max(decoded.width, decoded.height)
-        val bitmap = if (scale < 1f) {
-            Bitmap.createScaledBitmap(
-                decoded,
-                (decoded.width * scale).roundToInt().coerceAtLeast(1),
-                (decoded.height * scale).roundToInt().coerceAtLeast(1),
-                true,
-            ).also { if (it !== decoded) decoded.recycle() }
-        } else {
+        } ?: throw UnreadableImageException()
+        val scale = (MAX_PX.toFloat() / max(decoded.width, decoded.height)).coerceAtMost(1f)
+        val matrix = orientationMatrix(orientation).apply { preScale(scale, scale) }
+        val bitmap = if (matrix.isIdentity) {
             decoded
+        } else {
+            Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
+                .also { if (it !== decoded) decoded.recycle() }
         }
         val dir = File(context.cacheDir, "badge_upload").apply { mkdirs() }
         val out = File(dir, "badge_${System.nanoTime()}.jpg")
@@ -182,6 +188,23 @@ internal class DefaultBadgeImagePreparer @Inject constructor(
     private companion object {
         const val MAX_PX = 1200
         const val QUALITY = 85
+    }
+}
+
+/** The picked file could not be decoded as an image (mapped to a localized message by the editor). */
+class UnreadableImageException : IOException("unreadable image")
+
+/** Rotation/flip that brings an image with EXIF [orientation] upright (identity for normal/unknown). */
+internal fun orientationMatrix(orientation: Int): Matrix = Matrix().apply {
+    when (orientation) {
+        ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> postScale(-1f, 1f)
+        ExifInterface.ORIENTATION_ROTATE_180 -> postRotate(180f)
+        ExifInterface.ORIENTATION_FLIP_VERTICAL -> postScale(1f, -1f)
+        ExifInterface.ORIENTATION_TRANSPOSE -> { postRotate(90f); postScale(-1f, 1f) }
+        ExifInterface.ORIENTATION_ROTATE_90 -> postRotate(90f)
+        ExifInterface.ORIENTATION_TRANSVERSE -> { postRotate(-90f); postScale(-1f, 1f) }
+        ExifInterface.ORIENTATION_ROTATE_270 -> postRotate(-90f)
+        else -> Unit
     }
 }
 

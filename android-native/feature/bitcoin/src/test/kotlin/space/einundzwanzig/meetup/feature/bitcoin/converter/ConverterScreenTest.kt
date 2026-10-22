@@ -114,6 +114,23 @@ class ConverterScreenTest {
     }
 
     @Test
+    fun `picking a currency reports it and animates the sheet away`() {
+        show(loaded(currency = "EUR"))
+        rule.onNodeWithTag(ConverterTags.CURRENCY_CHIP).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithTag(ConverterTags.currencyRow("CHF")).performClick()
+        rule.waitForIdle()
+        assertEquals(ConverterAction.PickCurrency("CHF"), actions.last())
+        rule.onNodeWithTag(ConverterTags.CURRENCY_SHEET).assertDoesNotExist()
+    }
+
+    @Test
+    fun `unknown currency codes have no name resource`() {
+        assertEquals(L10nR.string.curJPY, currencyNameRes("JPY"))
+        assertEquals(null, currencyNameRes("XYZ"))
+    }
+
+    @Test
     fun `premium sign button toggles the sign`() {
         show(loaded())
         rule.onNodeWithContentDescription(context.getString(R.string.native_bitcoin_toggle_sign)).performScrollTo().performClick()

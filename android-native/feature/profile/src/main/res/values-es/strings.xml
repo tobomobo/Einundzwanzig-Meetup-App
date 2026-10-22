@@ -6,6 +6,7 @@
         <item quantity="other">%1$d relés activos</item>
     </plurals>
     <string name="native_relay_remove">Eliminar</string>
+    <string name="native_relay_remove_a11y">Eliminar %1$s</string>
     <string name="native_relay_enabled">Relé activado</string>
     <string name="native_relay_disabled">Relé desactivado</string>
     <string name="native_nostr_label">Nostr</string>
@@ -20,6 +21,7 @@
     <string name="native_list_joiner">" y "</string>
     <string name="native_auth_show_key">Confirma tu identidad para mostrar la clave</string>
     <string name="native_auth_export_key">Confirma tu identidad para exportar la clave</string>
+    <string name="native_auth_unavailable">La confirmación de identidad no está disponible aquí</string>
     <string name="native_meetup_favorite">Favorito</string>
     <string name="native_meetup_not_favorite">No es favorito</string>
     <string name="native_bunker_qr">Código QR para vincular con el firmante</string>

@@ -350,6 +350,8 @@ class OsmMapUiTest {
         assertEquals(2, src.tileSourcePolicy.maxConcurrent)
         assertFalse(src.tileSourcePolicy.acceptsBulkDownload())
         assertFalse(src.tileSourcePolicy.acceptsPreventive())
+        // userAgentValue is the agent sent, not osmdroid's normalized `<package>/<versionCode>`
+        assertFalse(src.tileSourcePolicy.normalizesUserAgent())
         assertTrue(src.baseUrl.startsWith("https://tile.openstreetmap.org/"))
     }
 }

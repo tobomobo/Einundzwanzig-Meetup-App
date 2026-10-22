@@ -49,6 +49,13 @@ class SettingsSheetViewModelTest {
     }
 
     @Test
+    fun `stored language is in the state before the first collection`() {
+        val guide = GuideController(store, CoroutineScope(main.dispatcher))
+        val vm = SettingsSheetViewModel(settings, locale, currency, guide) { "1.7.2" }
+        assertEquals("en", vm.uiState.value.locale)
+    }
+
+    @Test
     fun `empty version stays empty`() {
         assertEquals("", vm(version = "").uiState.value.appVersion)
     }

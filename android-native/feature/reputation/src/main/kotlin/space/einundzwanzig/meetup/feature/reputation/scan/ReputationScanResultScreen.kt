@@ -1,5 +1,6 @@
 package space.einundzwanzig.meetup.feature.reputation.scan
 
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -103,6 +104,8 @@ import space.einundzwanzig.meetup.feature.reputation.common.SectionCard
 import space.einundzwanzig.meetup.feature.reputation.common.SectionHeader
 import space.einundzwanzig.meetup.feature.reputation.common.amberColor
 import space.einundzwanzig.meetup.feature.reputation.common.cyanColor
+import space.einundzwanzig.meetup.feature.reputation.common.nip05DomainLabel
+import space.einundzwanzig.meetup.feature.reputation.common.zapActivityLabel
 import space.einundzwanzig.meetup.feature.reputation.common.greenColor
 import space.einundzwanzig.meetup.feature.reputation.common.greyColor
 import space.einundzwanzig.meetup.feature.reputation.common.levelStyle
@@ -318,10 +321,10 @@ private fun TrustBlock(data: ReputationQrData) {
 
 @Composable
 private fun MiniStat(icon: ImageVector, value: Int, label: String, color: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.semantics(mergeDescendants = true) {}) {
         Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(16.dp))
         Text(value.toString(), color = color, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
-        Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.sp)
+        Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -395,7 +398,7 @@ private fun Nip05Row(nip05: Nip05Result) {
     Spacer(Modifier.height(14.dp))
     SectionCard(borderColor = (if (nip05.valid) cyanColor else redColor).copy(alpha = 0.25f)) {
         if (nip05.valid) {
-            EvidenceRow(Icons.Rounded.AlternateEmail, nip05.nip05, nip05.domainLabel, cyanColor)
+            EvidenceRow(Icons.Rounded.AlternateEmail, nip05.nip05, nip05DomainLabel(nip05.domainType), cyanColor)
         } else {
             EvidenceRow(Icons.Rounded.AlternateEmail, stringResource(L10nR.string.qrNip05Invalid), nip05.nip05, redColor)
         }
@@ -426,7 +429,7 @@ private fun LightningSection(zaps: ZapStats) {
                 if (zaps.receivedCount > 0) greenColor else greyColor,
             )
             if (zaps.activeMonths > 0) {
-                EvidenceRow(Icons.Rounded.Schedule, stringResource(L10nR.string.rlMonthsActive, zaps.activeMonths), zaps.activityLabel, amberColor)
+                EvidenceRow(Icons.Rounded.Schedule, stringResource(L10nR.string.rlMonthsActive, zaps.activeMonths), zapActivityLabel(zaps.activity), amberColor)
             }
         } else {
             EvidenceRow(Icons.Outlined.Info, stringResource(L10nR.string.qrNoZap), stringResource(L10nR.string.qrNoLightning), greyColor)

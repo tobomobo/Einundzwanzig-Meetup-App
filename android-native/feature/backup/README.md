@@ -49,7 +49,9 @@ val launcher = rememberBackupLauncher()
   (navigate to the app shell on `true`, §2.1) inject `BackupLauncher` into their `@HiltViewModel`
   and expose the navigation as UI state or an event.
 - The flows may run on the application scope (`Dispatchers.Default`); the coordinator starts the
-  SAF pickers on the main thread, and `ShareHelper` switches to main itself.
+  SAF pickers on the main thread (`Dispatchers.Main.immediate`; core:common has no main qualifier,
+  tests use `Dispatchers.setMain`), and `ShareHelper` switches to main itself. File I/O uses the
+  injected `@IoDispatcher`.
 - If the host activity is destroyed while the share sheet is open, the share counts as dismissed:
   `export()` returns `false` and the busy guard is released.
 
@@ -61,12 +63,21 @@ val launcher = rememberBackupLauncher()
 ## Deviations from Flutter
 
 - The restored-item list uses plurals: "1 Badge", "1 Plattform-Proof" (Flutter always wrote
-  "N Badges" / "N Plattform-Proofs", spec 08 §1 #20).
+  "N Badges" / "N Plattform-Proofs", spec 08 §1 #20). The count-based restore errors
+  (`native_backupErrStageFailed`, `native_backupErrBadgesNotSaved`) are plurals as well.
 - `RestoreError.InvalidContent` shows the localized `backupNotValid` text; the technical detail
   (German, from `:data:backup`) goes to the log only. Flutter showed the detail.
 - `ImportFailure.Unexpected` and `RestoreError.Other` still show the raw exception text (storage,
   signer, JVM messages), untranslated in en/es, as Flutter did. If that text is blank, the
   localized `native_backupErrUnreadable` is shown instead.
+- Typed passwords are not restored after a configuration change (not written to the saved-state
+  bundle on purpose); the dialog itself stays open.
+- If writing the chosen SAF document fails, the empty/partial document is deleted (best effort)
+  before the share-sheet fallback, so no 0-byte `.21bkp` is left behind.
+- `export()` without a mounted `BackupHost` returns `false` at once (no password dialog that nobody
+  renders), like `restore()`. The app shell must mount `BackupHost(snackbarHostState)` once at the root.
+- The password rule rows expose "Erfüllt"/"Nicht erfüllt" (`native_backupRuleMet`/`NotMet`) as
+  TalkBack state description (polite live region).
 - Snackbars are not re-shown after a configuration change: a message is consumed once, and a
   snackbar that is visible during a rotation disappears with the recreated `SnackbarHostState`.
 
@@ -84,7 +95,8 @@ There is none, because the module has no NavKeys.
 
 ARB keys from spec 08 §2.7. Native-only strings use the `native_backup*` prefix in
 `res/values{,-en,-es}/strings.xml`: the restored-item words and the restore error texts that
-Flutter hard-coded in German, plus the overlay content description.
+Flutter hard-coded in German, plus the overlay content description and the rule-row state
+descriptions.
 
 ## Tests
 

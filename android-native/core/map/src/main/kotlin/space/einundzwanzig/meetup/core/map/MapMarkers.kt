@@ -18,12 +18,12 @@ import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import space.einundzwanzig.meetup.core.ui.motion.rememberReducedMotion
@@ -54,7 +54,7 @@ fun BitcoinBadgeMarker(modifier: Modifier = Modifier) {
     Box(
         modifier
             .size(MapMarkerDefaults.BadgeMarkerSize)
-            .shadow(8.dp, CircleShape, ambientColor = primary.copy(alpha = 0.5f), spotColor = primary.copy(alpha = 0.5f))
+            .drawBehind { drawBadgeGlow(primary) }
             .background(primary, CircleShape)
             .border(2.dp, MapMarkerDefaults.RingColor, CircleShape),
         contentAlignment = Alignment.Center,
@@ -67,6 +67,33 @@ fun BitcoinBadgeMarker(modifier: Modifier = Modifier) {
         )
     }
 }
+
+/**
+ * Flutter `BoxShadow(primary 50 %, blurRadius: 8, spreadRadius: 1)` around the badge, drawn as a
+ * radial gradient rather than an elevation shadow: RenderNode shadows are not drawn on the software
+ * canvas the share-image capture uses ([MapSnapshotState]).
+ */
+private fun DrawScope.drawBadgeGlow(primary: Color) {
+    val badge = size.minDimension / 2
+    val spread = BADGE_GLOW_SPREAD.toPx()
+    val blur = BADGE_GLOW_BLUR.toPx()
+    val radius = badge + spread + blur
+    val glow = primary.copy(alpha = 0.5f)
+    drawCircle(
+        brush = Brush.radialGradient(
+            0f to glow,
+            // Full strength up to half the blur outside the spread edge, then fading out.
+            ((badge + spread - blur / 2) / radius).coerceIn(0f, 1f) to glow,
+            1f to Color.Transparent,
+            center = center,
+            radius = radius,
+        ),
+        radius = radius,
+    )
+}
+
+private val BADGE_GLOW_SPREAD = 1.dp
+private val BADGE_GLOW_BLUR = 8.dp
 
 /**
  * Nearby meetup pin (spec 09 §2.2): a 38 dp `location_on` in a 40 dp box, `primary` when the meetup
@@ -99,13 +126,13 @@ fun LocationDot(
     val animate = pulse && !reducedMotion
     val halo = if (animate) {
         val transition = rememberInfiniteTransition(label = "locationDotHalo")
-        val value by transition.animateFloat(
+        // Kept as State and read only in drawBehind, so the halo redraws without recomposing.
+        transition.animateFloat(
             initialValue = 0f,
             targetValue = 1f,
             animationSpec = infiniteRepeatable(tween(1600, easing = LinearEasing), RepeatMode.Restart),
             label = "halo",
         )
-        value
     } else {
         null
     }
@@ -114,11 +141,12 @@ fun LocationDot(
         modifier
             .size(size * 2)
             .drawBehind {
-                if (halo != null) {
+                val progress = halo?.value
+                if (progress != null) {
                     val base = size.toPx() / 2
                     drawCircle(
-                        color = color.copy(alpha = 0.35f * (1f - halo)),
-                        radius = base + base * halo,
+                        color = color.copy(alpha = 0.35f * (1f - progress)),
+                        radius = base + base * progress,
                     )
                 }
             },

@@ -37,9 +37,9 @@ import space.einundzwanzig.meetup.core.l10n.R as L10nR
  * icons (§2.5), npub shortening and the "open in Nostr app" fallback (§2.7).
  */
 
-/** Flutter `Colors.amber`: the community gold token (`:core:ui` has no amber token yet). */
+/** Flutter `Colors.amber` (0xFFFFC107), distinct from the `cCyan` gold. */
 internal val amberColor: Color
-    @Composable @ReadOnlyComposable get() = MaterialTheme.extendedColors.community
+    @Composable @ReadOnlyComposable get() = MaterialTheme.extendedColors.amber
 
 /** Flutter `cCyan` (BrandColors.Gold). */
 internal val cyanColor: Color

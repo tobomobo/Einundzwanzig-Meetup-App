@@ -116,10 +116,14 @@ object BadgeSecurity {
     fun verifyCompact(data: JsonObject, nowSeconds: Long, checkExpiry: Boolean = true): VerifyResult = try {
         verifyCompactOrThrow(data, nowSeconds, checkExpiry)
     } catch (e: CompactVerifyException) {
-        VerifyResult(isValid = false, version = 0, adminNpub = "", adminPubkey = "", message = "Verifikations-Fehler: ${e.message}")
+        VerifyResult(
+            isValid = false, version = 0, adminNpub = "", adminPubkey = "",
+            message = "Verifikations-Fehler: ${e.message}",
+            reason = if (e.invalidSignature) VerifyFailure.InvalidSignature else VerifyFailure.Error(e.message.orEmpty()),
+        )
     }
 
-    private class CompactVerifyException(message: String) : Exception(message)
+    private class CompactVerifyException(message: String, val invalidSignature: Boolean = false) : Exception(message)
 
     private fun verifyCompactOrThrow(data: JsonObject, nowSeconds: Long, checkExpiry: Boolean): VerifyResult {
         val pubkey = data.stringOr("p", "") ?: throw CompactVerifyException(typeError("p", "String"))
@@ -127,19 +131,23 @@ object BadgeSecurity {
         val createdAt = data.intOr("c", 0) ?: throw CompactVerifyException(typeError("c", "int"))
 
         if (pubkey.isEmpty() || sig.isEmpty() || createdAt == 0L) {
-            return VerifyResult(false, 2, "", "", "Fehlende Signatur-Daten")
+            return VerifyResult(false, 2, "", "", "Fehlende Signatur-Daten", VerifyFailure.MissingData)
         }
         if (!isValidPubkeyHex(pubkey)) {
-            return VerifyResult(false, 2, "", pubkey, "Ungültiges Pubkey-Format (erwartet: 64 Hex-Zeichen)")
+            return VerifyResult(false, 2, "", pubkey, "Ungültiges Pubkey-Format (erwartet: 64 Hex-Zeichen)", VerifyFailure.BadPubkey)
         }
         if (!isValidSignatureHex(sig)) {
-            return VerifyResult(false, 2, "", pubkey, "Ungültiges Signatur-Format (erwartet: 128 Hex-Zeichen)")
+            return VerifyResult(
+                false, 2, "", pubkey, "Ungültiges Signatur-Format (erwartet: 128 Hex-Zeichen)", VerifyFailure.BadSigFormat,
+            )
         }
         val expiresAt = data.intOr("x", 0) ?: throw CompactVerifyException(typeError("x", "int"))
         if (checkExpiry && expiresAt > 0 && nowSeconds > expiresAt) {
+            val expiry = expiryInfoOf(expiresAt, nowSeconds)
             return VerifyResult(
                 false, 2, "", pubkey,
-                "Tag abgelaufen! ${expiryInfoOf(expiresAt, nowSeconds).toGermanString()}. Bitte Organisator um neuen Tag.",
+                "Tag abgelaufen! ${expiry.toGermanString()}. Bitte Organisator um neuen Tag.",
+                VerifyFailure.Expired(expiry),
             )
         }
 
@@ -150,10 +158,10 @@ object BadgeSecurity {
         val tags = listOf(listOf("t", "badge"), listOf("m", m))
 
         // Dart hashes `p` as given while Event() lower-cases it: an upper-case `p` never matches.
-        if (pubkey != pubkey.lowercase()) throw CompactVerifyException("Invalid event")
+        if (pubkey != pubkey.lowercase()) throw CompactVerifyException("Invalid event", invalidSignature = true)
         val eventId = EventIds.compute(pubkey, createdAt, KIND_BADGE, tags, contentJson)
         if (!EventIds.isValid(eventId, pubkey, createdAt, KIND_BADGE, tags, contentJson, sig)) {
-            throw CompactVerifyException("Invalid event")
+            throw CompactVerifyException("Invalid event", invalidSignature = true)
         }
         val adminNpub = npubOrEmpty(pubkey)
         return VerifyResult(true, 2, adminNpub, pubkey, "Schnorr-Signatur gültig ✓")
@@ -207,7 +215,10 @@ object BadgeSecurity {
         }
         // Dart: `final int version = data['v'] ?? 1;` throws for a non-int `v`.
         val version = data.intOr("v", 1)
-            ?: return VerifyResult(false, 0, "", "", "Verifikations-Fehler: ${typeError("v", "int")}")
+            ?: return VerifyResult(
+                false, 0, "", "", "Verifikations-Fehler: ${typeError("v", "int")}",
+                VerifyFailure.Error(typeError("v", "int")),
+            )
         if (version >= 2) {
             val isValid = verifyNostr(data)
             val adminPubkey = data.stringOr("admin_pubkey", "") ?: ""
@@ -219,11 +230,13 @@ object BadgeSecurity {
                 adminNpub = adminNpub,
                 adminPubkey = adminPubkey,
                 message = if (isValid) "Schnorr-Signatur gültig (Legacy-Format)" else "Signatur ungültig!",
+                reason = if (isValid) null else VerifyFailure.InvalidSignature,
             )
         }
         return VerifyResult(
             false, 1, "", "",
             "Legacy-Badges (v1) werden nicht mehr akzeptiert. Bitte Organisator um neuen v2-Tag (Schnorr-signiert).",
+            VerifyFailure.LegacyRejected,
         )
     }
 

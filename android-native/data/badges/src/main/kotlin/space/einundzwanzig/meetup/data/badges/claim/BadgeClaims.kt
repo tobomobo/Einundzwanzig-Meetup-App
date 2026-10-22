@@ -9,6 +9,7 @@ import space.einundzwanzig.meetup.data.badges.security.BadgeSecurity
  *
  * @property claimTimestamp the claim's `claimed_at` == event `created_at` (unix seconds).
  * @property message German status text (`Badge gebunden ✓` / reason).
+ * @property reason typed failure for localized UI texts; `null` on success.
  */
 data class ClaimResult(
     val success: Boolean,
@@ -17,7 +18,20 @@ data class ClaimResult(
     val claimPubkey: String = "",
     val claimTimestamp: Long = 0,
     val message: String = "",
+    val reason: ClaimFailure? = null,
 )
+
+/** Typed reason of a failed [ClaimResult] (the UI localizes it; [ClaimResult.message] is German). */
+sealed interface ClaimFailure {
+    /** `Kein Schlüssel vorhanden — Claim nicht möglich`. */
+    data object NoKey : ClaimFailure
+
+    /** The signer kept choosing its own `created_at` (`Claim-Fehler: Zeitstempel des Signers weicht ab`). */
+    data object TimestampMismatch : ClaimFailure
+
+    /** Signer / crypto error; [detail] is technical (not localized). */
+    data class Error(val detail: String) : ClaimFailure
+}
 
 /** Result of a claim verification (Dart `ClaimVerifyResult`). */
 data class ClaimVerifyResult(

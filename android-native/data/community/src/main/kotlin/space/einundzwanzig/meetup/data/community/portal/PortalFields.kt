@@ -118,7 +118,9 @@ object PortalFields {
             intro = pv(e, "intro"),
             bio = pv(e, "description").ifEmpty { pv(e, "bio") },
             image = pImg(e),
-            courses = (e["courses"] as? JsonArray).objects(),
+            courses = (e["courses"] as? JsonArray).objects().map { c ->
+                PortalCourseRef(id = intId(c), name = pv(c, "name"), image = pImg(c))
+            },
             links = pairs.map { (k, v) -> PortalLink(label = k, value = v, url = lecturerLinkUrl(k, v)) },
         )
     }
@@ -191,11 +193,14 @@ data class PortalLecturer(
     val intro: String,
     val bio: String,
     val image: String,
-    /** Raw course objects (row: `pImg(c)`, `pv(c,'name')`, tap if `id is int`). */
-    val courses: List<JsonObject>,
+    /** Course rows of the lecturer (`pImg(c)`, `pv(c,'name')`, tap if `id is int`). */
+    val courses: List<PortalCourseRef>,
     /** Ordered, non-empty link rows labelled `"$label: $value"`. */
     val links: List<PortalLink>,
 )
+
+/** A course row of the lecturer detail: int [id] (null → not tappable), [name] and [image] (`pImg`). */
+data class PortalCourseRef(val id: Int?, val name: String, val image: String)
 
 /** A lecturer link row: [label] (`Website`, `X (Twitter)`, `Nostr`, `Portal`), raw [value], resolved [url]. */
 data class PortalLink(val label: String, val value: String, val url: String) {

@@ -3,6 +3,9 @@ package space.einundzwanzig.meetup.feature.settings.sheet
 import android.content.Context
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertContentDescriptionEquals
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -35,9 +38,13 @@ class SettingsSheetContentTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val actions = mutableListOf<SettingsSheetAction>()
 
-    private fun show(state: SettingsSheetUiState = SettingsSheetUiState(appVersion = "1.7.2"), backupBusy: Boolean = false) {
+    private fun show(
+        state: SettingsSheetUiState = SettingsSheetUiState(appVersion = "1.7.2"),
+        backupBusy: Boolean = false,
+        enabled: Boolean = true,
+    ) {
         rule.setContent {
-            EinundzwanzigTheme { SettingsSheetContent(state, backupBusy = backupBusy) { actions += it } }
+            EinundzwanzigTheme { SettingsSheetContent(state, backupBusy = backupBusy, enabled = enabled) { actions += it } }
         }
     }
 
@@ -177,5 +184,38 @@ class SettingsSheetContentTest {
             ),
             actions,
         )
+    }
+
+    @Test
+    fun `theme buttons announce the group title with their option and form a selectable group`() {
+        show(SettingsSheetUiState(themeMode = ThemeMode.LIGHT))
+        val title = context.getString(space.einundzwanzig.meetup.feature.settings.R.string.native_settings_theme_title)
+        val light = context.getString(space.einundzwanzig.meetup.feature.settings.R.string.native_settings_theme_light)
+        rule.onNodeWithTag(SettingsSheetTags.theme(ThemeMode.LIGHT)).performScrollTo()
+            .assertContentDescriptionEquals("$title: $light")
+            .assertIsOn()
+        rule.onNodeWithTag(SettingsSheetTags.theme(ThemeMode.LIGHT), useUnmergedTree = true)
+            .assert(SemanticsMatcher("parent is a selectable group") { node -> node.parent?.config?.contains(SemanticsProperties.SelectableGroup) == true })
+    }
+
+    @Test
+    fun `while the sheet is closing no row reacts to taps`() {
+        show(enabled = false)
+        listOf(
+            SettingsSheetTags.PROFILE,
+            SettingsSheetTags.BACKUP,
+            SettingsSheetTags.RESTORE,
+            SettingsSheetTags.RELAYS,
+            SettingsSheetTags.MEMPOOL,
+            SettingsSheetTags.LANGUAGE,
+            SettingsSheetTags.LOG,
+            SettingsSheetTags.RESTART,
+            SettingsSheetTags.V4V,
+            SettingsSheetTags.RESET,
+        ).forEach { rule.onNodeWithTag(it).performScrollTo().assertIsNotEnabled() }
+        click(SettingsSheetTags.PROFILE)
+        click(SettingsSheetTags.LANGUAGE)
+        assertEquals(emptyList<SettingsSheetAction>(), actions)
+        rule.onNodeWithTag(SettingsSheetTags.LANGUAGE_DIALOG).assertDoesNotExist()
     }
 }

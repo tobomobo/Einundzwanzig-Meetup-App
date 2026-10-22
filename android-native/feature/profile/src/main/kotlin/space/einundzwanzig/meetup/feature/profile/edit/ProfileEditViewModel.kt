@@ -182,9 +182,10 @@ class ProfileEditViewModel @Inject constructor(
             }
             is ProfileEditAction.AuthResult -> onAuthResult(action.purpose, action.ok)
             is ProfileEditAction.AuthUnavailable -> {
+                // Technical cause stays in the log; the user gets a generic, localized message.
                 AppLogger.error(TAG, "DeviceAuth needs FragmentActivity")
                 onAuthResult(action.purpose, ok = false)
-                showError(UiText.res(L10nR.string.errorGeneric, AUTH_UNAVAILABLE))
+                showError(UiText.res(R.string.native_auth_unavailable))
             }
             ProfileEditAction.CheckBunker -> checkBunker()
             ProfileEditAction.ConnectAmber -> requestSwitch(SignerTarget.AMBER)
@@ -676,9 +677,6 @@ class ProfileEditViewModel @Inject constructor(
 
     private companion object {
         const val TAG = "ProfileEdit"
-
-        /** Technical detail of the errorGeneric snackbar when the host cannot show a BiometricPrompt. */
-        const val AUTH_UNAVAILABLE = "DeviceAuth needs FragmentActivity"
 
         /** Flutter's default SnackBar duration (4 s) for the validation hint. */
         const val SAVE_HINT_MILLIS = 4_000L

@@ -2,10 +2,12 @@ package space.einundzwanzig.meetup.feature.backup
 
 import android.content.Context
 import android.net.Uri
+import android.provider.DocumentsContract
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import space.einundzwanzig.meetup.core.common.IoDispatcher
+import space.einundzwanzig.meetup.core.common.log.AppLogger
 import space.einundzwanzig.meetup.data.backup.BackupFiles
 import java.io.IOException
 import javax.inject.Inject
@@ -21,6 +23,9 @@ interface BackupDocuments {
      * @throws space.einundzwanzig.meetup.data.backup.BackupReadException on any read error.
      */
     suspend fun read(uri: String): String
+
+    /** Deletes the document [uri] (best effort, never throws). Used after a failed [write]. */
+    suspend fun delete(uri: String)
 }
 
 internal class ContentResolverBackupDocuments @Inject constructor(
@@ -37,4 +42,11 @@ internal class ContentResolverBackupDocuments @Inject constructor(
 
     override suspend fun read(uri: String): String =
         BackupFiles.read({ context.contentResolver.openInputStream(Uri.parse(uri)) }, io)
+
+    override suspend fun delete(uri: String) {
+        withContext(io) {
+            runCatching { DocumentsContract.deleteDocument(context.contentResolver, Uri.parse(uri)) }
+                .onFailure { AppLogger.debug("App", "Backup-Dokument nicht gelöscht: ${it.message}") }
+        }
+    }
 }

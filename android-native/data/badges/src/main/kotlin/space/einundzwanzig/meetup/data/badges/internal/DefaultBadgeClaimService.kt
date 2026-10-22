@@ -8,6 +8,7 @@ import space.einundzwanzig.meetup.core.common.log.AppLogger
 import space.einundzwanzig.meetup.data.badges.claim.BadgeClaimService
 import space.einundzwanzig.meetup.data.badges.claim.BadgeClaims
 import space.einundzwanzig.meetup.data.badges.claim.ClaimBatchResult
+import space.einundzwanzig.meetup.data.badges.claim.ClaimFailure
 import space.einundzwanzig.meetup.data.badges.claim.ClaimResult
 import space.einundzwanzig.meetup.data.badges.model.BadgeIdentity
 import space.einundzwanzig.meetup.data.badges.model.MeetupBadge
@@ -29,7 +30,7 @@ internal class DefaultBadgeClaimService @Inject constructor(
     override suspend fun createClaim(orgSig: String, orgEventId: String, orgPubkey: String, blockHeight: Long): ClaimResult {
         try {
             if (!signer.canSign()) {
-                return ClaimResult(success = false, message = "Kein Schlüssel vorhanden — Claim nicht möglich")
+                return ClaimResult(success = false, message = "Kein Schlüssel vorhanden — Claim nicht möglich", reason = ClaimFailure.NoKey)
             }
             // The signer is asked for created_at == claimed_at (spec 02 §7.4). Signers that cannot
             // honour it yet pick their own; the equality check stays as the guard, and only then
@@ -58,11 +59,19 @@ internal class DefaultBadgeClaimService @Inject constructor(
                     "Claim-Zeitstempel weicht ab (Versuch ${attempt + 1}): signiert ${signed.createdAt}, erwartet $now",
                 )
             }
-            return ClaimResult(success = false, message = "Claim-Fehler: Zeitstempel des Signers weicht ab")
+            return ClaimResult(
+                success = false,
+                message = "Claim-Fehler: Zeitstempel des Signers weicht ab",
+                reason = ClaimFailure.TimestampMismatch,
+            )
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            return ClaimResult(success = false, message = "Claim-Fehler: ${e.message ?: e}")
+            return ClaimResult(
+                success = false,
+                message = "Claim-Fehler: ${e.message ?: e}",
+                reason = ClaimFailure.Error((e.message ?: e).toString()),
+            )
         }
     }
 

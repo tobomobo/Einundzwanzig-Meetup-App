@@ -12,7 +12,8 @@ Register with `chatEntries()` (`EntryProviderScope<NavKey>`).
 **App wiring:** `ChatRoute` keys its ViewModel per conversation (`"chat:$target"`), so two chats
 never share one. For the live subscription to close when the chat is popped (spec: "closed when
 leaving the screen"), `:app` must install `rememberViewModelStoreNavEntryDecorator()` (plus the
-saveable-state decorator) on its `NavDisplay`; otherwise the ViewModel lives in the Activity store.
+saveable-state decorator) on its `NavDisplay`; otherwise the ViewModel lives in the Activity store. This is recorded centrally in
+`ARCHITECTURE.md` §Navigation; `ChatViewModelTest` checks that clearing the ViewModel closes the subscription.
 
 ## Contents
 
@@ -41,3 +42,5 @@ badges belong to the callers (home / events, spec 11 §2.2).
 
 `ChatViewModelTest` (JVM, fakes), `ChatScreenTest` (Robolectric Compose, stateless screen) and
 `ChatRouteTest` (Robolectric, route effects: snackbars, Verein link, npub clipboard).
+`ChatScreenTest` also covers a 320x480dp screen at font scale 2 (footer capped at half the height
+and scrollable, so the message list stays visible).

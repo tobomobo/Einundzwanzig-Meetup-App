@@ -45,4 +45,12 @@
     <string name="native_layerHideDetails">Hide details</string>
     <string name="native_tnHubVerifyTitle">Check reputation</string>
     <string name="native_tnHubVerifySub">Check a person\'s verify string or npub across all proof layers</string>
+    <!-- Zap activity / NIP-05 domain labels (German literals of :data:proofs, localized natively). -->
+    <string name="native_zapActivityNone">No zap activity</string>
+    <string name="native_zapActivityLittle">Little activity</string>
+    <string name="native_zapActivityRegular">Regularly active</string>
+    <string name="native_zapActivityVeryActive">Very active</string>
+    <string name="native_nip05Community">Community-verified</string>
+    <string name="native_nip05Custom">Own domain</string>
+    <string name="native_nip05PublicProvider">Public provider</string>
 </resources>

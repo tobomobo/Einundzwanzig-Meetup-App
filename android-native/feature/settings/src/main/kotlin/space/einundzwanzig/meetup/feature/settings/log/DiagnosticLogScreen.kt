@@ -17,8 +17,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
@@ -56,7 +56,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -289,21 +288,40 @@ private fun ActionIcon(icon: ImageVector, label: String, tag: String, onClick: (
     }
 }
 
-@Composable
-private fun levelColor(level: String): Color = when (level) {
-    LogLevel.ERROR.code -> MaterialTheme.colorScheme.error
-    LogLevel.WARN.code -> MaterialTheme.colorScheme.primary
-    LogLevel.SEC.code -> MaterialTheme.extendedColors.nostr
-    LogLevel.DEBUG.code -> MaterialTheme.extendedColors.textTertiary
-    else -> MaterialTheme.colorScheme.onSurfaceVariant
-}
-
-/** Terminal-style list: `HH:MM:SS  LEVEL  tag: message`, selectable. */
+/**
+ * Terminal-style log: `HH:MM:SS  LEVEL  tag: message`, one line per entry.
+ *
+ * Like Flutter's single `SelectableText.rich`, the whole (filtered) log is one annotated text in
+ * a scrolling column, so a selection can span every line, also the ones scrolled off screen.
+ * The ring buffer holds at most 800 short lines, which one text layout handles easily.
+ */
 @Composable
 private fun LogList(entries: List<LogEntry>) {
     val tertiary = MaterialTheme.extendedColors.textTertiary
     val tagColor = MaterialTheme.colorScheme.primary
     val text = MaterialTheme.colorScheme.onSurface
+    val error = MaterialTheme.colorScheme.error
+    val warn = MaterialTheme.colorScheme.primary
+    val sec = MaterialTheme.extendedColors.nostr
+    val info = MaterialTheme.colorScheme.onSurfaceVariant
+    val annotated = remember(entries, tertiary, tagColor, text, error, warn, sec, info) {
+        buildAnnotatedString {
+            entries.forEachIndexed { index, entry ->
+                if (index > 0) append('\n')
+                val levelColor = when (entry.level) {
+                    LogLevel.ERROR.code -> error
+                    LogLevel.WARN.code -> warn
+                    LogLevel.SEC.code -> sec
+                    LogLevel.DEBUG.code -> tertiary
+                    else -> info
+                }
+                withStyle(SpanStyle(color = tertiary)) { append(entry.timeOfDay()); append("  ") }
+                withStyle(SpanStyle(color = levelColor, fontWeight = FontWeight.Bold)) { append(entry.level.padEnd(5)) }
+                withStyle(SpanStyle(color = tagColor)) { append("  "); append(entry.tag); append(": ") }
+                withStyle(SpanStyle(color = text)) { append(entry.message) }
+            }
+        }
+    }
     Surface(
         modifier = Modifier
             .fillMaxSize()
@@ -312,27 +330,17 @@ private fun LogList(entries: List<LogEntry>) {
         color = MaterialTheme.colorScheme.surfaceContainerLowest,
     ) {
         SelectionContainer {
-            LazyColumn(
-                Modifier
+            Text(
+                annotated,
+                modifier = Modifier
                     .fillMaxSize()
-                    .testTag(DiagnosticLogTags.LIST),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-            ) {
-                itemsIndexed(entries, key = { index, e -> "$index-${e.timeMillis}" }) { _, entry ->
-                    val levelColor = levelColor(entry.level)
-                    Text(
-                        buildAnnotatedString {
-                            withStyle(SpanStyle(color = tertiary)) { append(entry.timeOfDay()); append("  ") }
-                            withStyle(SpanStyle(color = levelColor, fontWeight = FontWeight.Bold)) { append(entry.level.padEnd(5)) }
-                            withStyle(SpanStyle(color = tagColor)) { append("  "); append(entry.tag); append(": ") }
-                            withStyle(SpanStyle(color = text)) { append(entry.message) }
-                        },
-                        fontFamily = Inconsolata,
-                        fontSize = 11.5.sp,
-                        lineHeight = 1.6.em,
-                    )
-                }
-            }
+                    .testTag(DiagnosticLogTags.LIST)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                fontFamily = Inconsolata,
+                fontSize = 11.5.sp,
+                lineHeight = 1.6.em,
+            )
         }
     }
 }

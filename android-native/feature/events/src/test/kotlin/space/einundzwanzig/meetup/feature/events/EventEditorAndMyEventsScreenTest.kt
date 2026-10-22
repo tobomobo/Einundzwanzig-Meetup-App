@@ -2,6 +2,7 @@ package space.einundzwanzig.meetup.feature.events
 
 import android.content.Context
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.hasText
@@ -97,6 +98,22 @@ class EventEditorAndMyEventsScreenTest {
         editor(editorState())
         rule.onNodeWithTag(EventEditorTags.START).performClick()
         rule.onNodeWithText(s(L10nR.string.actionCancel)).assertExists()
+    }
+
+    @Test
+    @Config(qualifiers = "de-w640dp-h360dp")
+    fun `date picker buttons stay reachable on a short landscape window`() {
+        editor(editorState())
+        rule.onNodeWithTag(EventEditorTags.START).performScrollTo().performClick()
+        rule.onNodeWithText(s(android.R.string.ok)).assertIsDisplayed()
+        rule.onNodeWithText(s(L10nR.string.actionCancel)).assertIsDisplayed()
+    }
+
+    @Test
+    fun `date picker buttons are displayed at the default screen size`() {
+        editor(editorState())
+        rule.onNodeWithTag(EventEditorTags.START).performScrollTo().performClick()
+        rule.onNodeWithText(s(android.R.string.ok)).assertIsDisplayed()
     }
 
     @Test

@@ -48,6 +48,26 @@ class MeetupDatesLogicTest {
     }
 
     @Test
+    fun `filterPrepared keeps the same dates as filter`() {
+        val all = listOf(
+            date("Einundzwanzig Berlin", meetupId = "1"),
+            date("Berlin Stammtisch", location = "Berlin", meetupId = "9"),
+            date("Hamburg", location = "Hafen", meetupId = "4"),
+            date("Stammtisch", location = "Aschaffenburg"),
+        )
+        val keys = all.map { MeetupDatesLogic.searchKey(it, meetups) }
+        val cases = listOf(
+            listOf("BERLIN", "Berlin", "1"), listOf("berl", "Berlin", "1"), listOf("hafen", null, null),
+            listOf("", null, null), listOf(" hafen", null, null), listOf("", null, "4"), listOf("asch", null, null),
+        )
+        for ((q, search, id) in cases) {
+            val expected = MeetupDatesLogic.filter(all, q!!, search, id, meetups)
+            val actual = MeetupDatesLogic.filterPrepared(keys, q, search, id).map { all[it] }
+            assertEquals("query=$q", expected, actual)
+        }
+    }
+
+    @Test
     fun `crest picks the longest contained city and falls back to cover image`() {
         assertEquals(aschaffenburg, MeetupDatesLogic.crestMeetup(date("Meetup Aschaffenburg"), meetups))
         // "Au" is shorter than 3 characters and never matches.

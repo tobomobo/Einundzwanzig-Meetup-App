@@ -46,12 +46,14 @@ class DefaultReputationRepublisherTest {
 
     private class FakeBadges(loadedInitially: Boolean) : BadgeRepository {
         var loadCalls = 0
+        var loadFailure: Exception? = null
         override val badges = MutableStateFlow<List<MeetupBadge>>(emptyList())
         override val loaded = MutableStateFlow(loadedInitially)
         override val badgesUnreadable: StateFlow<Boolean> = MutableStateFlow(false)
         override val savedEvents: SharedFlow<Unit> = MutableSharedFlow()
         override suspend fun loadBadges(): List<MeetupBadge> {
             loadCalls++
+            loadFailure?.let { throw it }
             loaded.value = true
             return badges.value
         }
@@ -105,5 +107,21 @@ class DefaultReputationRepublisherTest {
         advanceUntilIdle()
         assertEquals(1, publisher.calls.size)
         appScope.cancel()
+    }
+
+    @Test
+    fun `a failing wallet load is caught and does not crash the app scope`() = runTest {
+        val publisher = FakePublisher()
+        val badges = FakeBadges(loadedInitially = false).apply { loadFailure = IllegalStateException("boom") }
+        var uncaught: Throwable? = null
+        val handler = kotlinx.coroutines.CoroutineExceptionHandler { _, e -> uncaught = e }
+        DefaultReputationRepublisher(
+            publisher,
+            badges,
+            CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler) + handler),
+        ).republishForced()
+        advanceUntilIdle()
+        assertNull(uncaught)
+        assertTrue(publisher.calls.isEmpty())
     }
 }

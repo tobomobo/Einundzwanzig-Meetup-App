@@ -158,7 +158,7 @@ fun AdminPanelScreen(
             SessionSection(state, onAction)
             Spacer(Modifier.height(16.dp))
             if (state.isSuperAdmin) Spacer(Modifier.height(16.dp))
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(32.dp))
             HowItWorksBox()
         }
     }
@@ -200,30 +200,39 @@ private fun SectionLabel(text: String) {
     )
 }
 
+/** What the session section shows; animated over the data so outgoing content keeps rendering. */
+private sealed interface SessionSlot {
+    data object Loading : SessionSlot
+    data class Running(val session: ActiveSessionUi) : SessionSlot
+    data object Idle : SessionSlot
+}
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun SessionSection(state: AdminPanelUiState, onAction: (AdminPanelAction) -> Unit) {
-    val key = when {
-        !state.sessionChecked -> 0
-        state.session != null -> 1
-        else -> 2
+    val slot: SessionSlot = when {
+        !state.sessionChecked -> SessionSlot.Loading
+        state.session != null -> SessionSlot.Running(state.session)
+        else -> SessionSlot.Idle
     }
     val motion = MaterialTheme.motionScheme
     AnimatedContent(
-        targetState = key,
+        targetState = slot,
         transitionSpec = {
             (fadeIn(motion.defaultEffectsSpec()) + scaleIn(motion.defaultSpatialSpec(), initialScale = 0.96f)) togetherWith
                 fadeOut(motion.defaultEffectsSpec())
         },
+        // Countdown ticks change the Running data every second; only a slot change animates.
+        contentKey = { it::class },
         label = "session",
     ) { target ->
         when (target) {
-            0 -> LoadingPlaceholder(
+            SessionSlot.Loading -> LoadingPlaceholder(
                 height = 96.dp,
                 modifier = Modifier.clip(RoundedCornerShape(10.dp)),
             )
-            1 -> state.session?.let { ActiveSessionCard(it, onAction) }
-            else -> StartMeetupTile(onClick = { onAction(AdminPanelAction.StartClicked) })
+            is SessionSlot.Running -> ActiveSessionCard(target.session, onAction)
+            SessionSlot.Idle -> StartMeetupTile(onClick = { onAction(AdminPanelAction.StartClicked) })
         }
     }
 }

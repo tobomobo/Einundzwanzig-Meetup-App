@@ -17,4 +17,14 @@ dependencies {
     implementation(project(":data:identity"))
     // QrScanner, gallery QR picker (spec 04 §2.3, §2.7.1).
     implementation(project(":core:camera"))
+
+    // The secp256k1 Android AAR only ships device ABIs; JVM tests verify the 21v3 fixture with the host library.
+    testImplementation(libs.secp256k1.jvm)
+}
+
+// Tests read the shared vectors from spec/fixtures directly; rerun them when those change.
+tasks.withType<Test>().configureEach {
+    inputs.dir(rootProject.file("spec/fixtures"))
+        .withPropertyName("specFixtures")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 }

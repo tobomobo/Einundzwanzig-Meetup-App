@@ -54,7 +54,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -361,7 +360,8 @@ private fun NsecBackupDialog(nsec: String, onCopied: () -> Unit, onClose: () -> 
 /** nsec import dialog (spec 01 §2.7.4 `_importNsec`); the dialog stays open on errors. */
 @Composable
 private fun ImportNsecDialog(importing: Boolean, onImport: (String) -> Unit, onDismiss: () -> Unit) {
-    var value by rememberSaveable { mutableStateOf("") }
+    // Plain remember on purpose: a secret must never enter the saved-instance-state Bundle.
+    var value by remember { mutableStateOf("") }
     val orange = MaterialTheme.colorScheme.primary
     AlertDialog(
         onDismissRequest = onDismiss,

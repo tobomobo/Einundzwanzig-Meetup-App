@@ -7,7 +7,8 @@ package space.einundzwanzig.meetup.data.badges.security
  * @property version 2 (compact / legacy full format), 1 (rejected v1), 0 (exception path).
  * @property adminNpub organizer npub (`""` if unknown).
  * @property adminPubkey organizer hex pubkey as given.
- * @property message German text exactly as in Flutter (shown in the scanner).
+ * @property message German text exactly as in Flutter (logs; UI fallback when [reason] is null).
+ * @property reason typed failure for localized UI texts (spec 02 §2.9); `null` when valid.
  */
 data class VerifyResult(
     val isValid: Boolean,
@@ -15,7 +16,32 @@ data class VerifyResult(
     val adminNpub: String,
     val adminPubkey: String = "",
     val message: String,
+    val reason: VerifyFailure? = null,
 )
+
+/** Typed reason of a failed [VerifyResult] (the UI localizes it; [VerifyResult.message] is German). */
+sealed interface VerifyFailure {
+    /** `Fehlende Signatur-Daten`. */
+    data object MissingData : VerifyFailure
+
+    /** `Ungültiges Pubkey-Format (erwartet: 64 Hex-Zeichen)`. */
+    data object BadPubkey : VerifyFailure
+
+    /** `Ungültiges Signatur-Format (erwartet: 128 Hex-Zeichen)`. */
+    data object BadSigFormat : VerifyFailure
+
+    /** `Tag abgelaufen! <expiry>. Bitte Organisator um neuen Tag.` */
+    data class Expired(val expiry: ExpiryInfo) : VerifyFailure
+
+    /** Schnorr signature / event id does not match (`Signatur ungültig!`, `… Invalid event`). */
+    data object InvalidSignature : VerifyFailure
+
+    /** v1 payloads are rejected (Audit C1). */
+    data object LegacyRejected : VerifyFailure
+
+    /** Wrongly typed fields; [detail] is technical (not localized). */
+    data class Error(val detail: String) : VerifyFailure
+}
 
 /**
  * Result of [BadgeSecurity.signQrV3] (Dart `QRSignResult`). `isNostr == false` and empty fields

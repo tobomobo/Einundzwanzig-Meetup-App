@@ -114,6 +114,14 @@ class EventCalendarViewModelTest {
     }
 
     @Test
+    fun `refresh bypasses the meetup date cache, the initial load does not`() {
+        val vm = vm()
+        vm.onAction(EventCalendarAction.ToggleWorldwide)
+        vm.onAction(EventCalendarAction.Refresh)
+        assertEquals(listOf(false, false, true), repo.forced)
+    }
+
+    @Test
     fun `rsvp is optimistic and kept on success`() {
         val vm = vm()
         vm.onAction(EventCalendarAction.OpenDetails(nostrItem))

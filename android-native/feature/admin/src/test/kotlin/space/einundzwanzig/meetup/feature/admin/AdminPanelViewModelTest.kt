@@ -430,7 +430,7 @@ class AdminPanelViewModelTest {
     }
 
     @Test
-    fun `failing end of an expired session still clears it and shows the error`() = runTest(dispatcher) {
+    fun `failing end of an expired session still clears it without a snackbar`() = runTest(dispatcher) {
         repo.autoExpire = false
         repo.stored = session("Würzburg", BASE / 1000 - 10)
         repo.endError = IllegalStateException("wipe kaputt")
@@ -438,7 +438,7 @@ class AdminPanelViewModelTest {
         assertEquals(1, repo.endCalls)
         assertTrue(s.sessionChecked)
         assertNull(s.session)
-        assertEquals(listOf(AdminPanelEvent.Error("wipe kaputt")), events)
+        assertTrue(events.isEmpty())
     }
 
     @Test

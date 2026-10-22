@@ -164,7 +164,8 @@ fun MeetupCalendarScreen(
                 scrollBehavior = scrollBehavior,
             )
         },
-        snackbarHost = { AppSnackbarHost(snackbarHostState) },
+        // While the details sheet is open its own host shows the snackbars (it is a separate window).
+        snackbarHost = { if (state.details == null) AppSnackbarHost(snackbarHostState) },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             TextField(
@@ -209,7 +210,10 @@ fun MeetupCalendarScreen(
         }
     }
     state.details?.let { details ->
-        EventDetailsSheet(onDismiss = { onAction(MeetupCalendarAction.CloseDetails) }) {
+        EventDetailsSheet(
+            onDismiss = { onAction(MeetupCalendarAction.CloseDetails) },
+            snackbarHostState = snackbarHostState,
+        ) {
             MeetupDateSheetContent(details, onAction)
         }
     }

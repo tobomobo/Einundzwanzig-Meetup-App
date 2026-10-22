@@ -31,6 +31,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,7 +56,6 @@ import space.einundzwanzig.meetup.core.ui.badge.BadgeArt
 import space.einundzwanzig.meetup.core.ui.badge.BadgeArtSpec
 import space.einundzwanzig.meetup.core.ui.crest.MeetupCrestWatermark
 import space.einundzwanzig.meetup.core.ui.motion.Pressable
-import space.einundzwanzig.meetup.core.ui.theme.BrandColors
 import space.einundzwanzig.meetup.core.ui.theme.extendedColors
 import space.einundzwanzig.meetup.data.badges.model.MeetupBadge
 import space.einundzwanzig.meetup.data.badges.text.DartString
@@ -137,13 +138,13 @@ internal fun NormalBadgeCard(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (badge.isOrganizer) {
-                            Icon(Icons.Outlined.Shield, contentDescription = null, tint = BrandColors.TextSecondary, modifier = Modifier.size(11.dp))
+                            Icon(Icons.Outlined.Shield, contentDescription = null, tint = MaterialTheme.extendedColors.onScrim.copy(alpha = OnScrimSecondary), modifier = Modifier.size(11.dp))
                             Spacer(Modifier.width(4.dp))
                         } else if (!badge.presenceVerified) {
                             Icon(
                                 Icons.Rounded.LocationOff,
                                 contentDescription = stringResource(L10nR.string.badgeUnverified),
-                                tint = BrandColors.TextTertiary,
+                                tint = MaterialTheme.extendedColors.onScrim.copy(alpha = OnScrimTertiary),
                                 modifier = Modifier.size(11.dp),
                             )
                             Spacer(Modifier.width(4.dp))
@@ -152,37 +153,53 @@ internal fun NormalBadgeCard(
                     }
                 }
                 Spacer(Modifier.weight(1f))
-                Text(
-                    text = dartUpper(badge.meetupName),
-                    color = BrandColors.TextPrimary,
-                    style = TextStyle(
-                        fontSize = if (badge.meetupName.length > 18) 11.sp else 14.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 0.3.sp,
-                        lineHeight = 1.2.em,
-                        shadow = Shadow(scrim, Offset(1f, 1f), 6f),
-                    ),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+                // Flutter draws two shadows: (1,1) blur 6 black and (0,0) blur 12 black at 54 %.
+                // Compose takes one per text, so the glow is a second, semantics-free layer.
+                val density = LocalDensity.current
+                val nameStyle = TextStyle(
+                    fontSize = if (badge.meetupName.length > 18) 11.sp else 14.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 0.3.sp,
+                    lineHeight = 1.2.em,
                 )
+                val name = dartUpper(badge.meetupName)
+                Box {
+                    Text(
+                        text = name,
+                        color = MaterialTheme.extendedColors.onScrim,
+                        style = nameStyle.copy(shadow = Shadow(scrim.copy(alpha = 0.54f), Offset.Zero, with(density) { 12.dp.toPx() })),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.clearAndSetSemantics { },
+                    )
+                    Text(
+                        text = name,
+                        color = MaterialTheme.extendedColors.onScrim,
+                        style = nameStyle.copy(
+                            shadow = with(density) { Shadow(scrim, Offset(1.dp.toPx(), 1.dp.toPx()), 6.dp.toPx()) },
+                        ),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.CalendarToday, contentDescription = null, tint = BrandColors.OrangeLight, modifier = Modifier.size(10.dp))
+                    Icon(Icons.Rounded.CalendarToday, contentDescription = null, tint = MaterialTheme.extendedColors.bitcoinOnScrim, modifier = Modifier.size(10.dp))
                     Spacer(Modifier.width(4.dp))
                     Text(
                         BadgeFormat.dateShort(badge.date),
-                        color = BrandColors.TextPrimary.copy(alpha = 0.7f),
+                        color = MaterialTheme.extendedColors.onScrim.copy(alpha = 0.7f),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                     )
                 }
                 Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("₿", color = BrandColors.OrangeLight, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text("₿", color = MaterialTheme.extendedColors.bitcoinOnScrim, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.width(4.dp))
                     Text(
                         "Block ${BadgeFormat.blockWallet(badge.blockHeight)}",
-                        color = BrandColors.TextPrimary.copy(alpha = 0.5f),
+                        color = MaterialTheme.extendedColors.onScrim.copy(alpha = 0.5f),
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Medium,
                         fontFamily = FontFamily.Monospace,
@@ -243,18 +260,18 @@ internal fun CompactBadgeCard(
                 Spacer(Modifier.weight(1f))
                 Text(
                     shortName,
-                    color = BrandColors.TextPrimary,
+                    color = MaterialTheme.extendedColors.onScrim,
                     style = TextStyle(
                         fontSize = if (shortName.length > 12) 9.sp else 11.sp,
                         fontWeight = FontWeight.Black,
                         lineHeight = 1.2.em,
-                        shadow = Shadow(scrim, Offset(1f, 1f), 4f),
+                        shadow = with(LocalDensity.current) { Shadow(scrim, Offset(1.dp.toPx(), 1.dp.toPx()), 4.dp.toPx()) },
                     ),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Spacer(Modifier.height(3.dp))
-                Text(BadgeFormat.dateShort(badge.date), color = BrandColors.TextPrimary.copy(alpha = 0.54f), fontSize = 9.sp)
+                Text(BadgeFormat.dateShort(badge.date), color = MaterialTheme.extendedColors.onScrim.copy(alpha = 0.54f), fontSize = 9.sp)
             }
         }
     }
@@ -401,3 +418,8 @@ internal fun YearSectionHeader(
     }
 }
 
+/** Alpha of [space.einundzwanzig.meetup.core.ui.theme.ExtendedColors.onScrim] for Flutter `cTextSecondary` on a scrim. */
+private const val OnScrimSecondary = 0.62f
+
+/** Alpha of `onScrim` for Flutter `cTextTertiary` on a scrim. */
+private const val OnScrimTertiary = 0.54f

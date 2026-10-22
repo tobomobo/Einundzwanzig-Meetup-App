@@ -145,7 +145,8 @@ class AdminPanelViewModel internal constructor(
             }
             startTicker()
         } else {
-            if (session != null) endSessionSafely()
+            // Background expiry: like Dart `_checkSession`, a failed wipe is never shown to the user.
+            if (session != null) endSessionSafely(notifyUser = false)
             tickerJob?.cancel()
             _state.update { it.copy(sessionChecked = true, session = null) }
         }
@@ -178,16 +179,17 @@ class AdminPanelViewModel internal constructor(
 
     /**
      * `RollingQrService.endSession` must never crash the app (viewModelScope has no handler): a
-     * failed wipe is logged and surfaced as the error snackbar; callers still clear their state.
+     * failed wipe is logged and, if the user triggered it ([notifyUser]), surfaced as the error
+     * snackbar; callers still clear their state.
      */
-    private suspend fun endSessionSafely() {
+    private suspend fun endSessionSafely(notifyUser: Boolean = true) {
         try {
             repository.endSession()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             log.warn(TAG, "Session nicht beendbar", e)
-            _events.send(AdminPanelEvent.Error(e.message ?: e.toString()))
+            if (notifyUser) _events.send(AdminPanelEvent.Error(e.message ?: e.toString()))
         }
     }
 

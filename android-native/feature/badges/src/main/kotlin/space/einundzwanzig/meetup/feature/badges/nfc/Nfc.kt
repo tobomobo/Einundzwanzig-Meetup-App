@@ -20,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import space.einundzwanzig.meetup.core.common.log.AppLogger
 import space.einundzwanzig.meetup.core.ui.util.findActivity
+import space.einundzwanzig.meetup.feature.badges.R
 import javax.inject.Inject
 
 /** NFC hardware state (Dart `NfcManager.checkAvailability`). */
@@ -200,7 +201,7 @@ internal fun NfcReaderModeEffect(
                 currentOnError.value(e.message ?: e.toString())
             }
         } else if (active) {
-            currentOnError.value("NFC adapter unavailable")
+            currentOnError.value(context.getString(R.string.native_nfc_adapter_unavailable))
         }
         onPauseOrDispose {
             if (enabled && activity != null) runCatching { adapter?.disableReaderMode(activity) }

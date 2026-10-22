@@ -73,6 +73,7 @@ import space.einundzwanzig.meetup.core.ui.component.AppSnackbarHost
 import space.einundzwanzig.meetup.core.ui.component.LocalAppSnackbarHostState
 import space.einundzwanzig.meetup.core.ui.motion.rememberReducedMotion
 import space.einundzwanzig.meetup.core.ui.theme.EinundzwanzigTheme
+import space.einundzwanzig.meetup.core.ui.theme.ThemeMode
 import space.einundzwanzig.meetup.data.settings.locale.AppLocales
 import space.einundzwanzig.meetup.feature.onboarding.R
 import space.einundzwanzig.meetup.feature.onboarding.common.GradientButton
@@ -132,11 +133,6 @@ fun IntroScreen(state: IntroUiState, onAction: (IntroAction) -> Unit, snackbarHo
     ) { _ ->
         OnboardingBackground(subtle = false) {
             Box(Modifier.fillMaxSize().safeDrawingPadding()) {
-                LanguageChip(
-                    code = state.locale,
-                    onClick = { onAction(IntroAction.OpenLanguage) },
-                    modifier = Modifier.align(Alignment.TopEnd).padding(end = 12.dp, top = 4.dp),
-                )
                 Column(
                     Modifier
                         .align(Alignment.Center)
@@ -213,6 +209,12 @@ fun IntroScreen(state: IntroUiState, onAction: (IntroAction) -> Unit, snackbarHo
                         }
                     }
                 }
+                // Drawn last so the scrollable column never covers it on short screens.
+                LanguageChip(
+                    code = state.locale,
+                    onClick = { onAction(IntroAction.OpenLanguage) },
+                    modifier = Modifier.align(Alignment.TopEnd).padding(end = 12.dp, top = 4.dp),
+                )
             }
         }
     }
@@ -309,6 +311,12 @@ object IntroTags {
 @Composable
 private fun IntroPreview() {
     EinundzwanzigTheme { IntroScreen(IntroUiState(locale = "de"), onAction = {}) }
+}
+
+@Preview
+@Composable
+private fun IntroLightPreview() {
+    EinundzwanzigTheme(themeMode = ThemeMode.LIGHT) { IntroScreen(IntroUiState(locale = "de"), onAction = {}) }
 }
 
 @Preview

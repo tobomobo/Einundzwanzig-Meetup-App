@@ -46,4 +46,12 @@
     <string name="native_layerHideDetails">Ocultar detalles</string>
     <string name="native_tnHubVerifyTitle">Verificar reputación</string>
     <string name="native_tnHubVerifySub">Verificar el verify string o npub de una persona en todas las capas de prueba</string>
+    <!-- Zap activity / NIP-05 domain labels (German literals of :data:proofs, localized natively). -->
+    <string name="native_zapActivityNone">Sin actividad de zaps</string>
+    <string name="native_zapActivityLittle">Poca actividad</string>
+    <string name="native_zapActivityRegular">Activo con regularidad</string>
+    <string name="native_zapActivityVeryActive">Muy activo</string>
+    <string name="native_nip05Community">Verificado por la comunidad</string>
+    <string name="native_nip05Custom">Dominio propio</string>
+    <string name="native_nip05PublicProvider">Proveedor público</string>
 </resources>

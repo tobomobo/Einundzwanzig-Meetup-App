@@ -259,6 +259,9 @@ private fun createMapView(
 ): MapView {
     OsmConfiguration.ensureConfigured(context)
     return MapView(context).apply {
+        // Teardown is the DisposableEffect's onDetach. osmdroid's own destroy on window detach would
+        // drop the tile provider and the camera listener when the AndroidView is moved and reattached.
+        setDestroyMode(false)
         setTileSource(OsmConfiguration.OsmStandardTiles)
         setTilesScaledToDpi(true)
         setMultiTouchControls(true)

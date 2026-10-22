@@ -48,14 +48,19 @@ internal object NpubCameraTags {
  * with a medium haptic, then the screen pops. Other codes are ignored without feedback.
  */
 @Composable
-internal fun VerifyPersonQrCameraRoute() {
+internal fun VerifyPersonQrCameraRoute(
+    // Camera slot: the real [QrScanner]; tests pass a fake that feeds codes.
+    scanner: @Composable (onResult: (String) -> Boolean, enabled: Boolean) -> Unit = { onResult, enabled ->
+        QrScanner(onResult = onResult, enabled = enabled)
+    },
+) {
     val navigator = LocalNavigator.current
     val bus = LocalResultEventBus.current
     val haptics = rememberHaptics()
     var done by rememberSaveable { mutableStateOf(false) }
     VerifyPersonQrCameraScreen(onBack = navigator::back) {
-        QrScanner(
-            onResult = { raw ->
+        scanner(
+            { raw ->
                 val npub = if (done) null else NpubExtractor.extract(raw)
                 if (npub != null) {
                     done = true
@@ -67,7 +72,7 @@ internal fun VerifyPersonQrCameraRoute() {
                     done
                 }
             },
-            enabled = !done,
+            !done,
         )
     }
 }

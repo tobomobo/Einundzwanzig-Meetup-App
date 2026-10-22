@@ -125,6 +125,7 @@ class BadgeClaimTest {
         val failed = DefaultBadgeClaimService(always, StoreHarness(time = time).repo, time).createClaim(compactSig, "", organizerPub, 1)
         assertFalse(failed.success)
         assertTrue(failed.message.startsWith("Claim-Fehler"))
+        assertEquals(space.einundzwanzig.meetup.data.badges.claim.ClaimFailure.TimestampMismatch, failed.reason)
     }
 
     @Test
@@ -134,6 +135,7 @@ class BadgeClaimTest {
         val r = service.createClaim(compactSig, "", organizerPub, 1)
         assertFalse(r.success)
         assertEquals("Kein Schlüssel vorhanden — Claim nicht möglich", r.message)
+        assertEquals(space.einundzwanzig.meetup.data.badges.claim.ClaimFailure.NoKey, r.reason)
     }
 
     private fun unclaimed(id: String, presenceVerified: Boolean = true) = MeetupBadge(

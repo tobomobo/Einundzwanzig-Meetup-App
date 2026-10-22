@@ -14,6 +14,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import space.einundzwanzig.meetup.data.badges.security.ExpiryInfo
+import space.einundzwanzig.meetup.data.badges.security.VerifyFailure
+import space.einundzwanzig.meetup.feature.badges.scanner.BusyKind
+import space.einundzwanzig.meetup.feature.badges.scanner.RejectReason
 import space.einundzwanzig.meetup.core.ui.theme.EinundzwanzigTheme
 import space.einundzwanzig.meetup.data.identity.review.AppReviewDemo
 import space.einundzwanzig.meetup.data.issuance.session.NonceStatus
@@ -147,6 +155,8 @@ class BadgeScannerScreenTest {
         show(BadgeScannerUiState(dialog = ScannerDialog.ReviewDemo))
         rule.onNodeWithText(AppReviewDemo.SUCCESS_TITLE).assertExists()
         rule.onNodeWithText(AppReviewDemo.SUCCESS_BODY).assertExists()
+        rule.onNodeWithText(s(L10nR.string.actionOk)).performClick()
+        assertEquals(listOf<BadgeScannerAction>(BadgeScannerAction.DismissDialog), actions)
     }
 
     @Test
@@ -162,8 +172,29 @@ class BadgeScannerScreenTest {
 
     @Test
     fun `saving shows the blocking indicator`() {
-        show(BadgeScannerUiState(result = ScanResultUi.Found(found().pending, foundInfo()), saving = true))
+        show(BadgeScannerUiState(result = ScanResultUi.Found(found().pending, foundInfo()), busy = BusyKind.LOCATING))
         rule.onNodeWithContentDescription(s(R.string.native_scanner_locating)).assertExists()
+    }
+
+    @Test
+    fun `publishing announces the relay publish, not a location check`() {
+        show(BadgeScannerUiState(busy = BusyKind.PUBLISHING))
+        rule.onNodeWithContentDescription(s(R.string.native_scanner_publishing)).assertExists()
+        rule.onNodeWithContentDescription(s(R.string.native_scanner_locating)).assertDoesNotExist()
+    }
+
+    @Test
+    @Config(qualifiers = "en")
+    fun `typed rejections are localized`() {
+        var status: ScanStatus by mutableStateOf(
+            ScanStatus.Rejected("Tag abgelaufen! …", RejectReason.Verify(VerifyFailure.Expired(ExpiryInfo.Expired(7380)))),
+        )
+        rule.setContent { EinundzwanzigTheme { BadgeScannerScreen(BadgeScannerUiState(status = status), onAction = {}) } }
+        rule.onNodeWithText("✗ Tag expired! Expired 2h 3min ago. Please ask the organizer for a new tag.").assertExists()
+        status = ScanStatus.Rejected("Ungültiges Rolling-QR-Format.", RejectReason.RollingQrMalformed)
+        rule.onNodeWithText(s(L10nR.string.verifyErrPrefix, "Invalid rolling QR format.")).assertExists()
+        status = ScanStatus.Rejected("raw detail")
+        rule.onNodeWithText(s(L10nR.string.verifyErrPrefix, "raw detail")).assertExists()
     }
 
     @Test

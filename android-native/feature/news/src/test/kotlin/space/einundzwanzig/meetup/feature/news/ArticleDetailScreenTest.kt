@@ -3,9 +3,13 @@ package space.einundzwanzig.meetup.feature.news
 import android.content.Context
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
-import androidx.compose.ui.test.assertIsOff
-import androidx.compose.ui.test.assertIsOn
-import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertContentDescriptionEquals
+import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -85,17 +89,26 @@ class ArticleDetailScreenTest {
         assertEquals(listOf(ArticleDetailAction.OpenUrl(NewsLinks.WEBSITE_URL)), actions)
     }
 
+    private val likeLabel get() = context.getString(L10nR.string.newsLike)
+    private val likedLabel get() = context.getString(R.string.native_news_liked)
+    private fun stateDescription(value: String?) =
+        if (value == null) {
+            SemanticsMatcher.keyNotDefined(SemanticsProperties.StateDescription)
+        } else {
+            SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, value)
+        }
+
     @Test
-    fun `like label shows count once loaded`() {
+    fun `like label shows count once loaded and names the action for talkback`() {
         show(loaded(likes = ArticleLikes(7, false)))
-        rule.onNodeWithText("7").assertExists()
-        rule.onNodeWithText(context.getString(L10nR.string.newsLike)).assertDoesNotExist()
+        rule.onNodeWithTag(ArticleDetailTestTags.LIKE).assertContentDescriptionEquals("$likeLabel, 7")
     }
 
     @Test
     fun `like label falls back to newsLike and sends Like`() {
         show(loaded(likesLoaded = false))
-        rule.onNodeWithText(context.getString(L10nR.string.newsLike)).performScrollTo().performClick()
+        rule.onNodeWithTag(ArticleDetailTestTags.LIKE).assertContentDescriptionEquals(likeLabel)
+        rule.onNodeWithTag(ArticleDetailTestTags.LIKE).performScrollTo().performClick()
         assertEquals(listOf<ArticleDetailAction>(ArticleDetailAction.Like), actions)
     }
 
@@ -106,24 +119,34 @@ class ArticleDetailScreenTest {
     }
 
     @Test
-    fun `liked article shows the filled heart in the checked state`() {
+    fun `liked article announces the liked state and has no click action`() {
         show(loaded(likes = ArticleLikes(4, true)))
-        rule.onNodeWithTag(ArticleDetailTestTags.LIKE).assertIsOn()
-        rule.onNodeWithContentDescription(context.getString(R.string.native_news_liked)).assertExists()
+        rule.onNodeWithTag(ArticleDetailTestTags.LIKE)
+            .assert(stateDescription(likedLabel))
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+            .assertHasNoClickAction()
+            .assertContentDescriptionEquals("$likeLabel, 4")
     }
 
     @Test
-    fun `not liked article shows the outline heart`() {
+    fun `not liked article is a clickable like button without liked state`() {
         show(loaded(likes = ArticleLikes(4, false)))
-        rule.onNodeWithTag(ArticleDetailTestTags.LIKE).assertIsOff()
-        rule.onNodeWithContentDescription(context.getString(R.string.native_news_liked)).assertDoesNotExist()
+        rule.onNodeWithTag(ArticleDetailTestTags.LIKE)
+            .assert(stateDescription(null))
+            .assertHasClickAction()
     }
 
     @Test
-    fun `zap is disabled for an article without nip-23 author key`() {
+    fun `zap stays enabled for an article without nip-23 author key`() {
         show(loaded(article = article("l", id = "https://media.einundzwanzig.space/a/l")))
+        rule.onNodeWithTag(ArticleDetailTestTags.ZAP).assertIsEnabled().performScrollTo().performClick()
+        assertEquals(listOf<ArticleDetailAction>(ArticleDetailAction.Zap), actions)
+    }
+
+    @Test
+    fun `zap button is disabled while zapping`() {
+        show(loaded().copy(zapping = true))
         rule.onNodeWithTag(ArticleDetailTestTags.ZAP).assertIsNotEnabled()
-        rule.onNodeWithTag(ArticleDetailTestTags.SHARE).assertIsEnabled()
     }
 
     @Test

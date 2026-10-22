@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -129,7 +130,7 @@ private fun TreeCanvas(
         dot = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     val you = stringResource(L10nR.string.mnYou)
-    val description = stringResource(R.string.native_network_graph_description, net.degree1Count)
+    val description = pluralStringResource(R.plurals.native_network_graph_description, net.degree1Count, net.degree1Count)
     val tap by rememberUpdatedState(onNodeTap)
     val latestNet by rememberUpdatedState(net)
     val latestNames by rememberUpdatedState(names)

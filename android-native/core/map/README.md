@@ -35,8 +35,10 @@ Dependencies: `:core:common` (Dart number formatting, `AppLogger`), `:core:ui` (
 
 ### Feature recipes
 
-- **World map (03 §2.4):** start at the first located badge with zoom 11 (one badge) or 4. Fit once with
-  `LaunchedEffect(Unit) { if (located.size == 1) move(p, 11.0) else fitPoints(located, 60.dp, maxZoom = 12.0) }`.
+- **World map (03 §2.4):** start at the first located badge with zoom 11 (one badge) or 4. Fit once and never again
+  (the camera survives rotation and process death, so a refit would reset the user's zoom):
+  `var didFit by rememberSaveable { mutableStateOf(false) }` and
+  `LaunchedEffect(Unit) { if (!didFit) { if (located.size == 1) camera.move(p, 11.0) else camera.fitPoints(located, 60.dp, maxZoom = 12.0); didFit = true } }`.
   For each badge add `Marker(p, onClick = { selected = b }) { BitcoinBadgeMarker() }`.
   Put the map and stats bar in a `Box(Modifier.mapSnapshotArea(snapshot))`.
 - **Nearby (09 §2.2):** add `Circle(center, radiusKm * 1000, primary.copy(alpha = 0.08f), primary.copy(alpha = 0.4f))`,
@@ -51,13 +53,17 @@ Dependencies: `:core:common` (Dart number formatting, `AppLogger`), `:core:ui` (
 
 ## Tests
 
-`tools/gradlew-locked :core:map:testDebugUnitTest` runs 68 tests:
+`tools/gradlew-locked :core:map:testDebugUnitTest` runs 74 tests:
 - Mercator projection and its round trip, the `CameraFit.coordinates` zoom and centre, clamping, metres to pixels.
 - Camera state: commands, the driver, `fitPoints` waiting for layout, the tile wait, the saver.
 - Formatting and URLs, user agent, tile policy.
 - Robolectric Compose: marker placement and anchors, camera follow, marker vs map taps, long press,
   zoom controls, location picker (pin tip, accessibility pick of the centre), pan and zoom accessibility
-  actions, camera restoration (`StateRestorationTester`), zoom limits, snapshot size, and a smoke test
-  of the real osmdroid view.
+  actions, camera restoration (`StateRestorationTester`), zoom limits, snapshot size.
+- Real osmdroid view (`OsmdroidMapTest`): osmdroid's `Projection.toPixels` matches `OsmCameraState.toScreen`
+  within 1.5 px at integer, fractional and low zoom and at a fractional density (tile 672 px); `move` and
+  `animateTo` reach osmdroid; a view scroll updates the state; the map still works after its view is
+  detached and reattached (`setDestroyMode(false)`).
 - Native graphics (`OsmMapRenderTest`): the capture contains a marker's pixels at its scaled position
-  and the pixels of the osmdroid view.
+  the badge marker glow (drawn, not an elevation shadow, so the software capture keeps it) and the pixels
+  of the osmdroid view.

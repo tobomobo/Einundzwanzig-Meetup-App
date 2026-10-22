@@ -31,6 +31,7 @@ import space.einundzwanzig.meetup.feature.wallet.domain.BadgeGroup
 import space.einundzwanzig.meetup.feature.wallet.domain.CollectionSubtitle
 import space.einundzwanzig.meetup.feature.wallet.domain.ReputationShare
 import space.einundzwanzig.meetup.feature.wallet.domain.WalletLibrary
+import space.einundzwanzig.meetup.feature.wallet.domain.ensureLoaded
 import javax.inject.Inject
 import space.einundzwanzig.meetup.core.l10n.R as L10nR
 
@@ -149,9 +150,7 @@ internal class WalletViewModel @Inject constructor(
                     ui.update { recompute(it.copy(badges = badges, loaded = loaded, unreadable = unreadable)) }
                 }
         }
-        if (!repository.loaded.value) {
-            viewModelScope.launch { runSuspendCatching { repository.loadBadges() }.onFailure { AppLogger.warn(TAG, "Badges laden fehlgeschlagen", it) } }
-        }
+        repository.ensureLoaded(viewModelScope)
     }
 
     fun onAction(action: WalletAction) {
@@ -295,6 +294,11 @@ internal class WalletViewModel @Inject constructor(
                     snackbar(WalletMessage(L10nR.string.badgesUnreadableShort, tone = Tone.Error))
                     return@launch
                 }
+                if (removed == 0) {
+                    // The shown objects are gone (e.g. replaced by a reload or sync merge).
+                    snackbar(WalletMessage(L10nR.string.walletCleanupNone))
+                    return@launch
+                }
                 AppLogger.diag(TAG, "$removed doppelte Badge(s) entfernt. Neu: ${kept.size}.")
                 publisher.publishInBackground(repository.badges.value)
                 snackbar(WalletMessage(L10nR.string.walletCleanupDone, listOf(removed), Tone.Success))
@@ -302,6 +306,18 @@ internal class WalletViewModel @Inject constructor(
                 ui.update { it.copy(working = false) }
             }
         }
+    }
+
+    private var onClearedListener: (() -> Unit)? = null
+
+    /** Runs [listener] once when the entry is popped (the ViewModel is cleared). */
+    fun setOnClearedListener(listener: () -> Unit) {
+        onClearedListener = listener
+    }
+
+    override fun onCleared() {
+        onClearedListener?.invoke()
+        onClearedListener = null
     }
 
     private fun snackbar(message: WalletMessage) {

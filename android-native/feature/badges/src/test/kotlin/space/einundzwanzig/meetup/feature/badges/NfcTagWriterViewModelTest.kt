@@ -99,6 +99,11 @@ class NfcTagWriterViewModelTest {
         val model = create()
         assertEquals(HomeMeetupInfo.NotFound("999"), model.state.value.home)
         assertEquals(WriterStatus.HomeNotFound, model.state.value.status)
+        model.onAction(NfcTagWriterAction.CreateTag)
+        assertEquals(listOf<NfcTagWriterEvent>(NfcTagWriterEvent.SelectHomeMeetup), events)
+        assertFalse(model.state.value.waitingForTag)
+        assertEquals(WriterStatus.HomeNotFound, model.state.value.status)
+        assertEquals(0, sessions.basePayloadCalls)
     }
 
     @Test

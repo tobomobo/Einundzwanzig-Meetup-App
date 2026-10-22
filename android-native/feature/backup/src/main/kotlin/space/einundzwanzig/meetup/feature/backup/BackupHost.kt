@@ -19,12 +19,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import space.einundzwanzig.meetup.core.common.IoDispatcher
 import space.einundzwanzig.meetup.core.common.log.AppLogger
 import space.einundzwanzig.meetup.core.ui.component.showAppSnackbar
 import space.einundzwanzig.meetup.core.ui.share.ShareHelper
@@ -39,6 +40,8 @@ import space.einundzwanzig.meetup.core.l10n.R as L10nR
 @HiltViewModel
 class BackupHostViewModel @Inject constructor(
     private val coordinator: BackupCoordinator,
+    /** For the share fallback's file I/O ([shareBackup]). */
+    @IoDispatcher val io: CoroutineDispatcher,
 ) : ViewModel() {
     val uiState: StateFlow<BackupUiState> get() = coordinator.ui
     val messages: Flow<BackupMessage> get() = coordinator.messages
@@ -70,12 +73,13 @@ fun BackupHost(
         ActivityResultContracts.OpenDocument(),
     ) { uri -> vm.onDocumentResult(uri?.toString()) }
 
-    val platform = remember(context, create, open) {
+    val io = viewModel.io
+    val platform = remember(context, create, open, io) {
         object : BackupPlatform {
             override fun launchCreateDocument(fileName: String): Boolean = launchSafely { create.launch(fileName) }
             override fun launchOpenDocument(): Boolean = launchSafely { open.launch(BackupFiles.OPEN_MIME_TYPES) }
             override suspend fun share(fileName: String, bytes: ByteArray): ShareResult =
-                shareBackup(context, fileName, bytes)
+                shareBackup(context, fileName, bytes, io)
         }
     }
     DisposableEffect(viewModel, platform) {
@@ -145,9 +149,10 @@ internal suspend fun shareBackup(
     context: Context,
     fileName: String,
     bytes: ByteArray,
+    io: CoroutineDispatcher,
     openChooser: suspend (File) -> ShareResult = { file -> openShareChooser(context, file) },
 ): ShareResult {
-    val file = withContext(Dispatchers.IO) {
+    val file = withContext(io) {
         val dir = ShareHelper.backupDir(context)
         dir.listFiles()?.forEach { it.delete() }
         File(dir, fileName.replace('/', '_').replace('\\', '_')).apply { writeBytes(bytes) }
@@ -155,7 +160,7 @@ internal suspend fun shareBackup(
     // Cancelled (host destroyed while the chooser was open): keep the file, a chosen target may
     // still be reading it; the next export clears the directory.
     val result = openChooser(file)
-    if (result == ShareResult.Dismissed) withContext(Dispatchers.IO) { file.delete() }
+    if (result == ShareResult.Dismissed) withContext(io) { file.delete() }
     return result
 }
 

@@ -41,6 +41,7 @@ import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.LinkOff
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.QrCode2
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -61,6 +62,7 @@ import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TooltipAnchorPosition
 import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
@@ -94,7 +96,6 @@ import kotlinx.coroutines.launch
 import space.einundzwanzig.meetup.core.navigation.LocalNavigator
 import space.einundzwanzig.meetup.core.ui.component.AppLargeTopBar
 import space.einundzwanzig.meetup.core.ui.component.AppSnackbarHost
-import space.einundzwanzig.meetup.core.ui.component.ConfirmDialog
 import space.einundzwanzig.meetup.core.ui.component.FullScreenLoading
 import space.einundzwanzig.meetup.core.ui.component.GlassCard
 import space.einundzwanzig.meetup.core.ui.component.LocalAppSnackbarHostState
@@ -244,18 +245,56 @@ internal fun PlatformProofsScreen(
     }
 
     state.pendingRevoke?.let { proof ->
-        ConfirmDialog(
-            title = stringResource(L10nR.string.ppUnlinkQ),
-            // Raw platform id, not the display name (Flutter).
-            text = stringResource(L10nR.string.ppUnlinkBody, proof.username, proof.platform),
-            confirmLabel = stringResource(L10nR.string.ppRevoke),
-            dismissLabel = stringResource(L10nR.string.ppCancel),
+        RevokeProofDialog(
+            proof = proof,
             onConfirm = { onAction(PlatformProofsAction.ConfirmRevoke) },
             onDismiss = { onAction(PlatformProofsAction.DismissRevoke) },
-            destructive = true,
-            icon = Icons.Rounded.LinkOff,
         )
     }
+}
+
+/**
+ * Revoke confirmation (spec 06 §2.1). Local instead of core:ui ConfirmDialog because Flutter
+ * (platform_proof_screen.dart) gives ppRevoke a filled red button, not a text button.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun RevokeProofDialog(
+    proof: PlatformProof,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val error = MaterialTheme.colorScheme.error
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Rounded.LinkOff, contentDescription = null, tint = error) },
+        title = { Text(stringResource(L10nR.string.ppUnlinkQ), color = error) },
+        // Raw platform id, not the display name (Flutter).
+        text = {
+            Text(
+                stringResource(L10nR.string.ppUnlinkBody, proof.username, proof.platform),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = error,
+                    contentColor = MaterialTheme.colorScheme.onError,
+                ),
+                shapes = ButtonDefaults.shapes(),
+            ) {
+                Text(stringResource(L10nR.string.ppRevoke), fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(L10nR.string.ppCancel), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+    )
 }
 
 @Composable
@@ -427,8 +466,14 @@ private fun CreateProofSheet(
     // One submit path for the button and the IME Done action: animate the sheet away first.
     val submit: () -> Unit = {
         if (sheet.canSubmit) {
-            scope.launch { sheetState.hide() }.invokeOnCompletion {
-                onAction(PlatformProofsAction.Create)
+            scope.launch {
+                // Submit even if the hide animation is cancelled (e.g. sheet leaves composition):
+                // the VM still holds the sheet and re-checks canSubmit, so this is safe.
+                try {
+                    sheetState.hide()
+                } finally {
+                    onAction(PlatformProofsAction.Create)
+                }
             }
         }
     }
@@ -607,5 +652,42 @@ private fun PlatformProofsScreenPreview() {
 private fun PlatformProofsEmptyPreview() {
     EinundzwanzigTheme {
         PlatformProofsScreen(state = PlatformProofsUiState(isLoading = false), onAction = {}, onBack = {})
+    }
+}
+
+private val previewProofs = listOf(
+    PlatformProof("telegram", "satoshi_fan", "a".repeat(128), 1_746_000_000),
+    PlatformProof("bisq", "bisq_trader", "b".repeat(128), 1_748_000_000),
+)
+
+@Preview(name = "Platform proofs, create sheet")
+@Composable
+private fun PlatformProofsCreateSheetPreview() {
+    EinundzwanzigTheme {
+        PlatformProofsScreen(
+            state = PlatformProofsUiState(
+                isLoading = false,
+                proofs = previewProofs,
+                sheet = CreateSheetState(selectedPlatform = PlatformCatalog.OTHER),
+            ),
+            onAction = {},
+            onBack = {},
+        )
+    }
+}
+
+@Preview(name = "Platform proofs, revoke dialog")
+@Composable
+private fun PlatformProofsRevokePreview() {
+    EinundzwanzigTheme {
+        PlatformProofsScreen(
+            state = PlatformProofsUiState(
+                isLoading = false,
+                proofs = previewProofs,
+                pendingRevoke = previewProofs.first(),
+            ),
+            onAction = {},
+            onBack = {},
+        )
     }
 }

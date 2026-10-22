@@ -67,6 +67,7 @@ class BackupCoordinatorTest {
         advanceUntilIdle()
         assertTrue(result.await())
         assertEquals("enc_v2:a:b:c", h.documents.written["content://docs/1"])
+        assertTrue(h.documents.deleted.isEmpty())
         assertTrue(h.platform.shared.isEmpty())
         assertTrue(messages.isEmpty())
         assertTrue(h.log.lines.any { it.contains("Backup gespeichert") })
@@ -158,6 +159,7 @@ class BackupCoordinatorTest {
         advanceUntilIdle()
         assertTrue(result.await())
         assertEquals(1, h.platform.shared.size)
+        assertEquals(listOf("content://docs/2"), h.documents.deleted)
     }
 
     @Test
@@ -194,6 +196,25 @@ class BackupCoordinatorTest {
         assertFalse(result.await())
         assertEquals(listOf<BackupMessage>(BackupMessage.ExportFailed("store locked")), messages)
         assertFalse(h.coordinator.ui.value.loading)
+    }
+
+    @Test
+    fun `export without a host returns false and releases busy`() = test { h, _ ->
+        h.coordinator.detach(h.platform)
+        val result = startExport(h)
+        advanceUntilIdle()
+        assertFalse(result.await())
+        assertNull(h.coordinator.ui.value.dialog)
+        assertFalse(h.coordinator.busy.value)
+        assertTrue(h.exporter.passwords.isEmpty())
+        // A later export with a mounted host works again.
+        h.coordinator.attach(h.platform)
+        val next = startExport(h)
+        advanceUntilIdle()
+        assertEquals(BackupDialog.Password(isExport = true), h.coordinator.ui.value.dialog)
+        h.coordinator.onAction(BackupAction.CancelPassword)
+        advanceUntilIdle()
+        assertFalse(next.await())
     }
 
     @Test

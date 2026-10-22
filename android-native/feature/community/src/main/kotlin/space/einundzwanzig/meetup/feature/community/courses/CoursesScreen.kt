@@ -13,6 +13,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -37,13 +41,23 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.text
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -62,7 +76,6 @@ import space.einundzwanzig.meetup.feature.community.common.AccentCard
 import space.einundzwanzig.meetup.feature.community.common.CardRow
 import space.einundzwanzig.meetup.feature.community.common.IconBox
 import space.einundzwanzig.meetup.feature.community.common.LinkRow
-import space.einundzwanzig.meetup.feature.community.common.PortalThumb
 import space.einundzwanzig.meetup.feature.community.common.RowChevron
 import space.einundzwanzig.meetup.core.l10n.R as L10nR
 
@@ -102,6 +115,19 @@ fun CoursesScreen(
     // One scroll position per tab (Flutter TabBarView keeps them separately).
     val coursesListState = rememberLazyListState()
     val lecturersListState = rememberLazyListState()
+    // Swipeable tabs (Flutter TabBarView), kept in sync with state.tab in both directions.
+    val pagerState = rememberPagerState(initialPage = state.tab.ordinal) { CoursesTab.entries.size }
+    val currentTab by rememberUpdatedState(state.tab)
+    val currentOnAction by rememberUpdatedState(onAction)
+    LaunchedEffect(state.tab) {
+        if (pagerState.currentPage != state.tab.ordinal) pagerState.animateScrollToPage(state.tab.ordinal)
+    }
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.settledPage }.collect { page ->
+            val tab = CoursesTab.entries[page]
+            if (tab != currentTab) currentOnAction(CoursesAction.SelectTab(tab))
+        }
+    }
     Scaffold(
         modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
@@ -117,39 +143,19 @@ fun CoursesScreen(
             if (state.loading) {
                 FullScreenLoading(message = stringResource(L10nR.string.crsLoading))
             } else {
-                val items = if (state.tab == CoursesTab.Courses) state.courses else state.lecturers
-                val pullState = rememberPullToRefreshState()
-                PullToRefreshBox(
-                    isRefreshing = state.refreshing,
-                    onRefresh = { onAction(CoursesAction.Refresh) },
-                    state = pullState,
+                HorizontalPager(
+                    state = pagerState,
                     modifier = Modifier.fillMaxSize(),
-                    indicator = {
-                        PullToRefreshDefaults.LoadingIndicator(
-                            state = pullState,
-                            isRefreshing = state.refreshing,
-                            modifier = Modifier.align(Alignment.TopCenter),
-                        )
-                    },
-                ) {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize().testTag("coursesList"),
-                        state = if (state.tab == CoursesTab.Courses) coursesListState else lecturersListState,
-                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        if (items.isEmpty()) {
-                            item(key = "empty") { CoursesEmptyCard() }
-                        } else {
-                            itemsIndexed(items, key = { i, it -> "${state.tab}-$i-${it.id}" }) { _, item ->
-                                PortalItemCard(
-                                    item = item,
-                                    icon = if (state.tab == CoursesTab.Courses) Icons.Rounded.School else Icons.Rounded.Person,
-                                    onClick = { onAction(CoursesAction.OpenItem(state.tab, item)) },
-                                )
-                            }
-                        }
-                    }
+                    key = { CoursesTab.entries[it] },
+                ) { page ->
+                    val tab = CoursesTab.entries[page]
+                    PortalItemList(
+                        tab = tab,
+                        items = if (tab == CoursesTab.Courses) state.courses else state.lecturers,
+                        listState = if (tab == CoursesTab.Courses) coursesListState else lecturersListState,
+                        refreshing = state.refreshing,
+                        onAction = onAction,
+                    )
                 }
             }
         }
@@ -165,6 +171,50 @@ fun CoursesScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun PortalItemList(
+    tab: CoursesTab,
+    items: List<PortalListItem>,
+    listState: LazyListState,
+    refreshing: Boolean,
+    onAction: (CoursesAction) -> Unit,
+) {
+    val pullState = rememberPullToRefreshState()
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = { onAction(CoursesAction.Refresh) },
+        state = pullState,
+        modifier = Modifier.fillMaxSize(),
+        indicator = {
+            PullToRefreshDefaults.LoadingIndicator(
+                state = pullState,
+                isRefreshing = refreshing,
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+        },
+    ) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().testTag("coursesList"),
+            state = listState,
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (items.isEmpty()) {
+                item(key = "empty") { CoursesEmptyCard() }
+            } else {
+                itemsIndexed(items, key = { i, it -> "$tab-$i-${it.id}" }) { _, item ->
+                    PortalItemCard(
+                        item = item,
+                        icon = if (tab == CoursesTab.Courses) Icons.Rounded.School else Icons.Rounded.Person,
+                        onClick = { onAction(CoursesAction.OpenItem(tab, item)) },
+                    )
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun TabToggle(selected: CoursesTab, onSelect: (CoursesTab) -> Unit) {
@@ -175,14 +225,24 @@ private fun TabToggle(selected: CoursesTab, onSelect: (CoursesTab) -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
     ) {
         labels.forEachIndexed { index, (tab, label) ->
+            val isSelected = selected == tab
             ToggleButton(
-                checked = selected == tab,
+                checked = isSelected,
                 onCheckedChange = { onSelect(tab) },
-                modifier = Modifier.weight(1f),
+                // Tab semantics (Flutter TabBar) instead of the toggle/checkbox semantics of ToggleButton.
+                modifier = Modifier
+                    .weight(1f)
+                    .clearAndSetSemantics {
+                        role = Role.Tab
+                        this.selected = isSelected
+                        text = AnnotatedString(label)
+                        onClick { onSelect(tab); true }
+                    },
                 shapes = if (index == 0) {
                     ButtonGroupDefaults.connectedLeadingButtonShapes()
                 } else {
@@ -223,8 +283,9 @@ private fun CoursesEmptyCard() {
 private fun PortalItemCard(item: PortalListItem, icon: ImageVector, onClick: () -> Unit) {
     val accent = MaterialTheme.extendedColors.nostr
     AccentCard(accent = accent, onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            PortalThumb(url = item.image, icon = icon, color = accent, size = 42.dp)
+        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
+            // Flutter shows a 42×42 cNostr icon box, never the portal image (spec 11 §2.7).
+            IconBox(icon, accent, size = 42.dp, iconSize = 20.dp)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
@@ -244,7 +305,7 @@ private fun PortalItemCard(item: PortalListItem, icon: ImageVector, onClick: () 
                 }
             }
             Spacer(Modifier.width(8.dp))
-            RowChevron()
+            RowChevron(Modifier.align(Alignment.CenterVertically))
         }
     }
 }
@@ -299,8 +360,8 @@ private fun CoursesScreenPreview() {
             state = CoursesUiState(
                 loading = false,
                 courses = listOf(
-                    PortalListItem(1, "Bitcoin Grundlagen", "Einsteigerkurs über Geld, Knappheit und Selbstverwahrung.", "", emptyList()),
-                    PortalListItem(null, "Lightning Workshop", "Praxis mit Wallets. https://example.org", "", listOf("https://example.org")),
+                    PortalListItem(1, "Bitcoin Grundlagen", "Einsteigerkurs über Geld, Knappheit und Selbstverwahrung.", emptyList()),
+                    PortalListItem(null, "Lightning Workshop", "Praxis mit Wallets. https://example.org", listOf("https://example.org")),
                 ),
             ),
             onAction = {},

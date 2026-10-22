@@ -2,6 +2,8 @@ package space.einundzwanzig.meetup.feature.reputation.person
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.background
@@ -347,7 +349,13 @@ private fun ResultView(result: PresenceCheck, onAction: (VerifyPersonAction) -> 
         Spacer(Modifier.height(12.dp))
         result.path.forEachIndexed { i, npub ->
             if (i > 0) Connector()
-            AnimatedVisibility(visible = true, enter = fadeIn() + scaleIn(initialScale = 0.9f)) {
+            // Staggered expressive entrance; starts visible (no animation) under reduced motion.
+            val shown = remember(result) { MutableTransitionState(reducedMotion) }.apply { targetState = true }
+            AnimatedVisibility(
+                visibleState = shown,
+                enter = fadeIn(tween(durationMillis = 220, delayMillis = i * 60)) +
+                    scaleIn(ExpressiveSprings.fastSpatial(), initialScale = 0.9f),
+            ) {
                 PathNode(index = i, last = i == result.path.lastIndex, npub = npub, onOpen = { onAction(VerifyPersonAction.OpenNostr(npub)) })
             }
         }

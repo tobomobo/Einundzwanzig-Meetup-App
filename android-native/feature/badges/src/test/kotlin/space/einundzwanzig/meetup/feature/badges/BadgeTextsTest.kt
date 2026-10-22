@@ -9,7 +9,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import space.einundzwanzig.meetup.core.ui.component.Tone
+import space.einundzwanzig.meetup.data.badges.claim.ClaimFailure
 import space.einundzwanzig.meetup.data.badges.security.ExpiryInfo
+import space.einundzwanzig.meetup.data.badges.security.VerifyFailure
+import space.einundzwanzig.meetup.data.issuance.scan.ClaimInfo
 import space.einundzwanzig.meetup.data.identity.review.AppReviewDemo
 import space.einundzwanzig.meetup.data.issuance.session.SessionRemaining
 import space.einundzwanzig.meetup.feature.badges.camera.firstAcceptedBadgeQr
@@ -60,6 +63,49 @@ class BadgeTextsTest {
             res.getString(L10nR.string.mvKnownOrganizer, "Satoshi") + "\n\n" +
             res.getString(L10nR.string.verifyMsgTagExpiry, "Gültig noch 3h 12min")
         assertEquals(expected, confirmationText(res, ScanResultUi.Found(found().pending, info)))
+    }
+
+    @Test
+    fun `german verify and claim failures match the data module texts`() {
+        val now = 1_760_000_000L
+        val expired = space.einundzwanzig.meetup.data.badges.security.BadgeSecurity.verify(
+            kotlinx.serialization.json.buildJsonObject {
+                put("v", kotlinx.serialization.json.JsonPrimitive(2))
+                put("t", kotlinx.serialization.json.JsonPrimitive("B"))
+                put("m", kotlinx.serialization.json.JsonPrimitive("wuerzburg-de"))
+                put("x", kotlinx.serialization.json.JsonPrimitive(now - 2 * 3600 - 3 * 60))
+                put("c", kotlinx.serialization.json.JsonPrimitive(now - 4 * 3600))
+                put("p", kotlinx.serialization.json.JsonPrimitive("a".repeat(64)))
+                put("s", kotlinx.serialization.json.JsonPrimitive("b".repeat(128)))
+            },
+            now,
+        )
+        assertEquals(expired.message, BadgeTexts.verifyFailure(res, expired.reason!!))
+        val samples = mapOf(
+            VerifyFailure.MissingData to "Fehlende Signatur-Daten",
+            VerifyFailure.InvalidSignature to "Signatur ungültig!",
+            VerifyFailure.LegacyRejected to
+                "Legacy-Badges (v1) werden nicht mehr akzeptiert. Bitte Organisator um neuen v2-Tag (Schnorr-signiert).",
+        )
+        for ((failure, german) in samples) assertEquals(german, BadgeTexts.verifyFailure(res, failure))
+        assertEquals(
+            "Kein Schlüssel vorhanden — Claim nicht möglich",
+            BadgeTexts.claimFailure(res, ClaimFailure.NoKey, "fallback"),
+        )
+        assertEquals("fallback", BadgeTexts.claimFailure(res, null, "fallback"))
+    }
+
+    @Test
+    @Config(qualifiers = "en")
+    fun `english verify and claim failures are localized`() {
+        assertEquals(
+            "Tag expired! Expired 2h 3min ago. Please ask the organizer for a new tag.",
+            BadgeTexts.verifyFailure(res, VerifyFailure.Expired(ExpiryInfo.Expired(2 * 3600 + 3 * 60))),
+        )
+        val info = foundInfo().copy(claim = ClaimInfo.Failed("Kein Schlüssel vorhanden — Claim nicht möglich", ClaimFailure.NoKey))
+        val text = confirmationText(res, ScanResultUi.Found(found().pending, info))
+        assert(text.contains("⚠ Binding: No key available — claim not possible")) { text }
+        assert(!text.contains("Schlüssel")) { text }
     }
 
     @Test

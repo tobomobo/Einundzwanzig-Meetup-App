@@ -106,6 +106,7 @@ import space.einundzwanzig.meetup.feature.badges.common.Gap
 import space.einundzwanzig.meetup.feature.badges.common.NfcStateDialog
 import space.einundzwanzig.meetup.feature.badges.common.PrimaryActionButton
 import space.einundzwanzig.meetup.feature.badges.common.PulsingCircle
+import space.einundzwanzig.meetup.feature.badges.common.BadgeTexts
 import space.einundzwanzig.meetup.feature.badges.common.ResourceScanStrings
 import space.einundzwanzig.meetup.feature.badges.common.ShapedIcon
 import space.einundzwanzig.meetup.feature.badges.nfc.NfcReaderModeEffect
@@ -306,7 +307,7 @@ internal fun scanStatusText(status: ScanStatus): String = when (status) {
     ScanStatus.NoNfcDevice -> stringResource(L10nR.string.verifyNoNfcDevice)
     ScanStatus.NfcDisabledHint -> stringResource(L10nR.string.nfcDisabledHint)
     is ScanStatus.NonceExpired -> stringResource(L10nR.string.verifyErrQrExpired, nonceMessage(status.validation))
-    is ScanStatus.Rejected -> stringResource(L10nR.string.verifyErrPrefix, status.message)
+    is ScanStatus.Rejected -> stringResource(L10nR.string.verifyErrPrefix, rejectText(status))
     is ScanStatus.NfcRejected -> when (val e = status.error) {
         NfcPayloadError.NoNdef -> stringResource(L10nR.string.verifyErrNoNdef)
         NfcPayloadError.TagEmpty -> stringResource(L10nR.string.verifyErrTagEmpty)
@@ -321,12 +322,18 @@ internal fun scanStatusText(status: ScanStatus): String = when (status) {
 }
 
 @Composable
-private fun nonceMessage(validation: NonceValidation): String =
-    if (validation.status == NonceStatus.EXPIRED) {
-        stringResource(R.string.native_nonce_expired, validation.ageSeconds.toInt())
-    } else {
-        validation.message
-    }
+private fun rejectText(status: ScanStatus.Rejected): String = when (val reason = status.reason) {
+    null -> status.message
+    is RejectReason.Verify -> BadgeTexts.verifyFailure(LocalContext.current.resources, reason.failure)
+    RejectReason.RollingQrMalformed -> stringResource(R.string.native_nonce_malformed)
+}
+
+@Composable
+private fun nonceMessage(validation: NonceValidation): String = when (validation.status) {
+    NonceStatus.EXPIRED -> stringResource(R.string.native_nonce_expired, validation.ageSeconds.toInt())
+    NonceStatus.MALFORMED -> stringResource(R.string.native_nonce_malformed)
+    else -> validation.message
+}
 
 @Composable
 private fun ConfirmationView(result: ScanResultUi, onAction: (BadgeScannerAction) -> Unit) {
@@ -432,7 +439,7 @@ private fun ScannerDialogs(state: BadgeScannerUiState, onAction: (BadgeScannerAc
             icon = { Icon(Icons.Rounded.VerifiedUser, contentDescription = null, tint = MaterialTheme.extendedColors.success) },
             title = { Text(AppReviewDemo.SUCCESS_TITLE) },
             text = { Text(AppReviewDemo.SUCCESS_BODY, color = MaterialTheme.colorScheme.onSurfaceVariant) },
-            confirmButton = { TextButton(onClick = dismiss) { Text("OK") } },
+            confirmButton = { TextButton(onClick = dismiss) { Text(stringResource(L10nR.string.actionOk)) } },
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
         )
         is ScannerDialog.TooFar -> AlertDialog(
@@ -470,7 +477,7 @@ private fun ScannerDialogs(state: BadgeScannerUiState, onAction: (BadgeScannerAc
             onExtra = { onAction(BadgeScannerAction.NfcOpenSettings) },
         )
     }
-    if (state.saving) SavingDialog()
+    state.busy?.let { BusyDialog(it) }
 }
 
 @Composable
@@ -502,10 +509,13 @@ private fun CoAttendanceDialog(onAction: (BadgeScannerAction) -> Unit) {
     )
 }
 
-/** Non-dismissible blocking indicator while locating/saving (Flutter's spinner dialog). */
+/** Non-dismissible blocking indicator while locating/saving or publishing (Flutter's spinner dialog). */
 @Composable
-private fun SavingDialog() {
-    val label = stringResource(R.string.native_scanner_locating)
+private fun BusyDialog(kind: BusyKind) {
+    val label = when (kind) {
+        BusyKind.LOCATING -> stringResource(R.string.native_scanner_locating)
+        BusyKind.PUBLISHING -> stringResource(R.string.native_scanner_publishing)
+    }
     Dialog(
         onDismissRequest = {},
         properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),

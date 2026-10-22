@@ -26,6 +26,8 @@ import androidx.navigation3.runtime.NavKey
 import org.robolectric.Shadows.shadowOf
 import space.einundzwanzig.meetup.core.navigation.LocalNavigator
 import space.einundzwanzig.meetup.core.navigation.Navigator
+import space.einundzwanzig.meetup.core.navigation.VerifyPerson
+import space.einundzwanzig.meetup.data.badges.text.DartString
 import space.einundzwanzig.meetup.data.socialgraph.coattendance.MyNetwork
 import space.einundzwanzig.meetup.data.socialgraph.coattendance.NetworkBuildEvent
 import androidx.test.core.app.ApplicationProvider
@@ -277,6 +279,42 @@ class MyNetworkScreenTest {
             rule.onAllNodes(hasText(str(L10nR.string.mnRetryResult, 1, 2))).fetchSemanticsNodes().isNotEmpty()
         }
         assertEquals(1, source.retries)
+    }
+
+    @Test
+    fun `route check person navigates to verify person`() {
+        val source = FakeNetworkSource().apply { stages = listOf(NetworkBuildEvent.Done(MyNetwork.empty(ME))) }
+        val vm = MyNetworkViewModel(source, FakeTime(0))
+        val nav = RecordingNavigator()
+        rule.setContent {
+            CompositionLocalProvider(LocalNavigator provides nav) {
+                EinundzwanzigTheme { MyNetworkRoute(vm) }
+            }
+        }
+        rule.onNodeWithContentDescription(str(L10nR.string.mnCheckPerson)).performClick()
+        rule.waitForIdle()
+        assertEquals(listOf<NavKey>(VerifyPerson()), nav.pushed)
+    }
+
+    @Test
+    fun `section captions keep sharp s like Dart toUpperCase`() {
+        val names = mapOf(np(1) to "Straße")
+        show(content().copy(highlight = np(1), names = names))
+        rule.onNodeWithText(DartString.upper(str(L10nR.string.mnPathTo, "Straße"))).assertExists()
+        assertTrue(DartString.upper(str(L10nR.string.mnPathTo, "Straße")).contains("STRAßE"))
+    }
+
+    private class RecordingNavigator : Navigator {
+        val pushed = mutableListOf<NavKey>()
+        override fun navigate(key: NavKey) {
+            pushed += key
+        }
+        override fun replaceTop(key: NavKey) = Unit
+        override fun back() = Unit
+        override fun backTo(key: NavKey, inclusive: Boolean) = Unit
+        override fun resetTo(key: NavKey) = Unit
+        override fun navigateFromRoot(key: NavKey) = Unit
+        override fun openUrl(url: String) = Unit
     }
 
     private object NoopNavigator : Navigator {

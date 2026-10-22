@@ -1,5 +1,7 @@
 package space.einundzwanzig.meetup.feature.reputation.card
 
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -406,12 +408,13 @@ private fun GridTile(icon: ImageVector, value: Int, label: String) {
             .width(92.dp)
             .background(colors.surfaceContainerLow, shape)
             .border(0.5.dp, colors.outlineVariant, shape)
-            .padding(vertical = 12.dp),
+            .padding(vertical = 12.dp)
+            .semantics(mergeDescendants = true) {},
     ) {
         Icon(icon, contentDescription = null, tint = colors.primary, modifier = Modifier.size(18.dp))
         Spacer(Modifier.height(4.dp))
         Text(value.toString(), color = colors.onSurface, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
-        Text(label, color = colors.onSurfaceVariant, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text(label, color = colors.onSurfaceVariant, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 4.dp))
     }
 }
 

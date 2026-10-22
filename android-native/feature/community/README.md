@@ -42,7 +42,14 @@ both 500 ms after start, finished on dispose (`StartTourEffect` / `FinishTourOnD
   while it was in the background are skipped (each collection drops the replayed current value).
 - Hub colours: the Podcast card uses `extendedColors.purple` (`cPurple`), the SatoshiDuell card
   `extendedColors.duellGold` (`#FFC93C`), both added to `:core:ui` `ExtendedColors`.
-- Courses: each tab keeps its own scroll position (Flutter `TabBarView`).
+- Courses: the Kurse/Dozenten lists sit in a `HorizontalPager` (swipeable like Flutter `TabBarView`), synced
+  with `state.tab` both ways; the connected toggle row exposes `Role.Tab` + `selected` semantics. Each tab keeps
+  its own scroll position. List rows show the 42×42 cNostr icon box like Flutter (no portal images); the
+  lecturer detail course rows use the typed `PortalCourseRef` from `:data:community`.
+- Insets: every `Scaffold` body calls `consumeWindowInsets(padding)` after `padding(padding)`, so the nav-bar/IME
+  padding inside is not added twice. Hub cards use `heightIn(min = …)` (text scales; the two-card rows share
+  their height via `IntrinsicSize.Min`).
+- The no-wallet copy sheet animates out (`sheetState.hide()`) before the copy + `v4vCopied` snackbar.
 - Glossary expansion: an entry follows "expanded while searching" until the user toggles it; the toggle
   is kept per title (Flutter `PageStorageKey(title)`).
 - The dashboard PlebRap mini player (§2.11) and the home tiles live in `:feature:home`.
@@ -50,14 +57,21 @@ both 500 ms after start, finished on dispose (`StartTourEffect` / `FinishTourOnD
 Native-only strings (`res/values{,-en,-es}/strings.xml`, prefix `native_community_`): content
 descriptions for player controls, clear-search, add-to-calendar, link, seek, and the not-found text.
 
+## Cross-module edits
+
+- `:core:ui` `ExtendedColors`: `purple` (`cPurple`) and `duellGold` (`#FFC93C`).
+- `:data:community`: `PortalCourseRef(id, name, image)`; `PortalLecturer.courses` is `List<PortalCourseRef>`.
+
 ## Tests
 
 ```
 tools/gradlew-locked :feature:community:testDebugUnitTest
 ```
 
-66 tests: ViewModel tests with fakes (`CommunityHubViewModelTest`, `CoursesViewModelTest` incl. course
+73 tests: ViewModel tests with fakes (`CommunityHubViewModelTest`, `CoursesViewModelTest` incl. course
 and lecturer details, `ValueForValueViewModelTest`, `PlebrapViewModelTest`, `GlossaryViewModelTest`),
 Robolectric Compose UI tests (`HubAndPortalScreenTest`, `CoursesScreenTest`, `PlayerV4vGlossaryScreenTest`),
-route NavKey mapping (`RouteNavigationTest`), the calendar insert intent (`CalendarInsertTest`) and the
+route wiring (`RouteNavigationTest`: NavKeys and URLs of hub, portal area, courses and detail routes, V4V
+no-wallet sheet + clipboard + `v4vCopied`, PlebRap `prLoadError` snackbar, community tour start after 500 ms
+and finish on dispose), the calendar insert intent (`CalendarInsertTest`) and the
 tour step lists (`TourStepsTest`).

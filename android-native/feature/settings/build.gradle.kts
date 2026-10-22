@@ -11,4 +11,6 @@ dependencies {
     implementation(project(":data:mempool"))
     // Backup export / restore launched from the settings sheet (spec 08 via BackupLauncher).
     implementation(project(":feature:backup"))
+    // LocalActivity: the settings tour must survive configuration changes (language, rotation).
+    implementation(libs.androidx.activity.compose)
 }

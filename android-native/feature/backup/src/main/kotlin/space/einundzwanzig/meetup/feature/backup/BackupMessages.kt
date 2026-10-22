@@ -65,10 +65,10 @@ object BackupMessages {
         RestoreError.HoldNotPersisted -> resources.getString(R.string.native_backupErrHoldNotPersisted)
         RestoreError.ClearNotMarked -> resources.getString(R.string.native_backupErrClearNotMarked)
         RestoreError.ProofsNotCleared -> resources.getString(R.string.native_backupErrProofsNotCleared)
-        is RestoreError.StageFailed -> resources.getString(R.string.native_backupErrStageFailed, error.count)
+        is RestoreError.StageFailed -> resources.getQuantityString(R.plurals.native_backupErrStageFailed, error.count, error.count)
         RestoreError.KeyUnreadable -> resources.getString(R.string.native_backupErrKeyUnreadable)
         RestoreError.KeyNotTaken -> resources.getString(R.string.native_backupErrKeyNotTaken)
-        is RestoreError.BadgesNotSaved -> resources.getString(R.string.native_backupErrBadgesNotSaved, error.count)
+        is RestoreError.BadgesNotSaved -> resources.getQuantityString(R.plurals.native_backupErrBadgesNotSaved, error.count, error.count)
         // The technical detail is logged by the coordinator; the user sees the localized text.
         is RestoreError.InvalidContent -> resources.getString(L10nR.string.backupNotValid)
         // Technical exception text (storage, signer), not translated (README "Deviations").

@@ -58,7 +58,6 @@ import space.einundzwanzig.meetup.core.ui.theme.EinundzwanzigTheme
 import space.einundzwanzig.meetup.core.ui.theme.extendedColors
 import space.einundzwanzig.meetup.data.community.portal.PortalCourse
 import space.einundzwanzig.meetup.data.community.portal.PortalCourseEvent
-import space.einundzwanzig.meetup.data.community.portal.PortalFields
 import space.einundzwanzig.meetup.data.community.portal.PortalLecturer
 import space.einundzwanzig.meetup.data.community.portal.PortalLink
 import space.einundzwanzig.meetup.feature.community.R
@@ -330,13 +329,12 @@ private fun LecturerDetailsContent(lecturer: PortalLecturer, onAction: (Lecturer
         if (lecturer.courses.isNotEmpty()) {
             item(key = "coursesHeader") { DetailSectionHeader(stringResource(L10nR.string.crsCourses)) }
             itemsIndexed(lecturer.courses, key = { i, _ -> "course-$i" }) { _, c ->
-                val id = PortalFields.intId(c)
-                CardRow(onClick = id?.let { { onAction(LecturerDetailsAction.OpenCourse(it)) } }) {
+                CardRow(onClick = c.id?.let { id -> { onAction(LecturerDetailsAction.OpenCourse(id)) } }) {
                     Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        PortalThumb(PortalFields.pImg(c), Icons.Rounded.School, nostr, size = 40.dp)
+                        PortalThumb(c.image, Icons.Rounded.School, nostr, size = 40.dp)
                         Spacer(Modifier.width(12.dp))
                         Text(
-                            PortalFields.pv(c, "name"),
+                            c.name,
                             modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.titleMedium.copy(fontSize = 14.sp, fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onSurface,

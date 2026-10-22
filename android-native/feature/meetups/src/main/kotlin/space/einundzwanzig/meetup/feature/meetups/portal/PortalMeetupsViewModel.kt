@@ -41,7 +41,7 @@ data class LeaderRow(
     companion object {
         /** Dart `(a['name'] ?? '').toString()` etc. */
         fun fromJson(j: JsonObject): LeaderRow = LeaderRow(
-            userId = j["id"]?.dartIntOrNull(),
+            userId = j["id"]?.dartIntOrNull()?.takeIf { it in Int.MIN_VALUE..Int.MAX_VALUE }?.toInt(),
             name = j["name"].dartToString(),
             npub = j["nostr"].dartToString(),
             isCreator = (j["is_creator"] as? JsonPrimitive)?.let { !it.isString && it.content == "true" } == true,
@@ -98,7 +98,7 @@ sealed interface PortalMeetupsAction {
 /**
  * "Meine Meetups" (Dart `PortalMeetupsScreen` + `MeetupAdminCard`, spec 09 §2.1).
  *
- * Deviation (spec 09 §14 item 8): after showing the connected view the token is checked with
+ * Deviation (spec 09 §14 item 8): before anything is loaded the token is checked with
  * `tokenMatchesCurrentKey()`; a token of another identity is deleted and the login view returns.
  */
 @HiltViewModel
@@ -117,14 +117,16 @@ class PortalMeetupsViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             val connected = portal.hasToken()
-            _state.update { it.copy(checking = false, connected = connected) }
+            // Loading phase until the token is known to belong to this identity.
+            _state.update { it.copy(checking = false, connected = connected, loadingMeetups = connected) }
             if (connected) {
-                loadMeetups()
                 if (!portal.tokenMatchesCurrentKey()) {
+                    // Never load (or send authenticated requests) with a foreign identity's token.
                     portal.deleteToken()
-                    loadJob?.cancel()
                     _state.update { it.copy(connected = false, loadingMeetups = false, cards = emptyList()) }
+                    return@launch
                 }
+                loadMeetups()
             }
         }
     }

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -60,6 +61,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -164,15 +166,20 @@ private fun RelayList(state: RelaySettingsUiState, onAction: (RelaySettingsActio
             SectionLabel(stringResource(L10nR.string.rsDefaultRelays), Modifier.padding(top = 16.dp))
         }
         items(state.defaultRelays, key = { "d:" + it.url }) { row ->
-            RelayTile(url = row.url, enabled = row.enabled) {
+            // The whole row is the toggle so TalkBack announces the relay URL with the switch state.
+            RelayTile(
+                url = row.url,
+                enabled = row.enabled,
+                onToggle = { onAction(RelaySettingsAction.ToggleDefault(row.url, it)) },
+                rowModifier = Modifier.testTag(RelaySettingsTestTags.switch(row.url)),
+            ) {
                 Switch(
                     checked = row.enabled,
-                    onCheckedChange = { onAction(RelaySettingsAction.ToggleDefault(row.url, it)) },
+                    onCheckedChange = null,
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = MaterialTheme.extendedColors.onSuccess,
                         checkedTrackColor = MaterialTheme.extendedColors.success,
                     ),
-                    modifier = Modifier.testTag(RelaySettingsTestTags.switch(row.url)),
                 )
             }
         }
@@ -216,7 +223,7 @@ private fun RelayList(state: RelaySettingsUiState, onAction: (RelaySettingsActio
                         IconButton(onClick = { onAction(RelaySettingsAction.RemoveCustom(url)) }) {
                             Icon(
                                 Icons.Rounded.DeleteOutline,
-                                contentDescription = stringResource(R.string.native_relay_remove),
+                                contentDescription = stringResource(R.string.native_relay_remove_a11y, url),
                                 tint = MaterialTheme.colorScheme.error,
                             )
                         }
@@ -264,6 +271,8 @@ private fun RelayTile(
     url: String,
     enabled: Boolean,
     modifier: Modifier = Modifier,
+    onToggle: ((Boolean) -> Unit)? = null,
+    rowModifier: Modifier = Modifier,
     trailing: @Composable () -> Unit,
 ) {
     val border by animateColorAsState(
@@ -277,8 +286,13 @@ private fun RelayTile(
         border = BorderStroke(1.dp, border),
         modifier = modifier.fillMaxWidth(),
     ) {
+        val toggle = if (onToggle != null) {
+            Modifier.toggleable(value = enabled, role = Role.Switch, onValueChange = onToggle)
+        } else {
+            Modifier
+        }
         Row(
-            Modifier.padding(start = 14.dp, end = 6.dp).heightIn(min = 56.dp),
+            rowModifier.then(toggle).padding(start = 14.dp, end = 6.dp).heightIn(min = 56.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // Neutral status icon: it says "enabled", not "reachable" (spec 07 §1 item 2).

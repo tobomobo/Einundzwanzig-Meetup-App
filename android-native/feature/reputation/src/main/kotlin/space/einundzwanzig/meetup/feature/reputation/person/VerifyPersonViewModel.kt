@@ -8,6 +8,7 @@ import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -72,35 +73,42 @@ internal class VerifyPersonViewModel @AssistedInject constructor(
             is VerifyPersonAction.InputChanged -> _state.update { it.copy(input = action.text) }
             VerifyPersonAction.Check -> check()
             is VerifyPersonAction.Scanned -> {
+                // A scan replaces any running check, so the field and the result never disagree.
                 _state.update { it.copy(input = action.npub) }
-                check()
+                check(restart = true)
             }
             // Handled by the route.
             VerifyPersonAction.OpenScanner, is VerifyPersonAction.OpenNostr -> Unit
         }
     }
 
-    private fun check() {
-        if (_state.value.checking) return
+    private var job: Job? = null
+    private var generation = 0
+
+    private fun check(restart: Boolean = false) {
+        if (_state.value.checking && !restart) return
+        job?.cancel()
+        val gen = ++generation
         val target = normalize(_state.value.input)
         _state.update { it.copy(error = null, result = null) }
         if (!source.isValidNpub(target)) {
-            _state.update { it.copy(error = VerifyPersonError.INVALID_NPUB) }
+            _state.update { it.copy(checking = false, error = VerifyPersonError.INVALID_NPUB) }
             return
         }
         _state.update { it.copy(checking = true) }
-        viewModelScope.launch {
+        job = viewModelScope.launch {
             try {
                 val myNpub = source.myNpub()
                 val result = source.verifyPerson(myNpub, target)
-                _state.update { it.copy(result = result) }
+                if (gen == generation) _state.update { it.copy(result = result) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 AppLogger.warn(TAG, "Personen-Prüfung fehlgeschlagen", e)
-                _state.update { it.copy(error = VerifyPersonError.CHECK_FAILED) }
+                if (gen == generation) _state.update { it.copy(error = VerifyPersonError.CHECK_FAILED) }
             } finally {
-                _state.update { it.copy(checking = false) }
+                // A superseded check must not clear the flag of the one that replaced it.
+                if (gen == generation) _state.update { it.copy(checking = false) }
             }
         }
     }

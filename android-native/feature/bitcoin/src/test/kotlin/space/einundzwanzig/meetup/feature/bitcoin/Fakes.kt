@@ -9,9 +9,14 @@ import kotlinx.coroutines.test.TestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.flow.StateFlow
+import androidx.navigation3.runtime.NavKey
 import org.junit.rules.TestWatcher
 import org.junit.runner.Description
 import space.einundzwanzig.meetup.core.common.TimeSource
+import space.einundzwanzig.meetup.core.common.log.DiagnosticLog
+import space.einundzwanzig.meetup.core.common.log.LogEntry
+import space.einundzwanzig.meetup.core.navigation.Navigator
 import space.einundzwanzig.meetup.data.mempool.BitcoinDashboardData
 import space.einundzwanzig.meetup.data.mempool.MempoolConfig
 import space.einundzwanzig.meetup.data.mempool.MempoolHosts
@@ -110,6 +115,9 @@ class FakeMempoolConfig(initial: String = MempoolHosts.CLEARNET) : MempoolConfig
     override val persistedHost: String get() = persisted
     val setHostCalls = mutableListOf<String>()
 
+    /** When set, [setHost] throws it (simulates a failing store). */
+    var setHostError: Exception? = null
+
     /** When set, [ensureLoaded] suspends until it completes (simulates a slow first load). */
     var loadGate: CompletableDeferred<Unit>? = null
 
@@ -119,6 +127,7 @@ class FakeMempoolConfig(initial: String = MempoolHosts.CLEARNET) : MempoolConfig
 
     override suspend fun setHost(raw: String) {
         setHostCalls += raw
+        setHostError?.let { throw it }
         persisted = MempoolHosts.normalize(raw)
         override = null
         hostFlow.value = persisted
@@ -145,4 +154,40 @@ class FakeCurrencyRepository(initial: String = "EUR") : CurrencyRepository {
     override suspend fun reset() {
         current.value = "EUR"
     }
+}
+
+/** Swallows log output; counts warnings. */
+class FakeLog : DiagnosticLog {
+    var warnings = 0
+    override val entries: StateFlow<List<LogEntry>> = MutableStateFlow(emptyList())
+    override val verbose: StateFlow<Boolean> = MutableStateFlow(false)
+    override val isVerbose: Boolean = false
+    override fun debug(tag: String, message: String) = Unit
+    override fun info(tag: String, message: String) = Unit
+    override fun diag(tag: String, message: String) = Unit
+    override fun warn(tag: String, message: String, error: Any?) {
+        warnings++
+    }
+    override fun error(tag: String, message: String, error: Any?, stack: Array<StackTraceElement>?) = Unit
+    override fun security(tag: String, message: String) = Unit
+    override fun section(title: String) = Unit
+    override fun setVerbose(on: Boolean) = Unit
+    override suspend fun clear() = Unit
+}
+
+/** Records navigation calls. */
+class FakeNavigator : Navigator {
+    val navigated = mutableListOf<NavKey>()
+    var backCalls = 0
+    override fun navigate(key: NavKey) {
+        navigated += key
+    }
+    override fun replaceTop(key: NavKey) = Unit
+    override fun back() {
+        backCalls++
+    }
+    override fun backTo(key: NavKey, inclusive: Boolean) = Unit
+    override fun resetTo(key: NavKey) = Unit
+    override fun navigateFromRoot(key: NavKey) = Unit
+    override fun openUrl(url: String) = Unit
 }

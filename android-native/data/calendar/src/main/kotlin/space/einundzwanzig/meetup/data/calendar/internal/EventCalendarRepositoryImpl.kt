@@ -27,10 +27,10 @@ internal class EventCalendarRepositoryImpl @Inject constructor(
     private val log: DiagnosticLog,
 ) : EventCalendarRepository {
 
-    override suspend fun load(worldwide: Boolean): List<CalendarItem> = coroutineScope {
+    override suspend fun load(worldwide: Boolean, force: Boolean): List<CalendarItem> = coroutineScope {
         val zone = ZoneId.systemDefault()
         val nostrJob = async { guarded("Nostr") { nostr.fetchEvents(worldwide = worldwide) } }
-        val meetupJob = async { guarded("Meetups") { meetups.fetchPortalFirst() } }
+        val meetupJob = async { guarded("Meetups") { meetups.fetchPortalFirst(force) } }
         val coursesJob = async { guarded("Kurse") { portal.getCourses() } }
         val events = nostrJob.await()
         val dates = meetupJob.await()

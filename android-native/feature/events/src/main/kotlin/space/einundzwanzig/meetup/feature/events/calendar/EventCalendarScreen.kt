@@ -72,6 +72,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -80,6 +82,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -146,7 +149,7 @@ fun EventCalendarRoute(
         viewModel.reloadRunningSession()
         onPauseOrDispose { }
     }
-    NavResultEffect(NavResults.EventPublished) { viewModel.load() }
+    NavResultEffect(NavResults.EventPublished) { viewModel.load(force = true) }
     EventCalendarScreen(
         state = state,
         snackbarHostState = snackbar,
@@ -235,7 +238,8 @@ fun EventCalendarScreen(
                 modifier = Modifier.testTag(EventCalendarTags.FAB),
             )
         },
-        snackbarHost = { AppSnackbarHost(snackbarHostState) },
+        // While the details sheet is open its own host shows the snackbars (it is a separate window).
+        snackbarHost = { if (state.details == null) AppSnackbarHost(snackbarHostState) },
     ) { padding ->
         val pullState = rememberPullToRefreshState()
         PullToRefreshBox(
@@ -285,6 +289,7 @@ fun EventCalendarScreen(
         EventDetailsSheet(
             onDismiss = { onAction(EventCalendarAction.CloseDetails) },
             skipPartiallyExpanded = false,
+            snackbarHostState = snackbarHostState,
         ) {
             CalendarDetailsContent(details, state.zone, state.startingSession, state.cancelling, onAction)
         }
@@ -573,7 +578,17 @@ private fun MonthGrid(state: EventCalendarUiState, onAction: (EventCalendarActio
     val days = state.focused.lengthOfMonth()
     val cells = blanks + days
     val rows = (cells + 6) / 7
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    // The grid bleeds GRID_BLEED into the list's 16dp side padding and the cells have no gaps
+    // (the 2dp visual inset is inside each cell), so a day is >= 48dp wide even on 360dp phones.
+    Column(
+        Modifier.layout { measurable, constraints ->
+            val bleed = GRID_BLEED.roundToPx()
+            val width = constraints.maxWidth + 2 * bleed
+            val placeable = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
+            layout(constraints.maxWidth, placeable.height) { placeable.place(-bleed, 0) }
+        },
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
         Row(Modifier.fillMaxWidth()) {
             WeekdayNames.forEach { wd ->
                 Text(
@@ -586,7 +601,7 @@ private fun MonthGrid(state: EventCalendarUiState, onAction: (EventCalendarActio
             }
         }
         for (r in 0 until rows) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(Modifier.fillMaxWidth()) {
                 for (c in 0 until 7) {
                     val index = r * 7 + c
                     val dayNumber = index - blanks + 1
@@ -622,23 +637,24 @@ private fun DayCell(
 ) {
     val orange = MaterialTheme.colorScheme.primary
     val shape = RoundedCornerShape(10.dp)
-    val description = stringResource(R.string.native_events_day_events, day.dayOfMonth.toString(), count.toString())
+    val description = pluralStringResource(R.plurals.native_events_day_events, count, day.dayOfMonth.toString(), count)
     Box(
         modifier
             .aspectRatio(1f)
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics {
+                this.selected = selected
+                contentDescription = description
+            }
+            .testTag(EventCalendarTags.day(day))
+            .padding(2.dp)
             .then(
                 when {
                     selected -> Modifier.background(orange, shape)
                     today -> Modifier.background(orange.copy(alpha = 0.12f), shape).border(1.dp, orange, shape)
                     else -> Modifier
                 },
-            )
-            .clickable(role = Role.Button, onClick = onClick)
-            .semantics {
-                this.selected = selected
-                contentDescription = description
-            }
-            .testTag(EventCalendarTags.day(day)),
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -693,7 +709,7 @@ private fun MonthTile(month: Int, count: Int, onAction: (EventCalendarAction) ->
     val orange = MaterialTheme.colorScheme.primary
     val shape = RoundedCornerShape(12.dp)
     val name = monthName(month)
-    val description = stringResource(R.string.native_events_month_events, name, count.toString())
+    val description = pluralStringResource(R.plurals.native_events_month_events, count, name, count)
     Column(
         modifier
             .aspectRatio(1.1f)
@@ -710,7 +726,7 @@ private fun MonthTile(month: Int, count: Int, onAction: (EventCalendarAction) ->
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(name, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+        Text(name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Spacer(Modifier.height(6.dp))
         if (count > 0) {
             Text(
@@ -788,3 +804,6 @@ private fun EventCalendarScreenPreview() {
         )
     }
 }
+
+/** How far the month grid extends into the list's horizontal content padding. */
+private val GRID_BLEED = 8.dp

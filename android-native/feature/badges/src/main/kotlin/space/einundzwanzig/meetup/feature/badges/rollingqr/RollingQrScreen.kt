@@ -71,7 +71,6 @@ import space.einundzwanzig.meetup.core.ui.component.FullScreenLoading
 import space.einundzwanzig.meetup.core.ui.nostr.NpubFormat
 import space.einundzwanzig.meetup.core.ui.qr.QrCode
 import space.einundzwanzig.meetup.core.ui.qr.QrErrorCorrection
-import space.einundzwanzig.meetup.core.ui.theme.BrandColors
 import space.einundzwanzig.meetup.core.ui.theme.EinundzwanzigTheme
 import space.einundzwanzig.meetup.core.ui.theme.MonoStyle
 import space.einundzwanzig.meetup.core.ui.theme.extendedColors
@@ -92,9 +91,6 @@ object RollingQrTags {
     const val END = "rollingQr.end"
     const val EMPTY = "rollingQr.empty"
 }
-
-/** Scanners need dark modules on a light quiet zone in both themes. */
-private val QrCardColor = BrandColors.TextPrimary
 
 /** Stateful entry of `RollingQr` (spec 02 §2.3). */
 @Composable
@@ -281,11 +277,14 @@ private fun SessionBar(meetupInfo: String, remaining: String) {
 @Composable
 private fun QrCard(qr: String?) {
     val primary = MaterialTheme.colorScheme.primary
+    // Scanners need dark modules on a light quiet zone in both themes (theme token, fixed light).
+    val qrBackground = MaterialTheme.extendedColors.qrBackground
+    val qrModule = MaterialTheme.extendedColors.qrModule
     val description = stringResource(R.string.native_rq_qr_description)
     Box(
         Modifier
             .dropShadow(RoundedCornerShape(16.dp), Shadow(radius = 28.dp, color = primary.copy(alpha = 0.35f)))
-            .background(QrCardColor, RoundedCornerShape(16.dp))
+            .background(qrBackground, RoundedCornerShape(16.dp))
             .padding(16.dp)
             .testTag(RollingQrTags.QR)
             .semantics { contentDescription = description },
@@ -299,7 +298,13 @@ private fun QrCard(qr: String?) {
             if (code == null) {
                 Box(Modifier.size(QR_SIZE), contentAlignment = Alignment.Center) { AppLoadingIndicator() }
             } else {
-                QrCode(content = code, size = QR_SIZE, errorCorrection = QrErrorCorrection.M, backgroundColor = QrCardColor)
+                QrCode(
+                    content = code,
+                    size = QR_SIZE,
+                    errorCorrection = QrErrorCorrection.M,
+                    backgroundColor = qrBackground,
+                    moduleColor = qrModule,
+                )
             }
         }
     }

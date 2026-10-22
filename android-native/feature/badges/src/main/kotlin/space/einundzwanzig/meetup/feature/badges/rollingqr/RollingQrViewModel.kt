@@ -163,17 +163,30 @@ class RollingQrViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Generates the code of the current step. A slow generation (re-signing via Amber/bunker,
+     * signer prompt, slow secure storage) can span step boundaries whose ticks were skipped
+     * while it ran; then the code is regenerated right away instead of showing a stale step
+     * until the next boundary.
+     */
     private fun refresh(session: MeetupSession) {
         if (refreshJob?.isActive == true) return
         refreshJob = viewModelScope.launch {
-            try {
-                val qr = service.generateQrString(session)
-                _state.update { if (it.session != null) it.copy(qr = qr) else it }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                // Dart: errors are only logged; the last code stays.
-                log.error(TAG, "QR-Generierung fehlgeschlagen", e)
+            var current = session
+            while (true) {
+                val step = RollingQr.timeStep(time.nowSeconds())
+                try {
+                    val qr = service.generateQrString(current)
+                    _state.update { if (it.session != null) it.copy(qr = qr) else it }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // Dart: errors are only logged; the last code stays (the next boundary retries).
+                    log.error(TAG, "QR-Generierung fehlgeschlagen", e)
+                    break
+                }
+                if (RollingQr.timeStep(time.nowSeconds()) == step) break
+                current = _state.value.session ?: break
             }
         }
     }

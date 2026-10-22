@@ -55,6 +55,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import space.einundzwanzig.meetup.data.badges.text.DartString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -181,7 +182,7 @@ internal fun PersonDetailSheet(
             if (path.size >= 2) {
                 Spacer(Modifier.height(20.dp))
                 SectionCaption(
-                    stringResource(L10nR.string.mnPathTo, label(npub)).uppercase(),
+                    DartString.upper(stringResource(L10nR.string.mnPathTo, label(npub))),
                     MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(10.dp))
@@ -204,7 +205,7 @@ internal fun PersonDetailSheet(
             if (degree == 1 && contact != null) {
                 Spacer(Modifier.height(20.dp))
                 SectionCaption(
-                    stringResource(L10nR.string.mnSharedMeetupsList).uppercase(),
+                    DartString.upper(stringResource(L10nR.string.mnSharedMeetupsList)),
                     MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(8.dp))
@@ -227,7 +228,7 @@ internal fun PersonDetailSheet(
             if (others.isNotEmpty()) {
                 Spacer(Modifier.height(20.dp))
                 SectionCaption(
-                    stringResource(L10nR.string.mnAlsoVia).uppercase(),
+                    DartString.upper(stringResource(L10nR.string.mnAlsoVia)),
                     MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(8.dp))

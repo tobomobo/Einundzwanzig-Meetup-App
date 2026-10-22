@@ -4,6 +4,7 @@ import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import space.einundzwanzig.meetup.core.common.ApplicationScope
@@ -32,10 +33,17 @@ internal class DefaultReputationRepublisher @Inject constructor(
 
     override fun republishForced() {
         appScope.launch {
-            if (!badges.loaded.value) badges.loadBadges()
-            // platformProofs = null loads getProofsForPublishing() fresh (spec 06 §14 R4).
-            val result = publisher.publish(badges.badges.value, platformProofs = null, force = true)
-            AppLogger.info(TAG, "Reputation nach Proof-Änderung: ${result.germanMessage}")
+            // Fire-and-forget in the app scope: never let a failure reach the uncaught handler.
+            try {
+                val wallet = if (badges.loaded.value) badges.badges.value else badges.loadBadges()
+                // platformProofs = null loads getProofsForPublishing() fresh (spec 06 §14 R4).
+                val result = publisher.publish(wallet, platformProofs = null, force = true)
+                AppLogger.info(TAG, "Reputation nach Proof-Änderung: ${result.germanMessage}")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                AppLogger.warn(TAG, "Reputation-Republish fehlgeschlagen", e)
+            }
         }
     }
 

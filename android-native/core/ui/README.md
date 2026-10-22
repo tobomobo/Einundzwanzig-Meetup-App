@@ -38,7 +38,7 @@ Provide one app-wide instance, for example from a Hilt module in `:app`.
 |---|---|
 | `EinundzwanzigTheme(themeMode = ThemeMode.DARK, dynamicColor = false) { }` | `MaterialExpressiveTheme` with brand colours, `MotionScheme.expressive()`, brand shapes (6/10/14/20/28) |
 | `ThemeMode { DARK, LIGHT, SYSTEM }` | Dark is the brand default because the Flutter app was dark-only |
-| `MaterialTheme.extendedColors` → `ExtendedColors` | `success/onSuccess/successContainer/onSuccessContainer`, `community` (gold `cCyan`) + `communityContainer`, `nostr`, `nostrOnTile`, `course`, `textTertiary`, `bitcoin`, `purple` (`cPurple`, Podcast), `duellGold` (SatoshiDuell `#FFC93C`) |
+| `MaterialTheme.extendedColors` → `ExtendedColors` | `success/onSuccess/successContainer/onSuccessContainer`, `community` (gold `cCyan`) + `communityContainer`, `nostr`, `nostrOnTile`, `course`, `textTertiary`, `bitcoin`, `purple` (`cPurple`, Podcast), `duellGold` (SatoshiDuell `#FFC93C`), `amber` (Flutter `Colors.amber` `#FFC107`, warning/caution), `qrBackground`/`qrModule` (fixed light QR card + dark modules in every theme), `onScrim` (content on `colorScheme.scrim`), `bitcoinOnScrim` (`cOrangeLight` accent on a scrim, same in both themes) |
 | `BrandColors` | Raw Flutter palette (`cOrange`, `cCard`, …). Use it only where a colour must not follow the theme, such as a scrim. Features should use the colour scheme |
 | Colour mapping | `primary` = cOrange, `background/surface` = cDark, `surfaceContainerLow` = cSurface, `surfaceContainer` = cCard, `surfaceContainerHigh` = cCardHover, `onSurfaceVariant` = cTextSecondary, `outlineVariant` = cTileBorder, `tertiary` = gold |
 | Typography | Flutter slots exact: displayLarge 34, displayMedium 26, titleLarge 18 (w700), titleMedium 15 (w600), bodyLarge 15/1.5, bodyMedium 13/1.5, bodySmall 11/1.4, labelSmall 10 (w600, ls 1). The other slots use the M3 baseline in Rajdhani. The styles carry no colours |
@@ -61,7 +61,7 @@ Provide one app-wide instance, for example from a Hilt module in `:app`.
 | `StatusChip(label, color, icon?)`, `StatusPill(label, color)`, `SectionHeader(title, actionLabel?, onAction?, color?)` | Flutter widgets |
 | `EmptyState(icon, title, subtitle, actionLabel?, onAction?, accentColor)` | Pulsing icon that stays still with reduced motion |
 | `InfoBanner(...)`, `enum Tone { Neutral, Info, Success, Warning, Error }`, `Tone.accentColor()`, `Tone.defaultIcon()` | Inline warning and hint banners |
-| `AppTopBar`, `AppMediumTopBar`, `AppLargeTopBar`, `BackNavigationButton`, `AppTopBarDefaults` | Flexible M3E top bars with brand colours |
+| `AppTopBar`, `AppMediumTopBar`, `AppLargeTopBar`, `BackNavigationButton`, `AppTopBarDefaults` | Flexible M3E top bars with brand colours; `AppLargeTopBar(titleModifier = …)` targets the title text only (tour anchors) |
 | `ConfirmDialog(title, text, confirmLabel, onConfirm, onDismiss, destructive, icon, dismissible)` | Brand dialog |
 | `AppLoadingIndicator`, `AppContainedLoadingIndicator`, `FullScreenLoading`, `LoadingPlaceholder(height)` | Expressive `LoadingIndicator` instead of spinners |
 | `MonoText`, `SatsAmount(amount)` | Inconsolata |

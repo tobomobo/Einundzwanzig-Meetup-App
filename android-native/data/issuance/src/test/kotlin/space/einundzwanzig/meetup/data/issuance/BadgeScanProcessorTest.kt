@@ -158,6 +158,7 @@ class BadgeScanProcessorTest {
         val outcome = processor().processQr(bad, label)
         assertTrue("$outcome", outcome is ScanOutcome.Malformed)
         assertEquals("Ungültiges Rolling-QR-Format.", (outcome as ScanOutcome.Malformed).detail)
+        assertTrue(outcome.rollingQrFormat)
         assertEquals(0, claims.created)
     }
 
@@ -168,6 +169,7 @@ class BadgeScanProcessorTest {
         val r = processor().processQr(tampered, label)
         assertTrue(r is ScanOutcome.VerificationFailed)
         assertEquals("Verifikations-Fehler: Invalid event", (r as ScanOutcome.VerificationFailed).result.message)
+        assertEquals(space.einundzwanzig.meetup.data.badges.security.VerifyFailure.InvalidSignature, r.result.reason)
 
         // Static payload (no n/ts) after x: expiry check.
         val base = signedPayload("bad-neuenahr-de", time = time)
@@ -175,10 +177,12 @@ class BadgeScanProcessorTest {
         val expired = processor().processQr(base, label)
         assertTrue(expired is ScanOutcome.VerificationFailed)
         assertTrue((expired as ScanOutcome.VerificationFailed).result.message.startsWith("Tag abgelaufen!"))
+        assertTrue(expired.result.reason is space.einundzwanzig.meetup.data.badges.security.VerifyFailure.Expired)
 
         // v1 legacy is rejected.
         val v1 = processor().processQr(DartJson.decode("{\"v\":1,\"type\":\"BADGE\",\"meetup_id\":\"x\"}").jsonObject, label)
         assertEquals(1, (v1 as ScanOutcome.VerificationFailed).result.version)
+        assertEquals(space.einundzwanzig.meetup.data.badges.security.VerifyFailure.LegacyRejected, v1.result.reason)
     }
 
     @Test

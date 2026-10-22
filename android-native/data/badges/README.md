@@ -52,7 +52,7 @@ Package root: `space.einundzwanzig.meetup.data.badges`
 | `BadgeSecurity.signQrV3(signer, json)` / `verifyQrV3(...)` / `parseQrV3(code)` / `verifyQrLegacy(...)` | Reputation QR `21v3:` (kind 21001, tags `[]`). `parseQrV3` throws `IllegalArgumentException` for bad base64 or invalid UTF-8 (show `qrReadError`). The legacy check always rejects |
 | `BadgeSecurity.canonicalJsonEncode(map)`, `isValidPubkeyHex`, `isValidSignatureHex`, `signLegacy` (→ `""`), `verifyLegacy` (→ `false`) | Helpers. Canonical JSON delegates to `DartJson` |
 | `BadgeSecurity.KIND_BADGE` (21000), `KIND_REPUTATION_QR` (21001), `QR_V3_PREFIX`, `BADGE_VALIDITY_HOURS`, `COMPACT_SIGNED_KEYS` | Constants |
-| `VerifyResult`, `QrSignResult`, `QrVerifyResult`, `ReputationQrV3Parts`, `ExpiryInfo` | Result types |
+| `VerifyResult`, `QrSignResult`, `QrVerifyResult`, `ReputationQrV3Parts`, `ExpiryInfo` | Result types. `VerifyResult.reason: VerifyFailure?` (`MissingData`, `BadPubkey`, `BadSigFormat`, `Expired(expiry)`, `InvalidSignature`, `LegacyRejected`, `Error(detail)`) is the typed failure for localized UI texts; `message` stays Flutter's German text |
 | `MeetupKey.slug(name)` / `compose(slug, country)` / `parse(m): ParsedMeetupId` / `displayFromSlug(slug)` / `eventId(slug, date)` / `isIsoCountry(code)` | Meetup ids (spec 02 §8.2). The full ISO-3166 set has 249 codes, and `UK` is not one of them |
 | `interface BadgeSigner` (`canSign()`, `signEvent(kind, tags, content, createdAt: Long? = null)`), `BadgeSigner.of(signingService)` | The signing port. Hilt binds it to `SigningService`. `createdAt` asks for that `created_at` (claims). `SigningService` cannot take it yet, so the adapter drops it and callers compare `NostrEvent.createdAt` |
 
@@ -62,7 +62,7 @@ Package root: `space.einundzwanzig.meetup.data.badges`
 |---|---|
 | `interface BadgeClaimService` (inject) | `createClaim(orgSig, orgEventId, orgPubkey, blockHeight): ClaimResult`, `verifyClaim(...)`, `verifyBadgeClaim(badge)`, `claimUnboundBadges(list): ClaimBatchResult`, `ensureBadgesClaimed(list): ClaimBatchResult`. Pass `repository.badges.value`. The batch loads the store itself if needed, does nothing while it is unreadable, and only asks the signer for unclaimed badges that are actually stored (the caller's list only selects which identities to claim). Batches are single-flight: a second concurrent caller waits and skips what the first one claimed, so there is one signer prompt per badge. Claims are signed outside the repository lock, then applied with `BadgeRepository.update` to the collection as it is at that point. Badges scanned meanwhile stay, badges removed meanwhile are not brought back, and a claim is only applied if the stored variant still carries the same org sig/event id/pubkey/block height (only the claim fields are written onto it). `ClaimBatchResult.badges` is the stored collection, or the input list if nothing was stored |
 | `BadgeClaims.KIND_CLAIM` (21002), `claimContent(...)`, `claimTags(orgPubkey, blockHeight)`, `verifyClaim(...)`, `verifyBadgeClaim(badge)` | Pure claim format and verification, used by `:data:admin` (promotion claims) and `:data:reputation` |
-| `ClaimResult`, `ClaimVerifyResult`, `ClaimBatchResult(badges, claimedCount)` | Results |
+| `ClaimResult`, `ClaimVerifyResult`, `ClaimBatchResult(badges, claimedCount)` | Results. `ClaimResult.reason: ClaimFailure?` (`NoKey`, `TimestampMismatch`, `Error(detail)`) for localized UI texts |
 
 ## Store — `…store`
 

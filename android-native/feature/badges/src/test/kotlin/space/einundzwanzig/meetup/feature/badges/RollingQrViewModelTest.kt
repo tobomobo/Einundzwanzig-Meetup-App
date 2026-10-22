@@ -99,6 +99,25 @@ class RollingQrViewModelTest {
     }
 
     @Test
+    fun `slow generation across step boundaries regenerates the current step right away`() = runTest(dispatcher) {
+        service.stored = session(expiresAt = BASE_SECONDS + 3600)
+        // Starts 5 s into a step and takes 22 s (signer prompt): ends 7 s into step +2.
+        service.generationDelays += 22_000L
+        val model = create()
+        assertNull(model.state.value.qr)
+        advanceTimeBy(21_999)
+        assertEquals(0, service.generated)
+        advanceTimeBy(2)
+        // The stale step's code is replaced immediately, not at the next boundary 3 s later.
+        assertEquals(2, service.generated)
+        assertEquals("qr-2", model.state.value.qr)
+        advanceTimeBy(2_000)
+        assertEquals(2, service.generated)
+        advanceTimeBy(1_100)
+        assertEquals(3, service.generated)
+    }
+
+    @Test
     fun `paused screen stops regenerating and resumes with a fresh code`() = runTest(dispatcher) {
         service.stored = session(expiresAt = BASE_SECONDS + 3600)
         val model = create()

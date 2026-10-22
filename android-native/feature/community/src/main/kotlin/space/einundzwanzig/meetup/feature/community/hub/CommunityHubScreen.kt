@@ -12,7 +12,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -155,6 +159,7 @@ fun CommunityHubScreen(
             Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .consumeWindowInsets(padding)
                 .guideScrollContainer(scrollState)
                 .verticalScroll(scrollState)
                 .padding(16.dp)
@@ -165,14 +170,14 @@ fun CommunityHubScreen(
                 onClick = { onAction(CommunityHubAction.OpenPortal) },
                 modifier = Modifier.guideAnchor(CommunityHubAnchors.PORTAL),
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 HubSmallCard(
                     icon = Icons.AutoMirrored.Rounded.Article,
                     color = colors.primary,
                     title = stringResource(L10nR.string.chNews),
                     subtitle = stringResource(L10nR.string.chNewsSub),
                     onClick = { onAction(CommunityHubAction.OpenNews) },
-                    modifier = Modifier.weight(1f).guideAnchor(CommunityHubAnchors.NEWS),
+                    modifier = Modifier.weight(1f).fillMaxHeight().guideAnchor(CommunityHubAnchors.NEWS),
                 )
                 HubSmallCard(
                     icon = Icons.Rounded.Hub,
@@ -181,10 +186,10 @@ fun CommunityHubScreen(
                     subtitle = stringResource(L10nR.string.chNostrSub),
                     onClick = { onAction(CommunityHubAction.OpenNostr) },
                     external = true,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 HubSmallCard(
                     icon = Icons.Rounded.Campaign,
                     color = colors.primary,
@@ -192,7 +197,7 @@ fun CommunityHubScreen(
                     subtitle = stringResource(L10nR.string.chShoutoutSub),
                     onClick = { onAction(CommunityHubAction.OpenShoutout) },
                     external = true,
-                    modifier = Modifier.weight(1f).guideAnchor(CommunityHubAnchors.SHOUTOUT),
+                    modifier = Modifier.weight(1f).fillMaxHeight().guideAnchor(CommunityHubAnchors.SHOUTOUT),
                 )
                 HubSmallCard(
                     icon = Icons.Rounded.Podcasts,
@@ -201,7 +206,7 @@ fun CommunityHubScreen(
                     subtitle = stringResource(L10nR.string.chPodcastSub),
                     onClick = { onAction(CommunityHubAction.OpenPodcast) },
                     external = true,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                 )
             }
             SatoshiDuellCard(
@@ -303,9 +308,12 @@ private fun HubSmallCard(
     modifier: Modifier = Modifier,
     external: Boolean = false,
 ) {
-    AccentCard(accent = color, onClick = onClick, modifier = modifier.height(130.dp)) {
+    AccentCard(accent = color, onClick = onClick, modifier = modifier) {
         CornerWatermark(icon, color)
-        Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.Center) {
+        Column(
+            Modifier.fillMaxSize().heightIn(min = 130.dp).padding(16.dp),
+            verticalArrangement = Arrangement.Center,
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
                 Spacer(Modifier.weight(1f))
@@ -331,9 +339,12 @@ private fun HubWideCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    AccentCard(accent = color, onClick = onClick, modifier = modifier.fillMaxWidth().height(112.dp)) {
+    AccentCard(accent = color, onClick = onClick, modifier = modifier.fillMaxWidth()) {
         CornerWatermark(icon, color)
-        Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.Center) {
+        Column(
+            Modifier.fillMaxWidth().heightIn(min = 112.dp).padding(16.dp),
+            verticalArrangement = Arrangement.Center,
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
                 Spacer(Modifier.weight(1f))
@@ -363,7 +374,7 @@ internal fun SatoshiDuellCard(status: DuellStatus, onClick: () -> Unit, modifier
     AccentCard(
         accent = gold,
         onClick = onClick,
-        modifier = modifier.fillMaxWidth().height(120.dp),
+        modifier = modifier.fillMaxWidth(),
         gradientAlpha = 0.16f,
         borderAlpha = 0.28f,
     ) {
@@ -377,7 +388,10 @@ internal fun SatoshiDuellCard(status: DuellStatus, onClick: () -> Unit, modifier
                 .alpha(0.13f),
         )
         Column(
-            Modifier.fillMaxSize().padding(PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 18.dp)),
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 120.dp)
+                .padding(PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 18.dp)),
             verticalArrangement = Arrangement.Center,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {

@@ -61,8 +61,16 @@ class SettingsSheetViewModel @Inject constructor(
     /** One-shot events ([SettingsSheetEvent]). */
     val uiEvents: Flow<SettingsSheetEvent> = events.receiveAsFlow()
 
+    /**
+     * The stored language, read eagerly from creation on: the ViewModel lives with the host
+     * (Home), so the first DataStore read is done long before the sheet opens and the language
+     * row never flashes "System" for a chosen language.
+     */
+    private val locale: StateFlow<String?> =
+        localeController.appLocale.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     val uiState: StateFlow<SettingsSheetUiState> = combine(
-        localeController.appLocale,
+        locale,
         currency.current,
         settings.hapticEnabled,
         settings.themeMode,
@@ -73,6 +81,7 @@ class SettingsSheetViewModel @Inject constructor(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
         SettingsSheetUiState(
+            locale = locale.value,
             currency = currency.current.value,
             hapticEnabled = settings.hapticEnabled.value,
             themeMode = settings.themeMode.value,

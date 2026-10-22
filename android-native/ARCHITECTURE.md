@@ -201,3 +201,10 @@ fun EntryProviderScope<NavKey>.badgesEntries() {
 ```
 
 and navigates with `LocalNavigator.current.navigate(BadgeDetails(id))`.
+
+**Per-entry ViewModels (required in `:app`).** Every feature scopes its `hiltViewModel()` to the
+nav entry, so `:app`'s `NavDisplay` must install
+`entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator(), rememberViewModelStoreNavEntryDecorator())`
+(`lifecycle-viewmodel-navigation3`). Navigation 3's default is only the saveable-state decorator;
+without the ViewModel-store one, ViewModels live in the Activity store forever: popped screens keep
+their work running (e.g. the chat's relay subscription and read marks) and re-opened keys reuse stale state.

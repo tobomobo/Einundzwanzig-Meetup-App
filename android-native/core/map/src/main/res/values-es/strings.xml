@@ -5,7 +5,7 @@
     <string name="native_map_description">Mapa</string>
     <string name="native_map_zoom_in">Acercar</string>
     <string name="native_map_zoom_out">Alejar</string>
-    <string name="native_map_picked_location">Ubicación seleccionada</string>
+    <string name="native_map_picked_location_at">Ubicación seleccionada: %1$s</string>
     <string name="native_map_pan_north">Mover el mapa al norte</string>
     <string name="native_map_pan_south">Mover el mapa al sur</string>
     <string name="native_map_pan_east">Mover el mapa al este</string>

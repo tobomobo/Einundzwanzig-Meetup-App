@@ -14,8 +14,9 @@ interface EventCalendarRepository {
      * `MeetupCalendarService.fetchPortalFirst()` and the portal course list; then course details
      * in sequential batches of [COURSE_BATCH] (parallel within a batch); merges (course > meetup >
      * Nostr per minute+title key) and sorts by start. Never throws.
+     * [force] bypasses the 60 s meetup-date cache (`fetchPortalFirst(force = true)`, pull-to-refresh).
      */
-    suspend fun load(worldwide: Boolean): List<CalendarItem>
+    suspend fun load(worldwide: Boolean, force: Boolean = false): List<CalendarItem>
 
     companion object {
         /** Course details fetched in parallel per batch. */

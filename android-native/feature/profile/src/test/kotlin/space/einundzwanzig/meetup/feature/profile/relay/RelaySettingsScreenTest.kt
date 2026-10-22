@@ -68,7 +68,7 @@ class RelaySettingsScreenTest {
     fun `custom relay can be removed without confirmation`() {
         show(RelaySettingsUiState(isLoading = false, defaultRelays = defaults, customRelays = listOf("wss://mein.io"), activeCount = 2))
         rule.onNodeWithTag(RelaySettingsTestTags.LIST).performScrollToNode(hasTestTag(RelaySettingsTestTags.SUMMARY))
-        rule.onNodeWithContentDescription("Entfernen").performClick()
+        rule.onNodeWithContentDescription("wss://mein.io entfernen").performClick()
         assertEquals(listOf<RelaySettingsAction>(RelaySettingsAction.RemoveCustom("wss://mein.io")), actions)
     }
 

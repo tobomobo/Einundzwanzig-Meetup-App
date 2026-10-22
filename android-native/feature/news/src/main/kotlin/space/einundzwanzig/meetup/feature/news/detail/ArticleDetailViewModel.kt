@@ -59,8 +59,9 @@ data class ArticleDetailUiState(
     val hasFullContent: Boolean get() = !fullContent.isNullOrBlank()
 
     /**
-     * The Zap button is enabled only for a NIP-23 article with a 64-hex author key (spec 11 §14
-     * risk 12, `:data:news` README): a link-only id has no author to look up.
+     * A zap can start only for a NIP-23 article with a 64-hex author key (spec 11 §14 risk 12,
+     * `:data:news` README): a link-only id has no author to look up, so tapping Zap shows
+     * `newsZapNoAddress` instead of the amount sheet.
      */
     val canZap: Boolean get() = article?.let { NewsArticles.zapAuthorPubkey(it).isNotEmpty() } == true
 
@@ -177,9 +178,13 @@ class ArticleDetailViewModel @AssistedInject constructor(
 
     private fun openZapSheet() {
         val current = _state.value
-        val article = current.article ?: return
-        // The button is disabled without a NIP-23 author key ([ArticleDetailUiState.canZap]).
-        if (current.zapping || !current.canZap) return
+        if (current.article == null || current.zapping) return
+        // Link-only article (no 64-hex NIP-23 author key, spec 11 §14 risk 12): never start a zap,
+        // explain it right away instead of a silently disabled button.
+        if (!current.canZap) {
+            viewModelScope.launch { _events.send(ArticleDetailEvent.Message(L10nR.string.newsZapNoAddress, Tone.Error)) }
+            return
+        }
         _state.update { it.copy(zapSheetVisible = true) }
     }
 

@@ -64,6 +64,9 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import kotlinx.coroutines.launch
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -209,10 +212,7 @@ fun ConverterScreen(
         CurrencySheet(
             selected = c.currency,
             onDismiss = { sheetOpen = false },
-            onPick = { code ->
-                sheetOpen = false
-                onAction(ConverterAction.PickCurrency(code))
-            },
+            onPick = { code -> onAction(ConverterAction.PickCurrency(code)) },
         )
     }
 }
@@ -570,6 +570,16 @@ private fun RateInfo(c: ConverterState) {
 @Composable
 private fun CurrencySheet(selected: String, onDismiss: () -> Unit, onPick: (String) -> Unit) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    // Spec 13 §2.2: the sheet is at most 80 % of the screen high.
+    val maxSheetHeight = LocalConfiguration.current.screenHeightDp.dp * 0.8f
+    val pick: (String) -> Unit = { code ->
+        onPick(code)
+        // Animate the sheet away before removing it from the composition (expressive motion).
+        scope.launch { sheetState.hide() }.invokeOnCompletion {
+            if (!sheetState.isVisible) onDismiss()
+        }
+    }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -579,6 +589,7 @@ private fun CurrencySheet(selected: String, onDismiss: () -> Unit, onPick: (Stri
         Column(
             Modifier
                 .fillMaxWidth()
+                .heightIn(max = maxSheetHeight)
                 .verticalScroll(rememberScrollState())
                 .navigationBarsPadding(),
         ) {
@@ -593,7 +604,7 @@ private fun CurrencySheet(selected: String, onDismiss: () -> Unit, onPick: (Stri
             Spacer(Modifier.height(12.dp))
             Column(Modifier.selectableGroup()) {
                 CurrencyFormat.supported.forEach { code ->
-                    CurrencyRow(code, code == selected) { onPick(code) }
+                    CurrencyRow(code, code == selected) { pick(code) }
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -618,7 +629,7 @@ private fun CurrencyRow(code: String, isSelected: Boolean, onClick: () -> Unit) 
         ListItem(
             headlineContent = {
                 Text(
-                    "$code · ${stringResource(currencyNameRes(code))}",
+                    "$code · ${currencyNameRes(code)?.let { stringResource(it) } ?: code}",
                     color = if (isSelected) primary else MaterialTheme.colorScheme.onSurface,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                 )
@@ -651,15 +662,16 @@ private fun CurrencyRow(code: String, isSelected: Boolean, onClick: () -> Unit) 
     }
 }
 
-/** `curEUR` … `curJPY` (spec 13 §2.4 `currencyName`). */
-internal fun currencyNameRes(code: String): Int = when (code) {
+/** `curEUR` … `curJPY` (spec 13 §2.4 `currencyName`); `null` for unknown codes (shown as the code). */
+internal fun currencyNameRes(code: String): Int? = when (code) {
     "EUR" -> L10nR.string.curEUR
     "USD" -> L10nR.string.curUSD
     "CHF" -> L10nR.string.curCHF
     "GBP" -> L10nR.string.curGBP
     "CAD" -> L10nR.string.curCAD
     "AUD" -> L10nR.string.curAUD
-    else -> L10nR.string.curJPY
+    "JPY" -> L10nR.string.curJPY
+    else -> null
 }
 
 @Preview(name = "Converter", backgroundColor = 0xFF0C0C0E, showBackground = true, heightDp = 1000)

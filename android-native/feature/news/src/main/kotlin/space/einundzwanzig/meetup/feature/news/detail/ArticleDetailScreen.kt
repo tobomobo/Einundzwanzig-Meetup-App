@@ -58,6 +58,13 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -120,7 +127,6 @@ internal object ArticleDetailTestTags {
 fun ArticleDetailRoute(
     key: NewsArticleDetails,
     viewModel: ArticleDetailViewModel = hiltViewModel<ArticleDetailViewModel, ArticleDetailViewModel.Factory>(
-        key = "article-${key.listIndex}-${key.articleId}",
         creationCallback = { it.create(key) },
     ),
 ) {
@@ -245,7 +251,7 @@ private fun ArticleBody(
                     onState = { if (it is AsyncImagePainter.State.Error) failed = true },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(MaterialTheme.shapes.large),
+                        .clip(Dimens.TileShape),
                 )
                 Spacer(Modifier.height(18.dp))
             }
@@ -335,6 +341,13 @@ private fun ActionBar(state: ArticleDetailUiState, onAction: (ArticleDetailActio
     val buttonPadding = PaddingValues(vertical = 12.dp, horizontal = 8.dp)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         val liked = state.likes.mine
+        // TalkBack: name the action and the count ("Gefällt mir, 21") and the liked state. Exposed as a
+        // plain button, not a toggle: NIP-25 has no un-like, so a liked button has no click action.
+        val likeA11y = buildString {
+            append(stringResource(L10nR.string.newsLike))
+            state.likeCountLabel?.let { append(", ").append(it) }
+        }
+        val likedA11y = stringResource(R.string.native_news_liked)
         OutlinedToggleButton(
             checked = liked,
             onCheckedChange = { onAction(ArticleDetailAction.Like) },
@@ -351,14 +364,23 @@ private fun ActionBar(state: ArticleDetailUiState, onAction: (ArticleDetailActio
             modifier = Modifier
                 .weight(1f)
                 .heightIn(min = 48.dp)
-                .testTag(ArticleDetailTestTags.LIKE),
+                .testTag(ArticleDetailTestTags.LIKE)
+                .clearAndSetSemantics {
+                    contentDescription = likeA11y
+                    role = Role.Button
+                    when {
+                        liked -> stateDescription = likedA11y
+                        state.liking -> disabled()
+                        else -> onClick { onAction(ArticleDetailAction.Like); true }
+                    }
+                },
         ) {
             if (state.liking) {
                 AppLoadingIndicator(size = 18.dp, color = primary)
             } else {
                 Icon(
                     if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                    contentDescription = if (liked) stringResource(R.string.native_news_liked) else null,
+                    contentDescription = null,
                     modifier = Modifier.size(18.dp),
                 )
             }
@@ -372,7 +394,7 @@ private fun ActionBar(state: ArticleDetailUiState, onAction: (ArticleDetailActio
         OutlinedButton(
             onClick = { onAction(ArticleDetailAction.Zap) },
             shapes = ButtonDefaults.shapes(),
-            enabled = !state.zapping && state.canZap,
+            enabled = !state.zapping,
             border = BorderStroke(1.dp, primary.copy(alpha = 0.5f)),
             colors = ButtonDefaults.outlinedButtonColors(contentColor = primary),
             contentPadding = buttonPadding,
@@ -440,7 +462,7 @@ private fun ZapAmountSheet(onAction: (ArticleDetailAction) -> Unit) {
                         // Animate the sheet out first (Flutter `Navigator.pop`), then start the zap.
                         onClick = {
                             scope.launch { sheetState.hide() }
-                                .invokeOnCompletion { onAction(ArticleDetailAction.ZapAmount(sats)) }
+                                .invokeOnCompletion { cause -> if (cause == null) onAction(ArticleDetailAction.ZapAmount(sats)) }
                         },
                         shapes = ButtonDefaults.shapes(),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
@@ -493,7 +515,7 @@ private fun InvoiceFallbackSheet(invoice: String, onAction: (ArticleDetailAction
             Button(
                 onClick = {
                     scope.launch { sheetState.hide() }
-                        .invokeOnCompletion { onAction(ArticleDetailAction.CopyInvoice(invoice)) }
+                        .invokeOnCompletion { cause -> if (cause == null) onAction(ArticleDetailAction.CopyInvoice(invoice)) }
                 },
                 shapes = ButtonDefaults.shapes(),
                 modifier = Modifier

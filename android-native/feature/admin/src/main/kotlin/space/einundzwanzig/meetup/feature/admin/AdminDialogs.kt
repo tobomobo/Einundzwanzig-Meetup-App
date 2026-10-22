@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -52,10 +52,12 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -68,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import kotlinx.coroutines.launch
 import space.einundzwanzig.meetup.core.common.dart.toStringAsFixed
 import space.einundzwanzig.meetup.core.ui.component.AppContainedLoadingIndicator
 import space.einundzwanzig.meetup.core.ui.component.ConfirmDialog
@@ -264,7 +267,7 @@ private fun PortalPickerDialog(dialog: AdminDialog.PortalPicker, onAction: (Admi
                 )
                 Spacer(Modifier.height(8.dp))
                 LazyColumn(Modifier.weight(1f)) {
-                    items(dialog.visibleRows, key = { it.meetup.id + "|" + it.meetup.city }) { row ->
+                    itemsIndexed(dialog.visibleRows, key = { i, r -> "$i|${r.meetup.id}" }) { _, row ->
                         PickerRow(row, onClick = { onAction(AdminPanelAction.PickerRowClicked(row.meetup)) })
                     }
                 }
@@ -317,7 +320,7 @@ private fun PickerRow(row: PickerMeetup, onClick: () -> Unit) {
                 )
             }
         },
-        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0f)),
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
@@ -415,7 +418,13 @@ private fun ManualNameDialog(dialog: AdminDialog.ManualName, onAction: (AdminPan
 @Composable
 private fun PickNearbySheet(candidates: List<MeetupCandidate>, onAction: (AdminPanelAction) -> Unit) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    // The ViewModel drops the sheet from state on answer; hide first so it animates out.
+    fun hideThen(action: AdminPanelAction) {
+        scope.launch { sheetState.hide() }.invokeOnCompletion { onAction(action) }
+    }
     ModalBottomSheet(
+        // Swipe/scrim dismiss already animated the sheet out before this callback.
         onDismissRequest = { onAction(AdminPanelAction.DismissDialog) },
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
@@ -434,7 +443,7 @@ private fun PickNearbySheet(candidates: List<MeetupCandidate>, onAction: (AdminP
             )
             Spacer(Modifier.height(16.dp))
             candidates.take(AdminPanelViewModel.MAX_NEARBY).forEach { candidate ->
-                NearbyRow(candidate, onClick = { onAction(AdminPanelAction.NearbyPicked(candidate)) })
+                NearbyRow(candidate, onClick = { hideThen(AdminPanelAction.NearbyPicked(candidate)) })
                 Spacer(Modifier.height(8.dp))
             }
         }

@@ -1,5 +1,6 @@
 package space.einundzwanzig.meetup.feature.events
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
@@ -37,7 +38,7 @@ class MeetupCalendarViewModelTest {
     private val portal = FakePortal()
 
     private fun vm(key: MeetupCalendar = MeetupCalendar()) =
-        MeetupCalendarViewModel(key, calendar, myEvents, meetups, profiles, portal, berlinZone)
+        MeetupCalendarViewModel(key, calendar, myEvents, meetups, profiles, portal, berlinZone, main.dispatcher)
 
     @Test
     fun `loads portal dates with formatted rows and RSVP rows`() {
@@ -169,5 +170,68 @@ class MeetupCalendarViewModelTest {
         val vm = vm()
         vm.onAction(MeetupCalendarAction.ShareCopied)
         assertEquals(UiText.res(L10nR.string.evShareCopied), vm.messages.first().text)
+    }
+
+    @Test
+    fun `quick favorite double tap toggles twice instead of adding twice`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        profiles.updateGate = gate
+        val vm = vm()
+        vm.onAction(MeetupCalendarAction.ToggleFavorite("107"))
+        vm.onAction(MeetupCalendarAction.ToggleFavorite("107"))
+        gate.complete(Unit)
+        assertEquals(emptyList<String>(), profiles.current.favoriteMeetupIds)
+        assertFalse(vm.state.value.rows[0].isFavorite)
+        val msgs = vm.messages.take(2).toList()
+        assertEquals(UiText.res(L10nR.string.calFavAdded, "München"), msgs[0].text)
+        assertEquals(UiText.res(L10nR.string.calFavRemoved, "München"), msgs[1].text)
+    }
+
+    @Test
+    fun `failed favorite save keeps the star and shows no success snackbar`() = runTest {
+        profiles.failUpdate = true
+        val vm = vm()
+        vm.onAction(MeetupCalendarAction.ToggleFavorite("107"))
+        assertFalse(vm.state.value.rows[0].isFavorite)
+        vm.onAction(MeetupCalendarAction.ShareCopied)
+        // The next message is the share one: nothing was queued by the failed toggle.
+        assertEquals(UiText.res(L10nR.string.evShareCopied), vm.messages.first().text)
+    }
+
+    @Test
+    fun `rsvp double tap during the portal login starts only one login`() = runTest {
+        portal.tokenOk = false
+        val gate = CompletableDeferred<Unit>()
+        portal.loginGate = gate
+        val vm = vm()
+        vm.onAction(MeetupCalendarAction.Rsvp(1, "attending"))
+        assertTrue(vm.state.value.rows[0].rsvp!!.busy)
+        vm.onAction(MeetupCalendarAction.Rsvp(1, "attending"))
+        gate.complete(Unit)
+        assertEquals(1, portal.logins)
+        assertEquals(listOf(1 to "attending"), portal.rsvps)
+        assertFalse(vm.state.value.rows[0].rsvp!!.busy)
+    }
+
+    @Test
+    fun `search over 200 ICS dates and 300 meetups stays within a frame budget`() {
+        // ICS dates (no meetupId/portal link) resolve through the city regex matcher: that must
+        // happen once per data change, not per keystroke.
+        meetups.meetups = (0 until 300).map { meetup("m$it", "Stadt$it", "Einundzwanzig Stadt$it") }
+        calendar.dates = (0 until 200).map {
+            meetupDate(title = "Stammtisch Stadt$it", id = null, meetupId = "", location = "Bar $it")
+                .copy(url = "")
+        }
+        val vm = vm()
+        assertEquals(200, vm.state.value.rows.size)
+        assertEquals("m7", vm.state.value.rows[7].favKey)
+        val query = "stammtisch stadt1"
+        // Warm-up (JIT), then measure every prefix of the query as typed.
+        repeat(3) { vm.onAction(MeetupCalendarAction.Search(query)) }
+        val started = System.nanoTime()
+        for (i in 1..query.length) vm.onAction(MeetupCalendarAction.Search(query.take(i)))
+        val perKeyMs = (System.nanoTime() - started) / 1_000_000.0 / query.length
+        assertTrue("rebuild per keystroke took $perKeyMs ms", perKeyMs < 16.0)
+        assertEquals(111, vm.state.value.rows.size) // Stadt1, Stadt10–19, Stadt100–199
     }
 }

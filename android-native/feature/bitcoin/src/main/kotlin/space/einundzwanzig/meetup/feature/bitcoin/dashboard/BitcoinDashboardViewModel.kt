@@ -96,7 +96,7 @@ sealed interface BitcoinDashboardAction {
 @HiltViewModel
 class BitcoinDashboardViewModel @Inject constructor(
     private val mempool: MempoolService,
-    config: MempoolConfig,
+    private val config: MempoolConfig,
     currency: CurrencyRepository,
     private val time: TimeSource,
 ) : ViewModel() {
@@ -119,6 +119,9 @@ class BitcoinDashboardViewModel @Inject constructor(
     private var reloadAfterCurrent = false
     private var lastLoadMillis = 0L
 
+    /** Persisted host the shown data was loaded for (`null` before the first load). */
+    private var loadedPersistedHost: String? = null
+
     /** Handles [action]; navigation actions are handled by the route. */
     fun onAction(action: BitcoinDashboardAction) {
         when (action) {
@@ -134,11 +137,16 @@ class BitcoinDashboardViewModel @Inject constructor(
 
     /**
      * Runs while the screen is at least STARTED: loads at once on the first start, after the
-     * settings screen returned, or when the last load is older than a minute; then every 60 s.
+     * settings screen returned, when the persisted source changed elsewhere meanwhile, or when the
+     * last load is older than a minute; then every 60 s.
+     *
+     * Only the *persisted* host is compared: session-override changes come from the service's own
+     * mirror fallback during a load and must not trigger another load (that would loop offline).
      */
     suspend fun autoRefreshWhileVisible() {
-        if (reloadWhenVisible || time.nowMillis() - lastLoadMillis >= REFRESH_MILLIS) {
-            val force = reloadWhenVisible
+        val sourceChanged = loadedPersistedHost != null && loadedPersistedHost != config.persistedHost
+        if (reloadWhenVisible || sourceChanged || time.nowMillis() - lastLoadMillis >= REFRESH_MILLIS) {
+            val force = reloadWhenVisible || sourceChanged
             reloadWhenVisible = false
             load(force = force)
         }
@@ -157,6 +165,7 @@ class BitcoinDashboardViewModel @Inject constructor(
         loadJob = viewModelScope.launch {
             do {
                 reloadAfterCurrent = false
+                loadedPersistedHost = config.persistedHost
                 local.update { it.copy(loading = true) }
                 val d = mempool.getDashboardData()
                 lastLoadMillis = time.nowMillis()

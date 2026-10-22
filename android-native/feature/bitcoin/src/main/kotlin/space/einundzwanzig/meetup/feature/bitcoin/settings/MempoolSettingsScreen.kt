@@ -177,7 +177,7 @@ fun MempoolSettingsScreen(
                     HintCard(
                         text = stringResource(L10nR.string.mempoolTorHint),
                         icon = Icons.Outlined.Info,
-                        accent = MaterialTheme.extendedColors.nostr,
+                        accent = MaterialTheme.extendedColors.purple,
                         modifier = Modifier.testTag(MempoolTags.TOR_HINT),
                     )
                 }
@@ -246,7 +246,7 @@ private fun ModeOptions(selected: MempoolMode, onSelect: (MempoolMode) -> Unit) 
             mode = MempoolMode.TOR,
             selected = selected == MempoolMode.TOR,
             icon = Icons.Rounded.Shield,
-            accent = ext.nostr,
+            accent = ext.purple,
             title = stringResource(L10nR.string.mempoolTorTitle),
             subtitle = stringResource(L10nR.string.mempoolTorSub),
             onSelect = onSelect,

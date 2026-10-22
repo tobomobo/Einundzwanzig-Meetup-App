@@ -35,8 +35,8 @@ import space.einundzwanzig.meetup.core.navigation.NavResults
 import space.einundzwanzig.meetup.core.navigation.sendResult
 import space.einundzwanzig.meetup.core.ui.component.AppTopBar
 import space.einundzwanzig.meetup.core.ui.qr.ScannerOverlay
-import space.einundzwanzig.meetup.core.ui.theme.BrandColors
 import space.einundzwanzig.meetup.core.ui.theme.EinundzwanzigTheme
+import space.einundzwanzig.meetup.core.ui.theme.extendedColors
 import space.einundzwanzig.meetup.data.issuance.scan.BadgeQrParser
 import space.einundzwanzig.meetup.core.l10n.R as L10nR
 
@@ -58,6 +58,21 @@ internal fun firstAcceptedBadgeQr(values: List<String?>): String? = values.first
  */
 @Composable
 fun BadgeQrCameraRoute() {
+    BadgeQrCameraRoute(scanner = { onResult, enabled -> QrScanner(onResult = onResult, enabled = enabled) })
+}
+
+/**
+ * [BadgeQrCameraRoute] with a replaceable camera [scanner] and gallery picker [galleryResults]
+ * (gets the result handler, returns the launch action); tests feed codes through them.
+ */
+@Composable
+internal fun BadgeQrCameraRoute(
+    scanner: @Composable BoxScope.(onResult: (String) -> Boolean, enabled: Boolean) -> Unit,
+    galleryResults: @Composable (onResult: (QrImageResult) -> Unit) -> (() -> Unit) = { handler ->
+        val picker = rememberQrImagePicker(onResult = handler)
+        picker::launch
+    },
+) {
     val navigator = LocalNavigator.current
     val bus = LocalResultEventBus.current
     var handled by rememberSaveable { mutableStateOf(false) }
@@ -71,18 +86,19 @@ fun BadgeQrCameraRoute() {
             handled
         }
     }
-    val picker = rememberQrImagePicker { result ->
-        // Dart: no barcodes or errors → silently return.
-        if (result is QrImageResult.Codes) firstAcceptedBadgeQr(result.values)?.let(deliver)
-    }
+    val launchPicker = galleryResults { result -> galleryCode(result)?.let(deliver) }
     BadgeQrCameraScreen(
         onBack = navigator::back,
-        onPickImage = picker::launch,
+        onPickImage = launchPicker,
         galleryEnabled = !handled,
     ) {
-        QrScanner(onResult = deliver, enabled = !handled)
+        scanner(deliver, !handled)
     }
 }
+
+/** The accepted code of a gallery pick; `null` (Dart: silently return) for no match or errors. */
+internal fun galleryCode(result: QrImageResult): String? =
+    (result as? QrImageResult.Codes)?.let { firstAcceptedBadgeQr(it.values) }
 
 /**
  * Stateless badge camera: top bar with gallery action, the camera [content] (full bleed with
@@ -127,7 +143,7 @@ fun BadgeQrCameraScreen(
             Text(
                 text = stringResource(L10nR.string.verifyScanQrInstruction),
                 // Over the camera scrim in both themes, like the camera panels.
-                color = BrandColors.TextPrimary,
+                color = MaterialTheme.extendedColors.onScrim,
                 textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier

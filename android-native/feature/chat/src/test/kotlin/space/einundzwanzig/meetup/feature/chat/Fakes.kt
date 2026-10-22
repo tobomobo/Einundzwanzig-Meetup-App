@@ -3,6 +3,8 @@ package space.einundzwanzig.meetup.feature.chat
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.receiveAsFlow
 import space.einundzwanzig.meetup.core.common.TimeSource
 import space.einundzwanzig.meetup.data.chat.ChatMessage
@@ -46,6 +48,8 @@ internal class FakeChatService : ChatService {
     val marks = mutableListOf<Pair<String, Instant>>()
     var subscribedSince: Instant? = null
     var subscribeError: Throwable? = null
+    /** True while the live subscription is collected (closes like the relay socket on cancel). */
+    var liveOpen = false
     private var joinedOnce = false
 
     override suspend fun loadMeetupRooms(force: Boolean): List<ChatRoom> = emptyList()
@@ -64,6 +68,8 @@ internal class FakeChatService : ChatService {
         subscribedSince = since
         subscribeError?.let { e -> return kotlinx.coroutines.flow.flow { throw e } }
         return live.receiveAsFlow()
+            .onStart { liveOpen = true }
+            .onCompletion { liveOpen = false }
     }
     override suspend fun send(h: String, text: String): String? {
         sendGate?.await()

@@ -308,6 +308,36 @@ class MyNetworkViewModelTest {
     }
 
     @Test
+    fun `a retry reload replacing a running refresh keeps the forced rebuild and ends refreshing`() = runTest(dispatcher) {
+        source.failed = 1
+        source.fixed = 1
+        source.stages = listOf(NetworkBuildEvent.Done(sampleNetwork()))
+        val vm = vm()
+        val refreshGate = CompletableDeferred<Unit>()
+        source.gate = refreshGate
+        vm.onAction(MyNetworkAction.Refresh)
+        runCurrent()
+        assertTrue(vm.state.value.refreshing)
+        // The retry finishes while the refresh build still waits and starts a non-forced load.
+        source.gate = null
+        vm.onAction(MyNetworkAction.Retry)
+        advanceUntilIdle()
+        assertFalse(vm.state.value.refreshing)
+        assertEquals(listOf(false, true, true), source.builds)
+        assertTrue(source.builds.last())
+    }
+
+    @Test
+    fun `onStart recomputes the stand time against the current day`() = runTest(dispatcher) {
+        source.stages = listOf(NetworkBuildEvent.Done(sampleNetwork()))
+        val vm = vm()
+        assertEquals("08:15", vm.state.value.standTime)
+        time.millis = Instant.parse("2026-10-22T07:00:00Z").toEpochMilli()
+        vm.onStart()
+        assertEquals("21.10. 08:15", vm.state.value.standTime)
+    }
+
+    @Test
     fun `detail sheet keeps the network it was opened with`() = runTest(dispatcher) {
         val first = sampleNetwork()
         source.cached = first

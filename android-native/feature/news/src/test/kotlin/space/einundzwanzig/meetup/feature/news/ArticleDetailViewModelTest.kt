@@ -181,13 +181,14 @@ class ArticleDetailViewModelTest {
     }
 
     @Test
-    fun `article without nip-23 address cannot be zapped`() = runTest {
+    fun `article without nip-23 address explains newsZapNoAddress instead of zapping`() = runTest {
         val linkOnly = article("l", id = "https://media.einundzwanzig.space/a/l")
         store.update(listOf(linkOnly))
         val vm = vm(NewsArticleDetails(linkOnly.id, 0))
         assertFalse(vm.state.value.canZap)
         vm.events.test {
             vm.onAction(ArticleDetailAction.Zap)
+            assertEquals(ArticleDetailEvent.Message(L10nR.string.newsZapNoAddress, Tone.Error), awaitItem())
             expectNoEvents()
         }
         assertFalse(vm.state.value.zapSheetVisible)

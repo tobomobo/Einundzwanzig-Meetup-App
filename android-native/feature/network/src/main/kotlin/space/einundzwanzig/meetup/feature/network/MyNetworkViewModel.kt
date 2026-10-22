@@ -125,15 +125,29 @@ internal class MyNetworkViewModel @Inject constructor(
     fun load(forceFull: Boolean) {
         loadJob?.cancel()
         val gen = ++loadGen
-        if (forceFull) _state.update { it.copy(refreshing = true) }
+        // A load replacing a running pull-to-refresh inherits its forced full rebuild, so the
+        // rebuild is not dropped and the indicator still ends with this load.
+        val force = forceFull || _state.value.refreshing
+        if (force) _state.update { it.copy(refreshing = true) }
         loadJob = viewModelScope.launch {
             try {
-                runLoad(forceFull)
+                runLoad(force)
             } finally {
-                if (forceFull && gen == loadGen) _state.update { it.copy(refreshing = false) }
+                if (force && gen == loadGen) _state.update { it.copy(refreshing = false) }
             }
         }
     }
+
+    /**
+     * Recomputes the `mnStandAt` text against the current time (Flutter builds it on every
+     * rebuild), so a screen kept open or restored across midnight switches to `dd.MM. HH:mm`.
+     */
+    fun onStart() {
+        _state.update { s -> s.copy(standTime = standTimeOf(s.network)) }
+    }
+
+    private fun standTimeOf(net: MyNetwork?): String? =
+        net?.updatedAt?.let { NetworkPresentation.standTime(it, time.nowMillis(), zone) }
 
     private suspend fun runLoad(forceFull: Boolean) {
         val myNpub = try {
@@ -206,7 +220,7 @@ internal class MyNetworkViewModel @Inject constructor(
     }
 
     private fun showNetwork(net: MyNetwork) {
-        val stand = net.updatedAt?.let { NetworkPresentation.standTime(it, time.nowMillis(), zone) }
+        val stand = standTimeOf(net)
         _state.update { it.copy(network = net, standTime = stand) }
     }
 

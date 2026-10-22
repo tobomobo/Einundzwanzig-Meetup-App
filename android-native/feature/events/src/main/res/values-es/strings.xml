@@ -23,7 +23,16 @@
     <string name="native_events_open_meetup_chat">Abrir el chat del meetup</string>
     <string name="native_events_npub_hint">npub1…</string>
     <string name="native_events_dash">–</string>
-    <string name="native_events_month_events">%1$s: %2$s eventos</string>
-    <string name="native_events_day_events">%1$s, %2$s eventos</string>
     <string name="native_events_clear_filter">Borrar filtro</string>
+    <string name="native_events_image_unreadable">No se pudo leer la imagen</string>
+    <plurals name="native_events_month_events">
+        <item quantity="one">%1$s: %2$d evento</item>
+        <item quantity="many">%1$s: %2$d eventos</item>
+        <item quantity="other">%1$s: %2$d eventos</item>
+    </plurals>
+    <plurals name="native_events_day_events">
+        <item quantity="one">%1$s, %2$d evento</item>
+        <item quantity="many">%1$s, %2$d eventos</item>
+        <item quantity="other">%1$s, %2$d eventos</item>
+    </plurals>
 </resources>
