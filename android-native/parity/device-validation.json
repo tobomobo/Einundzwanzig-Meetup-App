@@ -4,7 +4,7 @@
   "optimizedPreview": {
     "tests": 9,
     "failures": 0,
-    "apkSha256": "b78a8c2d7049cd1cdda6780e261286b0266ab55a3649ffb8174aefdb7bee4679",
+    "apkSha256": "513110a0236734f370a599738ff91154cc69eb9fb28348cdbbc487246c5fe7ce",
     "cases": [
       "Activity creates/recreates with production graph",
       "First-key and identity-switch proof fencing through actual Hilt/Keystore/repository",
@@ -15,7 +15,15 @@
       "NIP-44 encryption roundtrip",
       "NIP-49 default-cost roundtrip and wrong password",
       "Bundled ML Kit decodes QR through production factory"
-    ]
+    ],
+    "pendingIdentityFreshInstalls": {
+      "runs": 3,
+      "failures": 0,
+      "screenPixels": "320x640",
+      "densityDpi": 160,
+      "deadlineSeconds": 10,
+      "fixtureWrite": "distinct same-directory temporary file, fsync, atomic rename after ensureMigrated"
+    }
   },
   "flutterUpgrade": {
     "sourceVersion": "1.7.2+31",

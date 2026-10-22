@@ -1,13 +1,16 @@
 package space.einundzwanzig.meetup.testing
 
+import android.graphics.Bitmap
 import android.os.SystemClock
-import android.util.AtomicFile
+import android.system.Os
 import android.view.accessibility.AccessibilityNodeInfo
+import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import dagger.hilt.EntryPoints
 import java.io.File
+import java.io.FileOutputStream
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.json.JSONArray
@@ -17,6 +20,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import space.einundzwanzig.meetup.MainActivity
+import space.einundzwanzig.meetup.data.identity.SecureStorageUnreadableException
+import space.einundzwanzig.meetup.feature.onboarding.splash.SplashViewModel
 import space.einundzwanzig.meetup.feature.onboarding.R as OnboardingR
 import space.einundzwanzig.meetup.feature.settings.R as SettingsR
 
@@ -27,9 +32,9 @@ class PendingMigrationDeviceTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val entry = EntryPoints.get(context.applicationContext, DeviceParityEntryPoint::class.java)
-        withTimeout(60_000) { entry.migration().gate.await() }
-        val state = AtomicFile(File(context.noBackupFilesDir, "flutter_migration/state.json"))
-        val original = state.readFully()
+        withTimeout(60_000) { entry.migration().ensureMigrated() }
+        val state = File(context.noBackupFilesDir, "flutter_migration/state.json")
+        val original = state.readBytes()
         try {
             val fixture = JSONObject(String(original, Charsets.UTF_8))
                 .put("state", "IMPORTED_WITH_ERRORS")
@@ -38,24 +43,30 @@ class PendingMigrationDeviceTest {
                 .put("failedKeys", JSONArray(listOf("nostr_nsec_key")))
                 .put("importedSecrets", JSONArray())
                 .put("abandoned", JSONArray())
-            state.writeBytes(fixture.toString().toByteArray())
+            state.replaceFixture(fixture.toString().toByteArray())
             assertEquals(setOf("nostr_nsec_key"), entry.migration().pendingLegacySecrets())
+            assertTrue("The production key store must see the pending fixture",
+                runCatching { entry.keys().hasKey() }.exceptionOrNull() is SecureStorageUnreadableException)
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-                var diagnostics = ""
-                var logTitle = ""
-                scenario.onActivity {
-                    diagnostics = it.getString(OnboardingR.string.native_onboarding_storage_diagnostics)
-                    logTitle = it.getString(SettingsR.string.native_log_title)
+                try {
+                    var diagnostics = ""
+                    var logTitle = ""
+                    scenario.onActivity {
+                        diagnostics = it.getString(OnboardingR.string.native_onboarding_storage_diagnostics)
+                        logTitle = it.getString(SettingsR.string.native_log_title)
+                    }
+                    // The previous keep condition hid this indefinitely; 20 s migration timeout never ran.
+                    var node: AccessibilityNodeInfo? = awaitText(diagnostics)
+                    while (node != null && !node.isClickable) node = node.parent
+                    assertTrue("Diagnostics action must be clickable", node?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true)
+                    awaitText(logTitle)
+                } catch (error: Throwable) {
+                    captureFailure(scenario, state)
+                    throw error
                 }
-                // The previous keep condition hid this indefinitely; 20 s migration timeout never ran.
-                var node: AccessibilityNodeInfo? = awaitText(diagnostics)
-                while (node != null && !node.isClickable) node = node.parent
-                assertTrue("Diagnostics action must be clickable", node?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true)
-                awaitText(logTitle)
             }
-            Unit
         } finally {
-            state.writeBytes(original)
+            state.replaceFixture(original)
         }
     }
 
@@ -80,14 +91,46 @@ class PendingMigrationDeviceTest {
         return null
     }
 
-    private fun AtomicFile.writeBytes(bytes: ByteArray) {
-        val stream = startWrite()
+    private fun File.replaceFixture(bytes: ByteArray) {
+        // A second AtomicFile would share production's .new name without its monitor. Its
+        // openRead() can delete that in-progress fixture. Use a distinct temp name and one
+        // filesystem rename, so concurrent readers always open a complete old or new report.
+        val temp = File.createTempFile("state-device-fixture-", ".tmp", parentFile)
         try {
-            stream.write(bytes)
-            finishWrite(stream)
-        } catch (e: Exception) {
-            failWrite(stream)
-            throw e
+            FileOutputStream(temp).use { stream -> stream.write(bytes); stream.fd.sync() }
+            Os.rename(temp.path, path)
+        } finally {
+            temp.delete()
+        }
+    }
+
+    private fun captureFailure(scenario: ActivityScenario<MainActivity>, state: File) {
+        // Save evidence before ActivityScenario closes the error screen. Only synthetic test
+        // state and the currently visible UI are recorded; no secure-store values are read.
+        runCatching {
+            val instrumentation = InstrumentationRegistry.getInstrumentation()
+            val directory = File(instrumentation.targetContext.getExternalFilesDir(null), "device-failures").apply { mkdirs() }
+            val details = StringBuilder()
+            scenario.onActivity { activity ->
+                details.appendLine("splash=${ViewModelProvider(activity)[SplashViewModel::class.java].state.value}")
+                details.appendLine("windowFocus=${activity.hasWindowFocus()} configuration=${activity.resources.configuration}")
+            }
+            details.appendLine("migration=${state.readText()}")
+            fun tree(node: AccessibilityNodeInfo?, depth: Int) {
+                if (node == null) return
+                details.appendLine("${" ".repeat(depth)}${node.packageName} ${node.className} visible=${node.isVisibleToUser} text=${node.text} description=${node.contentDescription}")
+                for (index in 0 until node.childCount) tree(node.getChild(index), depth + 1)
+            }
+            val automation = instrumentation.uiAutomation
+            tree(automation.rootInActiveWindow, 0)
+            File(directory, "pending-migration.txt").writeText(details.toString())
+            automation.takeScreenshot()?.let { bitmap ->
+                try {
+                    FileOutputStream(File(directory, "pending-migration.png")).use {
+                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+                    }
+                } finally { bitmap.recycle() }
+            }
         }
     }
 }

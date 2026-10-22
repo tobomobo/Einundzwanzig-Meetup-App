@@ -45,6 +45,11 @@ optimized/obfuscated and non-debuggable. Its instrumentation build pins only API
 the app/test APK boundary, plus two reflective test seams. Ordinary preview and production
 release builds contain neither the test entry point nor those additional rules.
 
+The pending-identity regression also passed three fresh installs at CI's 320×640 display size.
+Its fixture waits for migration completion and uses a distinct temporary file plus atomic rename,
+avoiding a collision with production `AtomicFile` readers. The ten-second UI deadline remains;
+failures save the visible screen, accessibility tree and migration report in device artifacts.
+
 `migrationTest` is deliberately unminified and debuggable, with the production application ID,
 so an existing Flutter APK can be updated in place with the matching signing key. This covers
 upgrade data preservation separately from genuine R8 runtime behavior.
