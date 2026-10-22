@@ -132,7 +132,7 @@ jobs:
             -derivedDataPath /tmp/einundzwanzig-ui-derived-data \
             CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY=- \
             CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
-            CODE_SIGN_ENTITLEMENTS=Configuration/SimulatorUITests.entitlements
+            CODE_SIGN_ENTITLEMENTS="${GITHUB_WORKSPACE}/apple-native/Configuration/SimulatorUITests.entitlements"
           python3 apple-native/Scripts/validate_project.py \
             --verify-simulator-app /tmp/einundzwanzig-ui-derived-data/Build/Products/Debug-iphonesimulator/Einundzwanzig.app
 

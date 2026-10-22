@@ -654,14 +654,16 @@ def validate_simulator_test_signing(project):
         require("SimulatorUITests" not in settings.get("CODE_SIGN_ENTITLEMENTS", ""), "simulator UI entitlements must not enter production build configurations")
     workflow = read_text(project.apple.parent / ".github/workflows/apple-native.yml")
     steps = re.split(r"(?m)^      - name: ", workflow)
-    marker = f"CODE_SIGN_ENTITLEMENTS={entitlement_path}"
+    # CLI settings also reach SwiftPM targets, whose working directories are
+    # package checkouts. A quoted workspace-absolute path is required here.
+    marker = f'CODE_SIGN_ENTITLEMENTS="${{GITHUB_WORKSPACE}}/apple-native/{entitlement_path}"'
     signing_steps = [step for step in steps if marker in step]
     require(len(signing_steps) == 1, "exactly one simulator UI build step must supply test entitlements")
     build = signing_steps[0]
     for token in ("Build isolated iOS UI tests with simulator ad-hoc signing\n", "xcodebuild build-for-testing", "-configuration Debug", "-sdk iphonesimulator", "-destination 'generic/platform=iOS Simulator'", "--verify-simulator-app"):
         require(token in build, f"simulator UI signing step must contain {token!r}")
     tokens = shlex.split(build.replace("\\\n", " "))
-    for token in ("CODE_SIGNING_ALLOWED=YES", "CODE_SIGNING_REQUIRED=YES", "CODE_SIGN_IDENTITY=-", "CODE_SIGN_STYLE=Manual", "DEVELOPMENT_TEAM="):
+    for token in ("CODE_SIGNING_ALLOWED=YES", "CODE_SIGNING_REQUIRED=YES", "CODE_SIGN_IDENTITY=-", "CODE_SIGN_STYLE=Manual", "DEVELOPMENT_TEAM=", f"CODE_SIGN_ENTITLEMENTS=${{GITHUB_WORKSPACE}}/apple-native/{entitlement_path}"):
         require(token in tokens, f"simulator UI signing step must contain the exact argument {token!r}")
     runs = [step for step in steps if step.startswith("Run isolated iOS app identity, wallet and offline smoke tests\n")]
     require(len(runs) == 1 and "xcodebuild test-without-building" in runs[0] and "-sdk iphonesimulator" in runs[0] and "CODE_SIGNING_ALLOWED=NO" not in runs[0], "UI tests must run the previously verified simulator build without rebuilding it unsigned")
