@@ -2,7 +2,7 @@
 
 Updated 2026-10-22 against the Flutter `lib/` behavior and the independent native-port findings. The exact 57-key source contract remains in [SOURCE_ROUTES.md](SOURCE_ROUTES.md). “Implemented” below describes connected source workflows, not Apple SDK or physical-device validation. Explanatory screens and crypto primitives alone do not count as a feature.
 
-The app now connects signing, badge/claim/authority verification, encrypted recovery, portal/calendar/chat operations and public media/data flows. [VALIDATION.md](VALIDATION.md) separates portable checks and executed Mac package/store/Network tests from pending complete app SDK, simulator and device acceptance.
+The app now connects signing, badge/claim/authority verification, encrypted recovery, portal/calendar/chat operations and public media/data flows. [VALIDATION.md](VALIDATION.md) separates portable checks, executed Mac package/store/Network tests and five successful unsigned Apple SDK builds from pending simulator UI and signed-device acceptance.
 
 | Route | Status | Apple behavior / remaining work |
 | --- | --- | --- |
@@ -84,4 +84,4 @@ ICS retains bounded WEEKLY/MONTHLY, EXDATE, civil-date and DST handling. Unsuppo
 
 The independent review follow-up additionally prevents locked or unloaded-wallet complete exports, binds mixed Flutter backups to their active remote signer while protecting a retained local key, preserves historical v1 HMAC badge rows outside v2 authority, exports current proofs, and resolves unambiguous legacy city favorites without merging same-city groups. Modal routes, editor draft lifetime, all-day civil dates, naive UTC portal edit dates, selected currency rates and asynchronous chat-draft acknowledgments have dedicated corrections/regressions.
 
-Same-identity recovery authenticates the current vault password before adding alternate key material. Pending humanity receipt evidence survives normalization and remains unverified. Public wallet/account staging shares recursive secret-field redaction, including actual Flutter aliases; encrypted full recovery preserves legitimate identity keys. Independent final security and platform source reviews report no supported P1/P2 in their reviewed scope. Complete app SDK/UI and signed-device acceptance remain open.
+Same-identity recovery authenticates the current vault password before adding alternate key material. Pending humanity receipt evidence survives normalization and remains unverified. Public wallet/account staging shares recursive secret-field redaction, including actual Flutter aliases; encrypted full recovery preserves legitimate identity keys. Independent final security and platform source reviews report no supported P1/P2 in their reviewed scope. All five unsigned Apple SDK builds passed at `bf7246b`; simulator UI acceptance is blocked by widget installation metadata, and signed-device acceptance remains open.
