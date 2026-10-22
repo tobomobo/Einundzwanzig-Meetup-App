@@ -80,26 +80,29 @@ struct MeetupDirectoryView: View {
         .overlay { if store.loading && store.meetups.isEmpty { ProgressView() } }
     }
     private var directoryMap: some View {
-                Map(position: $camera, selection: $selectedID) {
-                    if useRadius, let origin {
-                        Marker(originLabel, systemImage: "scope", coordinate: origin.coordinate).tint(.blue)
-                        MapCircle(center: origin.coordinate, radius: radius * 1000).foregroundStyle(.blue.opacity(0.08))
-                    }
-                    ForEach(results) { result in
-                        if let coordinate = result.meetup.coordinate {
-                            Marker(result.meetup.name, systemImage: store.isFavorite(result.id) ? "star.fill" : "person.3.fill", coordinate: coordinate)
-                                .tint(.accentColor).tag(result.id)
-                        }
-                    }
-                }
-                .mapControls { MapCompass(); MapScaleView() }
-                .safeAreaInset(edge: .bottom) {
-                    if let selectedID, let result = results.first(where: { $0.id == selectedID }) {
-                        NavigationLink(value: AppRoute.meetup(result.id)) { matchRow(result).padding().background(.background, in: RoundedRectangle(cornerRadius: 20)) }
-                            .buttonStyle(.plain).padding()
-                    }
-                }
-
+        Map(position: $camera, selection: $selectedID) {
+            if useRadius, let origin {
+                Marker(originLabel, systemImage: "scope", coordinate: origin.coordinate).tint(Color.blue)
+                MapCircle(center: origin.coordinate, radius: radius * 1000).foregroundStyle(Color.blue.opacity(0.08))
+            }
+            ForEach(results, id: \.id) { (result: NearbyMeetupMatch) in
+                meetupMarker(result)
+            }
+        }
+        .mapControls { MapCompass(); MapScaleView() }
+        .safeAreaInset(edge: .bottom) {
+            if let selectedID, let result = results.first(where: { $0.id == selectedID }) {
+                NavigationLink(value: AppRoute.meetup(result.id)) { matchRow(result).padding().background(.background, in: RoundedRectangle(cornerRadius: 20)) }
+                    .buttonStyle(.plain).padding()
+            }
+        }
+    }
+    @MapContentBuilder
+    private func meetupMarker(_ result: NearbyMeetupMatch) -> some MapContent {
+        if let coordinate = result.meetup.coordinate {
+            Marker(result.meetup.name, systemImage: store.isFavorite(result.id) ? "star.fill" : "person.3.fill", coordinate: coordinate)
+                .tint(Color.accentColor).tag(result.id)
+        }
     }
     private var directoryList: some View {
                 List {
