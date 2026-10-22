@@ -22,11 +22,11 @@ The app now connects signing, badge/claim/authority verification, encrypted reco
 | `BadgeDetails` | Implemented | Source/collector/authority status, original full proof, share, explicit public attendance publication and local deletion. |
 | `BadgeWorldMap` | Implemented | Maps collected badge coordinates; unsigned rolling QR coordinates are excluded from presence evidence. |
 | `ReputationQr` | Implemented | Signed reputation QR and relay publication from deduplicated cryptographically verified badge evidence. |
-| `ReputationCard` | Implemented | Source/claim/authority-derived trust score, independent issuers/meetups/account age and organizer thresholds. |
+| `ReputationCard` | Implemented | Source/claim/authority-derived trust score, independent issuers/meetups/account age and organizer thresholds; previewed in-memory public-summary PNG sharing. |
 | `ReputationScanner` | Implemented | Camera or text input for signed reputation records and optional underlying full badge evidence. |
 | `ReputationScanResult` | Implemented | Distinguishes authenticated author statements from independently verified badge evidence. |
 | `ReputationVerify` | Implemented | Checks signature, versioned proof hash, source/collector signatures and issuer authority when evidence is supplied. |
-| `VerifyPerson` | Implemented | Signed reputation QR/npub lookup, signed public profile name, separate NIP-05 domain check, observed coattendance, bounded three-degree paths and separate badge ownership evidence. |
+| `VerifyPerson` | Implemented | Signed reputation QR/npub lookup, public profile/reputation nickname, separate NIP-05 check, follow directions, bounded provider-verified 180-day zap observations, observed coattendance and separate badge ownership evidence. Activity counts never change badge trust. |
 | `VerifyPersonQrCamera` | Implemented | Shared native QR scanner supplies signed reputation/person verification input. |
 | `TrustNetworkHub` | Implemented | Verified registry, vouches, reputation/proofs and observed social-network navigation. |
 | `MyTrustNetwork` | Implemented | Incremental signed graph discovery up to three degrees, bridge paths, encrypted reverified cache and explicit stale/bounded status. Large-event edges remain separate. |
@@ -54,10 +54,10 @@ The app now connects signing, badge/claim/authority verification, encrypted reco
 | `CommunityHub` | Implemented | News/resources/learning/calendar/trust/portal and native PlebRap/value-for-value navigation. |
 | `PortalArea` | Implemented | Authenticated meetup/event/leader workflows alongside public course and lecturer navigation. |
 | `Courses` | Implemented | Native course/lecturer tabs, searches, persisted list/detail cache and truthful refresh failures. |
-| `CourseDetails` | Implemented | Actual detail/related lecturer/date/join links, cached fallback and native calendar review/export. |
+| `CourseDetails` | Implemented | Actual detail/related lecturer/date/join links, clickable validated description URLs retained through caching, cached fallback and native calendar review/export. |
 | `LecturerDetails` | Implemented | Biography, source/cache status, related courses and validated official/social/Nostr links. |
-| `ValueForValue` | Implemented | LNURL-pay amount/comment, optional signed zap request, BOLT-11 checksum/amount match, explicit external wallet review/open/share. Returning never claims payment success. |
-| `PlebrapLibrary` | Implemented | All 41 source tracks, album/search, native AVPlayer queue/play/pause/seek, offline download/removal and system Now Playing controls. |
+| `ValueForValue` | Implemented | LNURL-pay amount/comment and article presets, optional signed zap request, BOLT-11 checksum/amount match, draft/identity request fencing and explicit external wallet review/open/share. Returning never claims payment success. |
+| `PlebrapLibrary` | Implemented | All 41 source tracks, album/search, native playback/seek, automatic bounded offline caching/reload preserving position, failed-track skipping without end wrap, download/removal/reset fences and system Now Playing controls. |
 | `Glossary` | Implemented | All 55 source entries in German/English/Spanish plus a native seven-step feature tour. |
 | `BitcoinDashboard` | Implemented | Height/fees, selected-currency rates, mempool/mining/difficulty, circulating supply, Moscow sats/USD and configured-host Lightning capacity/nodes/channels; partial-source status, widget and background refresh. |
 | `Converter` | Implemented | Exact sats/BTC/mBTC/µBTC and reverse fiat conversion, value-preserving unit switches, editable premium/discount and adjusted amount/result sats, with invalid precision rejection. |
@@ -85,3 +85,5 @@ ICS retains bounded WEEKLY/MONTHLY, EXDATE, civil-date and DST handling. Unsuppo
 The independent review follow-up additionally prevents locked or unloaded-wallet complete exports, binds mixed Flutter backups to their active remote signer while protecting a retained local key, preserves historical v1 HMAC badge rows outside v2 authority, exports current proofs, and resolves unambiguous legacy city favorites without merging same-city groups. Modal routes, editor draft lifetime, all-day civil dates, naive UTC portal edit dates, selected currency rates and asynchronous chat-draft acknowledgments have dedicated corrections/regressions.
 
 Same-identity recovery authenticates the current vault password before adding alternate key material. Pending humanity receipt evidence survives normalization and remains unverified. Public wallet/account staging shares recursive secret-field redaction, including actual Flutter aliases; encrypted full recovery preserves legitimate identity keys. Independent final security and platform source reviews report no supported P1/P2 in their reviewed scope. All five unsigned Apple SDK builds, widget installation and app launch passed at `aabaa04`; simulator UI acceptance is blocked by the unsigned test app's missing Keychain entitlement, and signed-device acceptance remains open.
+
+The 2026-10-22 feature followthrough additionally closes removed-favorite resurrection, concurrent avatar-removal overwrite, stale contextual chat rooms, split community event participation and stale Bitcoin metrics after reset. Independent closure review at `826a354` found no remaining supported P1/P2 in those reviewed changes. This is scoped source evidence; Apple UI/rendering/share/playback and live-service interoperability remain manual acceptance work.

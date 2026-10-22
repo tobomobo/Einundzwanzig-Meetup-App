@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "source_head": "826a354816c1512f887138801677250463cd6a42",
+  "baseline": "Flutter lib/ actual user workflows",
+  "status": "Implemented feature followthrough; manual Apple acceptance pending",
+  "implemented": [
+    "Persistent organizer participation excluded from reputation; badge collection summary/full-proof export",
+    "Signed person/profile lookup, NIP-05 distinction, follow details, bounded provider-verified zap observations and public PNG summary sharing",
+    "Durable calendar cancellation, own RSVP lookup, community/worldwide scope, creator-safe portal leaders and recurrence, participation state",
+    "Meetup-bound member-gated chat, context isolation, read/unread state and generation fences",
+    "Premium/discount converter and value-preserving units; Lightning/supply/Moscow dashboard; news article fallback and accepted-heart ledger",
+    "Local/Nostr avatars, live Home trust, home-meetup chooser and favorite reconciliation",
+    "Automatic bounded audio cache, item failure skipping, retained course URLs and explicit zap presets"
+  ],
+  "portable_checks": [
+    {
+      "suite": "Badge store journeys/guards",
+      "passed": 9
+    },
+    {
+      "suite": "Badge protocol and person mapping",
+      "passed": 3
+    },
+    {
+      "suite": "Bitcoin converter/dashboard",
+      "passed": 9
+    },
+    {
+      "suite": "RSS",
+      "passed": 11
+    },
+    {
+      "suite": "News reactions/LNURL",
+      "passed": 9
+    },
+    {
+      "suite": "Final event/portal protocol with existing relay guards",
+      "passed": 28
+    },
+    {
+      "suite": "Actual WorkflowStore final",
+      "passed": 10
+    },
+    {
+      "suite": "Signed public profile lookup",
+      "passed": 5
+    },
+    {
+      "suite": "Actual profile/AppStore selection",
+      "passed": 6
+    },
+    {
+      "suite": "Trust details with verification guards",
+      "passed": 11
+    },
+    {
+      "suite": "Actual portable media controller/cache/streaming",
+      "passed": 11
+    },
+    {
+      "suite": "Course description links and existing course tests",
+      "passed": 18
+    },
+    {
+      "suite": "Zap presets/LNURL",
+      "passed": 6,
+      "case_invocations": 9
+    }
+  ],
+  "static_checks": {
+    "swift_three_target_syntax_files": 49,
+    "localized_keys_each_de_en_es": 1111,
+    "strict_project_validator": "PASS"
+  },
+  "review": {
+    "first_round_p2": 5,
+    "fixed": 5,
+    "second_round_open_p1": 0,
+    "second_round_open_p2": 0,
+    "scope": "Specified followthrough diffs; not a whole-app security audit"
+  },
+  "runtime_pending": [
+    "Current Apple SDK typecheck and user journeys",
+    "Real AVPlayer/cache and PhotosUI",
+    "Rendered PNG and native sharing",
+    "Live portal, NIP29, signer/provider and wallet interoperability",
+    "Signed installed-Flutter upgrade and production prerequisites"
+  ],
+  "combined_appstore": {
+    "passed": 29,
+    "failures": 0,
+    "duration_seconds": 198.207,
+    "release_compile_seconds": 66.87,
+    "copied_production_sources_match_final_head": true,
+    "scope": "Actual AppStore/IdentityStore/BadgeStore/WorkflowStore/ProfilePictureStore; fixture platform adapters and offline synthetic data"
+  },
+  "android_companion": {
+    "commit": "928096a67d9ef9afaea834cb7dc94b89b441ceba",
+    "fix": "Production gallery image decoding",
+    "passed": 7,
+    "baseline_regression_failures": 3
+  },
+  "ci_monitoring": "Stopped at user request; no new result claimed"
+}
