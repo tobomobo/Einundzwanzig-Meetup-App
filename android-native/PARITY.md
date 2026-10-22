@@ -78,6 +78,15 @@ additionally runs optimized preview and legacy-storage tests on APIs 26, 29, 34 
 publishing a prerelease. A configured matrix is not evidence that every job has passed; consult
 the particular workflow run and its uploaded device results.
 
+At `990d831`, workflow `39775616682` passed all four device jobs and passed JVM tests
+and preview lint on both build attempts. Each combined build job then exhausted its
+90-minute limit during APK assembly; artifact verification and publishing were skipped.
+The workflow now runs JVM tests and lint on separate validation runners, leaving the
+APK build its full existing 90-minute budget. Publishing requires both validation stages,
+the strictly verified APK and all four device jobs. Successful jobs on the trusted `kotlin`
+branch can save Gradle caches for later runs. The workflow and shell checks pass locally;
+the changed CI layout still requires a successful run before claiming a new prerelease.
+
 ## Deliberate differences and external prerequisites
 
 - Native Material navigation, cards and motion implement the requested Android UI. Flutter
