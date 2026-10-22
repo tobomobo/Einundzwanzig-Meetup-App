@@ -84,9 +84,11 @@ struct PortalEventEditor: View {
     @State private var recurrence = ""
     @State private var recurrenceEnd = Date().addingTimeInterval(30 * 86400)
     @State private var interval = 1
+    @State private var loaded = false
+    @State private var invalidSource = false
     var body: some View {
         Form {
-            Section { WorkflowNotice() }
+            Section { WorkflowNotice(); if invalidSource { Text("The existing portal date is invalid. Saving is disabled to preserve it.").foregroundStyle(.red) } }
             Section("Meetup date") {
                 DatePicker("Start", selection: $start)
                 TextField("Location", text: $location)
@@ -109,12 +111,19 @@ struct PortalEventEditor: View {
                                              recurrenceType: recurrence.isEmpty ? nil : recurrence, recurrenceInterval: recurrence.isEmpty ? nil : interval,
                                              recurrenceEndDate: recurrence.isEmpty ? nil : f.string(from: recurrenceEnd))
                 Task { await workflow.savePortalEvent(draft, eventID: existing?["id"].integer) }
-            }.disabled(workflow.busy)
+            }.disabled(workflow.busy || invalidSource)
         }.navigationTitle(existing == nil ? "Create date" : "Edit date")
             .onAppear {
+                guard !loaded else { return }; loaded = true
                 if let existing {
-                    start = existing["start"].string.flatMap { ISO8601DateFormatter().date(from: $0) } ?? Date()
+                    guard let saved = DateParsing.portal(existing["start_iso"].string ?? existing["start"].string) else { invalidSource = true; return }
+                    start = saved
                     location = existing["location"].string ?? ""; description = existing["description"].string ?? ""; link = existing["link"].string ?? ""
+                    recurrence = existing["recurrence_type"].string ?? ""; interval = existing["recurrence_interval"].integer ?? 1
+                    if let rawEnd = existing["recurrence_end_date"].string, !rawEnd.isEmpty {
+                        guard let savedEnd = DateParsing.portal(rawEnd), savedEnd >= start else { invalidSource = true; return }
+                        recurrenceEnd = savedEnd
+                    } else { recurrenceEnd = start.addingTimeInterval(30 * 86400) }
                 }
             }
     }
@@ -130,7 +139,7 @@ struct NostrEventsView: View {
                 NavigationLink {
                     NostrEventDetailView(entry: entry)
                 } label: {
-                    VStack(alignment: .leading) { Text(entry.title).font(.headline); Text(entry.start, style: .date); Text(entry.location).font(.caption).foregroundStyle(.secondary) }
+                    VStack(alignment: .leading) { Text(entry.title).font(.headline); Text(entry.start, format: entry.meetupEvent.displayFormat(.dateTime.year().month().day())); Text(entry.location).font(.caption).foregroundStyle(.secondary) }
                 }
             }
         }.navigationTitle("Nostr calendar").searchable(text: $query)
@@ -143,7 +152,7 @@ struct NostrEventDetailView: View {
     var body: some View {
         List {
             Section {
-                Text(entry.title).font(.title.bold()); Text(entry.start, style: .date)
+                Text(entry.title).font(.title.bold()); Text(entry.start, format: entry.meetupEvent.displayFormat(.dateTime.year().month().day())).accessibilityIdentifier("calendar.civilDate")
                 if !entry.allDay { Text(entry.start, style: .time) }
                 Text(entry.location); Text(entry.event.content).textSelection(.enabled); WorkflowNotice()
             }
@@ -179,17 +188,18 @@ struct NostrEventEditor: View {
     @State private var issuers = ""
     @State private var latitude = ""
     @State private var longitude = ""
+    @State private var loaded = false
     var body: some View {
         Form {
             Section { WorkflowNotice(); if workflow.signer == nil { NavigationLink("Unlock a signing identity") { IdentitySetupView() } } }
             Section("Event") {
-                TextField("Title", text: $title); TextField("Description", text: $description, axis: .vertical).lineLimit(3...8)
-                TextField("Location", text: $location)
-                NavigationLink("Choose location") { NativeVenuePicker(location: $location, latitude: $latitude, longitude: $longitude) }
+                TextField("Title", text: $title).accessibilityIdentifier("calendar.title"); TextField("Description", text: $description, axis: .vertical).lineLimit(3...8)
+                TextField("Location", text: $location).accessibilityIdentifier("calendar.location")
+                NavigationLink("Choose location") { NativeVenuePicker(location: $location, latitude: $latitude, longitude: $longitude) }.accessibilityIdentifier("calendar.chooseLocation")
                 Toggle("All day", isOn: $allDay).disabled(existing != nil)
-                DatePicker("Start", selection: $start, displayedComponents: allDay ? [.date] : [.date, .hourAndMinute])
+                DatePicker("Start", selection: $start, displayedComponents: allDay ? [.date] : [.date, .hourAndMinute]).environment(\.timeZone, allDay ? TimeZone(secondsFromGMT: 0)! : .current)
                 Toggle("End date", isOn: $hasEnd)
-                if hasEnd { DatePicker("End", selection: $end, in: start..., displayedComponents: allDay ? [.date] : [.date, .hourAndMinute]) }
+                if hasEnd { DatePicker("End", selection: $end, in: start..., displayedComponents: allDay ? [.date] : [.date, .hourAndMinute]).environment(\.timeZone, allDay ? TimeZone(secondsFromGMT: 0)! : .current) }
             }
             Section("Attendance badge") {
                 Toggle("Enable badge", isOn: $badges)
@@ -220,6 +230,7 @@ struct NostrEventEditor: View {
                 Task { await workflow.publishCalendar(draft, existing: existing) }
             }.disabled(workflow.signer == nil || workflow.busy || title.isEmpty)
         }.navigationTitle("Calendar event").onAppear {
+            guard !loaded else { return }; loaded = true
             if let existing {
                 title = existing.title; description = existing.event.content; location = existing.location; start = existing.start
                 end = existing.end ?? start.addingTimeInterval(7200); hasEnd = existing.end != nil; allDay = existing.allDay
@@ -228,6 +239,13 @@ struct NostrEventEditor: View {
                 issuers = existing.event.tags.filter { $0.count > 3 && $0[0] == "p" && $0[3] == "issuer" }.map { $0[1] }.joined(separator: ",")
                 if let tag = existing.event.tags.first(where: { $0.count >= 3 && $0[0] == "g" }) { latitude = tag[1]; longitude = tag[2] }
             }
+        }
+        .onChange(of: allDay) { _, allDay in
+            guard existing == nil else { return }
+            let utc = TimeZone(secondsFromGMT: 0)!
+            let from = allDay ? TimeZone.current : utc, to = allDay ? utc : TimeZone.current
+            if let value = CivilDateBridge.rebase(start, from: from, to: to) { start = value }
+            if let value = CivilDateBridge.rebase(end, from: from, to: to) { end = value }
         }
     }
 }
@@ -251,7 +269,7 @@ struct NativeChatView: View {
     @Environment(WorkflowStore.self) private var workflow
     var room: String? = nil
     var entry: NostrCalendarEntry? = nil
-    @State private var text = ""
+    @State private var draft = ChatDraft()
     var body: some View {
         VStack {
             List {
@@ -267,9 +285,9 @@ struct NativeChatView: View {
                 }
             }
             HStack {
-                TextField("Message", text: $text, axis: .vertical).lineLimit(1...5)
-                Button("Send") { let message = text; Task { if await workflow.send(message, room: room, entry: entry) { text = "" } } }
-                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || workflow.signer == nil || workflow.busy)
+                TextField("Message", text: Binding(get: { draft.text }, set: { draft.update($0) }), axis: .vertical).lineLimit(1...5).accessibilityIdentifier("chat.message")
+                Button("Send") { let snapshot = draft.snapshot; Task { let sent = await workflow.send(snapshot.text, room: room, entry: entry); draft.complete(snapshot, sent: sent) } }
+                    .disabled(draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || workflow.signer == nil || workflow.busy)
             }.padding()
         }.navigationTitle(entry?.title ?? room ?? "Chat")
             .task(id: room ?? entry?.id) {
@@ -279,6 +297,7 @@ struct NativeChatView: View {
                 }
             }
             .refreshable { await workflow.loadMessages(room: room, entry: entry) }
+            .onChange(of: room ?? entry?.id) { draft.update("") }
     }
 }
 

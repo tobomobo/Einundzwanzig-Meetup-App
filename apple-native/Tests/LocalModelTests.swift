@@ -71,6 +71,29 @@ enum LocalModelTests {
                 let decoded = try JSONDecoder().decode(BadgePreview.self, from: encoded)
                 try require(decoded == value, "Preview metadata lost")
             }),
+            ("all-day editor roundtrip preserves civil date west and east of UTC", {
+                let utc = TimeZone(secondsFromGMT: 0)!
+                let source = DateParsing.portal("2026-10-25")!
+                for name in ["America/Los_Angeles", "Pacific/Auckland", "Europe/Vienna"] {
+                    let zone = TimeZone(identifier: name)!
+                    let local = CivilDateBridge.rebase(source, from: utc, to: zone)!
+                    var calendar = Calendar(identifier: .gregorian); calendar.timeZone = zone
+                    try require(calendar.component(.day, from: local) == 25, "All-day editor shifted the civil day")
+                    try require(CivilDateBridge.rebase(local, from: zone, to: utc) == source, "All-day save shifted the source day")
+                }
+            }),
+            ("accepted chat send preserves edits made after its captured revision", {
+                var draft = ChatDraft(); draft.update("Draft A")
+                let sentA = draft.snapshot
+                draft.update("Draft B"); draft.complete(sentA, sent: true)
+                try require(draft.text == "Draft B", "Accepted A erased newer unsent B")
+                draft.update("Draft A"); draft.complete(sentA, sent: true)
+                try require(draft.text == "Draft A", "An equal string with a newer revision was erased")
+                let latest = draft.snapshot; draft.complete(latest, sent: false)
+                try require(draft.text == "Draft A", "A skipped/failed send erased text")
+                draft.complete(latest, sent: true)
+                try require(draft.text.isEmpty, "The unchanged accepted draft was not cleared")
+            }),
             ("demo and ordinary planning domains remain independent after persistence", {
                 var preferences = LocalPreferences()
                 let real = MeetupEvent(id: "real-1", title: "Real", start: Date(timeIntervalSince1970: 100))

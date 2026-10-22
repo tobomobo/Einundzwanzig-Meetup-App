@@ -40,7 +40,7 @@ with tempfile.TemporaryDirectory(prefix="einundzwanzig-model-tests-") as tempora
         module_dir = binary_dir / "Modules"
     binary = str(pathlib.Path(temporary) / "model-tests")
     subprocess.run([swiftc, "-swift-version", "6", "-warnings-as-errors", "-D", "LOCAL_MODEL_TESTS",
-                    "-I", str(module_dir), str(root / "App/Models/LocalModels.swift"),
+                    "-I", str(module_dir), str(root / "App/Models/LocalModels.swift"), str(root / "App/Models/ChatDraft.swift"),
                     str(root / "App/Models/AppLocalization.swift"), str(root / "App/Models/EventFormatting.swift"),
                     str(root / "App/LearningStore.swift"), str(root / "Tests/LocalModelTests.swift"), *link, "-o", binary], check=True)
     subprocess.run([binary, str(root / "Resources")], check=True, env=environment)

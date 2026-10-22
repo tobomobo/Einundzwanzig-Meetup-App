@@ -27,6 +27,12 @@ enum UITestFixtureMode {
         guard enabled, ProcessInfo.processInfo.arguments.contains("--reset-ui-test-data") else { return }
         try KeychainStore.resetUITestScope()
         if FileManager.default.fileExists(atPath: directory.path) { try FileManager.default.removeItem(at: directory) }
+        if ProcessInfo.processInfo.arguments.contains("--seed-navigation-fixtures") {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            var cache = DataCache()
+            cache.meetups = [Meetup(id: "7001", name: "Fixture Meetup", city: "Fixture City", country: "AT", latitude: 48.2, longitude: 16.3)]
+            try JSONEncoder().encode(cache).write(to: directory.appendingPathComponent("public-cache.json"), options: .atomic)
+        }
         #endif
     }
 }

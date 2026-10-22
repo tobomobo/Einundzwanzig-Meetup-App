@@ -76,3 +76,5 @@ Tests use synthetic payloads, transport stubs and published crypto fixtures with
 network access. An optional `MEETUP_LIVE_ICS_FIXTURE` path enables a captured-response
 smoke test; no full live feed is checked in. Linux checks do not establish Apple SDK
 compilation or runtime behavior.
+
+Mempool endpoint normalization matches the source default/onion/custom modes, strips a terminal `/api`, rejects credentials/query/fragment and permits explicit HTTP for a local node/tunnel. Onion requests get 45 seconds, ordinary Bitcoin requests 20. On Apple platforms the dedicated HTTP adapter uses Network.framework, bounded HTTP/1 framing and no redirects; HTTPS retains URLSession/ATS. Other public clients retain their 15-second policy. Apple-only loopback fixtures exercise actual adapter completion/cancellation/timeout; portable fixtures cover framing, truncation, conflicts, bounds and currency-specific prices.

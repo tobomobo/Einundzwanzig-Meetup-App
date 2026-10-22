@@ -27,6 +27,7 @@ import MeetupNostr
     private(set) var status = ""
     private(set) var busy = false
     private(set) var walletUnreadable = false
+    private(set) var walletLoaded = false
     private(set) var trust = TrustScore()
     private(set) var myVouches: [AdminRegistryEntry] = []
     private(set) var pendingBackup: [String: BackupValue] = [:]
@@ -52,7 +53,7 @@ import MeetupNostr
         badges = []; platformProofs = []; humanity = nil; session = nil
         registry = RegistrySnapshot(); social = SocialGraphSnapshot(); socialLoadingDepth = 0; reputationQR = ""
         trust = TrustScore(); myVouches = []; pendingBackup = [:]; eventEvidence = []; lastSyncHashes = []; busy = false
-        publicKey = ""; walletUnreadable = false
+        publicKey = ""; walletUnreadable = false; walletLoaded = false
         guard let signer else { return }
         do {
             let key = try await signer.publicKey()
@@ -60,6 +61,8 @@ import MeetupNostr
             publicKey = key
             social.owner = key
             try await loadWallet(signer: signer, key: key, epoch: epoch)
+            try assertCurrent(epoch, key: key)
+            walletLoaded = true
         } catch { if epoch == generation { walletUnreadable = true; status = error.localizedDescription } }
     }
 
@@ -67,6 +70,7 @@ import MeetupNostr
     /// identity active; incrementing first fences every in-flight operation.
     func prepareIdentityChange() async throws {
         generation += 1
+        walletLoaded = false
         do { try persistence.delete() }
         catch { busy = false; throw BadgeStoreError.persistenceDeletion(error.localizedDescription) }
         signer = nil; publicKey = ""; badges = []; platformProofs = []
@@ -99,7 +103,7 @@ import MeetupNostr
     private func begin() throws -> (any NostrSigner, String, Int) {
         guard !busy else { throw IdentityError.busy }
         guard !walletUnreadable else { throw BadgeStoreError.unreadableWallet }
-        guard let signer, !publicKey.isEmpty else { throw BadgeStoreError.noSigner }
+        guard let signer, !publicKey.isEmpty, walletLoaded else { throw BadgeStoreError.noSigner }
         busy = true; return (signer, publicKey, generation)
     }
     private func finish(_ epoch: Int) { if epoch == generation { busy = false } }
@@ -416,12 +420,15 @@ import MeetupNostr
         let (signer, key, epoch) = try begin(); defer { finish(epoch) }
         let proof = try await PlatformIdentityProof.create(platform: platform, username: username, signer: signer, now: Self.now)
         var next = wallet; next.platformProofs.removeAll { $0.platform == platform }; next.platformProofs.append(proof)
+        Self.removePendingPlatform(platform, from: &next.pendingBackup)
         try await persist(next, signer: signer, epoch: epoch)
         return try proof.verifyString(publicKey: key)
     }
     func removePlatformProof(_ id: String) async throws {
         let (signer, _, epoch) = try begin(); defer { finish(epoch) }
-        var next = wallet; next.platformProofs.removeAll { $0.id == id }; try await persist(next, signer: signer, epoch: epoch)
+        var next = wallet; next.platformProofs.removeAll { $0.id == id }
+        Self.removePendingPlatform(id, from: &next.pendingBackup)
+        try await persist(next, signer: signer, epoch: epoch)
     }
     func verifyPlatformProof(_ text: String, expectedUsername: String?) async throws -> PlatformIdentityProof {
         let (_, key, epoch) = try begin(); defer { finish(epoch) }
@@ -499,7 +506,32 @@ import MeetupNostr
 
     func backupBadges() throws -> [BackupValue] {
         guard !walletUnreadable else { throw BadgeStoreError.unreadableWallet }
+        guard walletLoaded, signer != nil, !publicKey.isEmpty else { throw BadgeStoreError.noSigner }
         return try badges.map { try JSONDecoder().decode(BackupValue.self, from: Data($0.wireJSON.utf8)) }
+    }
+    /// A synchronous, owner-fenced snapshot taken only after configuration has
+    /// finished loading durable ciphertext. Pending evidence grants no authority.
+    func backupSnapshot(owner: String) throws -> [String: BackupValue] {
+        try assertCurrent(generation, key: owner)
+        var fields = pendingBackup.mapValues(Self.safeProofMetadata)
+        fields["badges"] = .array(try backupBadges())
+        var proofs = fields["platform_proofs"]?.array ?? []
+        for proof in platformProofs {
+            proofs.removeAll { $0.object?["platform"]?.string == proof.platform }
+            proofs.append(try JSONDecoder().decode(BackupValue.self, from: JSONEncoder().encode(proof)))
+        }
+        if fields["platform_proofs"] != nil || !proofs.isEmpty { fields["platform_proofs"] = .array(proofs) }
+        if let humanity {
+            var summary = try JSONDecoder().decode(BackupValue.self, from: JSONEncoder().encode(humanity.publicSummary)).object ?? [:]
+            summary["verified"] = .bool(false); summary["needs_reverification"] = .bool(true)
+            fields["humanity_proof"] = .object(summary)
+        }
+        return fields
+    }
+    private static func removePendingPlatform(_ platform: String, from fields: inout [String: BackupValue]) {
+        if let proofs = fields["platform_proofs"]?.array {
+            fields["platform_proofs"] = .array(proofs.filter { $0.object?["platform"]?.string != platform })
+        }
     }
     func restoreBackup(_ document: BackupDocument, decision: BackupDocument.RestoreDecision) async throws {
         let (signer, key, epoch) = try begin(); defer { finish(epoch) }
@@ -508,9 +540,9 @@ import MeetupNostr
             let data = try JSONEncoder().encode(raw)
             let value = try JSONDecoder().decode(BadgeJSON.self, from: data)
             let badge = try CollectedBadge(json: value.object)
-            // Unsigned legacy rows are preserved as pending material. A source
-            // or claim that purports to be signed must verify mathematically.
-            if badge.sigVersion >= 2 || !badge.sig.isEmpty {
+            // Flutter v1 HMAC rows are historical collection data, never v2
+            // authority. All purported current Schnorr sources remain strict.
+            if badge.sigVersion >= 2 || (badge.sigVersion != 1 && !badge.sig.isEmpty) {
                 guard await BadgeSecurity.verifyStored(badge, collector: nil, now: Self.now) else { throw BadgeProtocolError.invalidSignature }
             }
             if !badge.claimSig.isEmpty {
@@ -523,7 +555,19 @@ import MeetupNostr
         // Restored registry/admin booleans are never promoted to authority.
         // Preserve raw evidence for a later explicit relay revalidation.
         for name in ["humanity_proof", "platform_proofs", "admin_registry", "my_vouches", "co_attendance"] {
-            if let value = document.fields[name] { next.pendingBackup[name] = Self.safeProofMetadata(value) }
+            if let value = document.fields[name] {
+                let safe = Self.safeProofMetadata(value)
+                if let old = next.pendingBackup[name]?.array, let incoming = safe.array {
+                    next.pendingBackup[name] = .array(old + incoming.filter { !old.contains($0) })
+                } else if safe != .null { next.pendingBackup[name] = safe }
+            }
+        }
+        // Recheck proof signatures for this owner locally. Provider/authority
+        // claims remain pending; preserving an exact signature is not trust.
+        for raw in document.fields["platform_proofs"]?.array ?? [] {
+            guard let proof = try? JSONDecoder().decode(PlatformIdentityProof.self, from: JSONEncoder().encode(raw)),
+                  let event = try? proof.event(publicKey: key), await crypto.verify(event) else { continue }
+            if !next.platformProofs.contains(where: { $0.platform == proof.platform }) { next.platformProofs.append(proof) }
         }
         next.humanity = nil
         try assertCurrent(epoch, key: key); try await persist(next, signer: signer, epoch: epoch)

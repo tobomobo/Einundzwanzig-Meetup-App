@@ -281,7 +281,7 @@
 "mempool.address" = "HTTPS-Adresse der Mempool-Instanz";
 "mempool.default" = "mempool.space verwenden";
 "mempool.https" = "Verwende eine HTTPS-Adresse ohne Benutzerinformationen, Suchparameter oder Fragment. Ein Pfad zur Instanz ist möglich.";
-"mempool.invalid" = "Diese Adresse ist nicht zulässig. Verwende eine HTTPS-Adresse ohne Benutzerinformationen, Suchparameter oder Fragment.";
+"mempool.invalid" = "Gib eine gültige HTTP- oder HTTPS-Adresse ohne Zugangsdaten, Abfrage oder Fragment ein.";
 "mempool.noTor" = "Diese App hat keine integrierte Tor-Unterstützung. Anfragen gehen direkt an die eingestellte HTTPS-Instanz.";
 "menu.navigate" = "Navigation";
 "nav.badges" = "Badge-Vorschauen";
@@ -1010,3 +1010,13 @@
 "Flutter migration completed." = "Flutter-Migration abgeschlossen.";
 "Flutter data migrated and saved." = "Flutter-Daten migriert und gespeichert.";
 "Backup recovered. Original Flutter data remains intact." = "Backup wiederhergestellt. Ursprüngliche Flutter-Daten bleiben erhalten.";
+
+/* Reviewed network and recovery workflows. */
+"Default HTTPS" = "Standard-HTTPS";
+"Tor / Onion" = "Tor / Onion";
+"Custom server" = "Eigener Server";
+"HTTPS is the default. Explicit HTTP is supported for your own Bitcoin node or tunnel." = "HTTPS ist Standard. Explizites HTTP wird für deinen eigenen Bitcoin-Node oder Tunnel unterstützt.";
+"Onion connections require a running system VPN that resolves and routes .onion addresses, such as Orbot. The app does not start a Tor proxy or switch to clearnet on failure." = "Onion-Verbindungen benötigen ein laufendes System-VPN, das .onion-Adressen auflöst und weiterleitet, etwa Orbot. Die App startet keinen Tor-Proxy und wechselt bei Fehlern nicht ins Clearnet.";
+"The existing portal date is invalid. Saving is disabled to preserve it." = "Der vorhandene Portaltermin ist ungültig. Zum Schutz ist das Speichern deaktiviert.";
+"Paste backup text" = "Backup-Text einfügen";
+"Review pasted backup" = "Eingefügtes Backup prüfen";

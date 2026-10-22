@@ -1,9 +1,22 @@
 import Foundation
 import MeetupNostr
+import MeetupCore
 
 /// Public profile continuity only. Stored flags never confer signing, portal,
 /// organizer, or proof authority; those capabilities come from verified stores.
 enum UserContinuity {
+    /// Portal IDs take priority. City fallback is case-insensitive and only
+    /// resolves one group; ambiguous city names never select multiple groups.
+    static func resolveFavorite(_ stored: String, among meetups: [Meetup]) -> Meetup? {
+        if let exact = meetups.first(where: { $0.id == stored }) { return exact }
+        let city = stored.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !city.isEmpty else { return nil }
+        let matches = meetups.filter { $0.city.caseInsensitiveCompare(city) == .orderedSame }
+        return matches.count == 1 ? matches[0] : nil
+    }
+    static func resolveFavoriteIDs(_ stored: Set<String>, among meetups: [Meetup]) -> Set<String> {
+        Set(stored.map { resolveFavorite($0, among: meetups)?.id ?? $0 })
+    }
     static func sanitize(_ fields: [String: BackupValue]) -> [String: BackupValue] {
         var output: [String: BackupValue] = [:]
         for (key, value) in fields {

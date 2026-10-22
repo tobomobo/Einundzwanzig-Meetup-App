@@ -15,6 +15,7 @@ struct IdentitySetupView: View {
     @State private var result = ""
     @State private var message: String?
     @State private var importedPayload = ""
+    @State private var pastedBackup = ""
     @State private var reviewed: BackupDocument?
     @State private var importing = false
     @State private var importingLegacyKeys = false
@@ -110,8 +111,8 @@ struct IdentitySetupView: View {
                 }
                 if !identity.publicKey.isEmpty {
                     Section("Export and password") {
-                        SecureField("Current vault password", text: $vaultPassword)
-                        SecureField("Export / backup password", text: $backupPassword)
+                        SecureField("Current vault password", text: $vaultPassword).accessibilityIdentifier("identity.currentVaultPassword")
+                        SecureField("Export / backup password", text: $backupPassword).accessibilityIdentifier("identity.exportPassword")
                         Button("Export encrypted recovery key (NIP-49)") {
                             run {
                                 result = try await identity.exportNIP49(vaultPassword: vaultPassword, exportPassword: backupPassword)
@@ -124,7 +125,7 @@ struct IdentitySetupView: View {
                                 exportName = "meetup-\(Date().formatted(.iso8601.year().month().day())).21bkp"; exporting = true
                                 vaultPassword = ""; backupPassword = ""
                             }
-                        }
+                        }.accessibilityIdentifier("identity.exportBackup")
                         Button("Reveal unencrypted nsec…", role: .destructive) { rawExport = true }
                         Button("Change vault password") {
                             run { try requireNewPassword(); try await identity.changePassword(current: vaultPassword, replacement: newPassword); clearSecrets(); message = "Vault password changed." }
@@ -133,13 +134,22 @@ struct IdentitySetupView: View {
                 }
                 Section("Restore or migrate") {
                     Text("Open an encrypted .21bkp or a Flutter JSON backup. Review the identity before restoring. A password also protects the pending recovery copy when importing JSON.")
-                    SecureField("Backup password", text: $backupPassword)
-                    SecureField("Password for the restored vault", text: $vaultPassword)
+                    SecureField("Backup password", text: $backupPassword).accessibilityIdentifier("identity.backupPassword")
+                    SecureField("Password for the restored vault", text: $vaultPassword).accessibilityIdentifier("identity.restoreVaultPassword")
                     Button("Choose backup or Flutter JSON backup…") { importingLegacyKeys = false; importing = true }
+                    DisclosureGroup("Paste backup text") {
+                        TextEditor(text: $pastedBackup).font(.caption.monospaced()).frame(minHeight: 120).privacySensitive().autocorrectionDisabled().accessibilityIdentifier("identity.backupText")
+                            #if os(iOS)
+                            .textInputAutocapitalization(.never)
+                            #endif
+                        Button("Review pasted backup") {
+                            run { reviewed = try await identity.previewBackup(pastedBackup, password: backupPassword); importedPayload = pastedBackup; message = nil }
+                        }.disabled(pastedBackup.isEmpty).accessibilityIdentifier("identity.reviewBackup")
+                    }
                     if let reviewed {
                         let decision = reviewed.decision(existingNpub: identity.npub)
                         Text("Backup identity: \(reviewed.identityNpub.isEmpty ? "No signing identity" : reviewed.identityNpub)")
-                            .font(.caption).textSelection(.enabled)
+                            .font(.caption).textSelection(.enabled).accessibilityIdentifier("identity.backupPreview")
                         Text(LocalizedStringKey(restoreExplanation(decision))).foregroundStyle(decision == .replacesIdentity ? .orange : .primary)
                         Button(LocalizedStringKey(decision == .replacesIdentity ? "Confirm replacement and restore" : "Confirm restore")) {
                             run {
@@ -147,7 +157,7 @@ struct IdentitySetupView: View {
                                                                  allowReplacement: true, allowUnidentified: true)
                                 self.reviewed = nil; importedPayload = ""; clearSecrets(); message = "Backup restored. Imported proofs require relay verification."
                             }
-                        }
+                        }.accessibilityIdentifier("identity.confirmRestore")
                     }
                     Button("Migrate this app's Flutter Keychain identity") {
                         confirmReplacement { try requireNewPassword(); try await identity.migrateFlutterKeychain(vaultPassword: newPassword); clearSecrets(); message = "Flutter identity migrated. The original entries were removed only after the protected write succeeded." }
@@ -242,7 +252,7 @@ struct IdentitySetupView: View {
     }
     private func clearSecrets() {
         input = ""; bunkerURI = ""; vaultPassword = ""; newPassword = ""; confirmPassword = ""
-        keyPassword = ""; backupPassword = ""; result = ""
+        keyPassword = ""; backupPassword = ""; result = ""; pastedBackup = ""
         importedPayload = ""; reviewed = nil; legacyKeyJSON = nil; legacyNpub = ""
         upgradeReview = nil
     }

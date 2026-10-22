@@ -28,6 +28,8 @@
 	<string>Finde auf Wunsch Meetups in deiner Nähe und prüfe bei Badge-Ausstellung oder Sammlung die Anwesenheit. Optional erfasste Badge-Koordinaten bleiben im verschlüsselten lokalen Wallet.</string>
 	<key>NSLocationUsageDescription</key>
 	<string>Finde auf Wunsch Meetups in deiner Nähe und prüfe die Anwesenheit bei Badges. Optional erfasste Badge-Koordinaten bleiben im verschlüsselten lokalen Wallet. Die Ortssuche ist ohne Standortzugriff möglich.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Rufe öffentliche Bitcoin-Daten von deinem ausdrücklich gewählten lokalen Node oder Netzwerk-Tunnel ab.</string>
 	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
 	<string>Speichere ausgewaehlte Meetup-Termine in deinem Kalender.</string>
 	<key>UIApplicationSceneManifest</key>

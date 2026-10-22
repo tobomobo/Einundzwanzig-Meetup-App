@@ -27,10 +27,12 @@ protocol HTTPTransport: Sendable {
 
 struct URLSessionTransport: HTTPTransport {
     let maximumBytes: Int
+    let timeout: TimeInterval
     private let configuration: @Sendable () -> URLSessionConfiguration
-    init(maximumBytes: Int = 4 * 1024 * 1024,
+    init(maximumBytes: Int = 4 * 1024 * 1024, timeout: TimeInterval = 15,
          configuration: @escaping @Sendable () -> URLSessionConfiguration = { .ephemeral }) {
         self.maximumBytes = maximumBytes
+        self.timeout = timeout
         self.configuration = configuration
     }
 
@@ -39,7 +41,7 @@ struct URLSessionTransport: HTTPTransport {
         let request = BoundedRequest(maximumBytes: maximumBytes)
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
-                request.start(url: url, accept: accept, configuration: configuration(), continuation: continuation)
+                request.start(url: url, accept: accept, timeout: timeout, configuration: configuration(), continuation: continuation)
             }
         } onCancel: {
             request.cancel()
@@ -61,7 +63,7 @@ private final class BoundedRequest: NSObject, URLSessionDataDelegate, @unchecked
 
     init(maximumBytes: Int) { self.maximumBytes = maximumBytes }
 
-    func start(url: URL, accept: String, configuration: URLSessionConfiguration,
+    func start(url: URL, accept: String, timeout: TimeInterval, configuration: URLSessionConfiguration,
                continuation: CheckedContinuation<Data, any Error>) {
         lock.lock()
         if cancelled {
@@ -70,13 +72,13 @@ private final class BoundedRequest: NSObject, URLSessionDataDelegate, @unchecked
             return
         }
         self.continuation = continuation
-        configuration.timeoutIntervalForRequest = 15
-        configuration.timeoutIntervalForResource = 15
+        configuration.timeoutIntervalForRequest = timeout
+        configuration.timeoutIntervalForResource = timeout
         configuration.httpCookieStorage = nil
         configuration.urlCredentialStorage = nil
         configuration.urlCache = nil
         let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
-        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: timeout)
         request.httpMethod = "GET"
         request.setValue(accept, forHTTPHeaderField: "Accept")
         request.setValue("Einundzwanzig-Apple-Prototype/0.1", forHTTPHeaderField: "User-Agent")

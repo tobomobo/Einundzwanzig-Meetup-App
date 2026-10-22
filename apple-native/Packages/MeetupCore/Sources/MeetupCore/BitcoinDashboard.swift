@@ -8,6 +8,14 @@ public struct BitcoinDashboard: Codable, Sendable, Equatable {
     public init(values: [String: Double] = [:], prices: [String: Double] = [:], failedSources: [String] = [], fetchedAt: Date = Date()) {
         self.values = values; self.prices = prices; self.failedSources = failedSources; self.fetchedAt = fetchedAt
     }
+    public static func price(for currency: String, dashboard: BitcoinDashboard?, snapshot: BitcoinSnapshot?) -> Double? {
+        if let value = dashboard?.prices[currency], value.isFinite, value > 0 { return value }
+        switch currency {
+        case "EUR": return snapshot?.eur
+        case "USD": return snapshot?.usd
+        default: return nil
+        }
+    }
 }
 public enum BitcoinAmountUnit: String, CaseIterable, Sendable {
     case sats, btc, mBTC, microBTC, fiat

@@ -4,14 +4,12 @@ public actor MempoolClient {
     public static let defaultBaseURL = URL(string: "https://mempool.space")!
     private let transport: any HTTPTransport
 
-    public init() { transport = URLSessionTransport(maximumBytes: 256 * 1024) }
+    public init() { transport = MempoolHTTPTransport() }
     init(transport: any HTTPTransport) { self.transport = transport }
 
     /// All three sources must succeed. No invented zero values, cached prices or hidden host fallback.
     public func snapshot(baseURL: URL = MempoolClient.defaultBaseURL) async throws -> BitcoinSnapshot {
-        guard SafeURL.web(baseURL.absoluteString) != nil,
-              baseURL.query == nil, baseURL.fragment == nil else { throw MeetupCoreError.invalidURL }
-        let root = baseURL.lastPathComponent == "api" ? baseURL.deletingLastPathComponent() : baseURL
+        let root = try MempoolConfiguration.normalize(baseURL.absoluteString)
         async let heightData = transport.get(root.appendingPathComponent("api/blocks/tip/height"), accept: "text/plain")
         async let pricesData = transport.get(root.appendingPathComponent("api/v1/prices"), accept: "application/json")
         async let feesData = transport.get(root.appendingPathComponent("api/v1/fees/recommended"), accept: "application/json")
@@ -40,8 +38,7 @@ public actor MempoolClient {
     /// Each source has an independent result, so one unavailable endpoint never
     /// discards fresh prices or metrics returned by the others.
     public func dashboard(baseURL: URL = MempoolClient.defaultBaseURL) async throws -> BitcoinDashboard {
-        guard SafeURL.web(baseURL.absoluteString) != nil, baseURL.query == nil, baseURL.fragment == nil else { throw MeetupCoreError.invalidURL }
-        let root = baseURL.lastPathComponent == "api" ? baseURL.deletingLastPathComponent() : baseURL
+        let root = try MempoolConfiguration.normalize(baseURL.absoluteString)
         let sources = ["prices": "api/v1/prices", "mempool": "api/mempool", "mining": "api/v1/mining/hashrate/3d", "difficulty": "api/v1/difficulty-adjustment"]
         let transport = transport
         return await withTaskGroup(of: (String, Data?).self) { group in

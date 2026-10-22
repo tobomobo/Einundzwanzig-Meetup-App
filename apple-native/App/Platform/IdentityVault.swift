@@ -9,6 +9,8 @@ enum IdentityVault {
         let publicKey: String
         let sealedSecret: String
         let bunker: BunkerPointer?
+        /// Alternate Flutter local key, encrypted separately from the NIP46 client key.
+        var retainedLocalSecret: String? = nil
     }
     struct PendingRestore: Codable, Sendable {
         let payload: String
@@ -26,6 +28,7 @@ enum IdentityVault {
         let record = try JSONDecoder().decode(Record.self, from: bytes)
         guard record.version == 1, record.sealedSecret.hasPrefix("ncryptsec1"),
               (record.kind == .bunker) == (record.bunker != nil) else { throw IdentityError.invalidBackup }
+        if let retained = record.retainedLocalSecret, !retained.hasPrefix("ncryptsec1") { throw IdentityError.invalidBackup }
         _ = try NIP19.encodePublicKey(record.publicKey)
         return record
     }

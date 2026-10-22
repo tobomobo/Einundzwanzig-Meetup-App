@@ -79,7 +79,7 @@ struct ConverterView: View {
     @State private var amount = "100000"
     @State private var unit = "sats"
     private var price: Double? {
-        store.bitcoinDashboard?.prices[store.preferences.currency] ?? store.bitcoin.map { store.preferences.currency == "EUR" ? $0.eur : $0.usd }
+        BitcoinDashboard.price(for: store.preferences.currency, dashboard: store.bitcoinDashboard, snapshot: store.bitcoin)
     }
     private var sats: Int64? { try? (BitcoinAmountUnit(rawValue: unit) ?? .sats).sats(amount, price: price) }
     var body: some View {

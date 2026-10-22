@@ -169,7 +169,7 @@
 "mempool.address" = "Mempool server URL";
 "mempool.default" = "Use mempool.space";
 "mempool.https" = "Enter an HTTPS address without a query or fragment. Public Bitcoin data is requested from this server.";
-"mempool.invalid" = "Enter a valid HTTPS address without a query or fragment.";
+"mempool.invalid" = "Enter a valid HTTP or HTTPS address without credentials, a query or a fragment.";
 "mempool.noTor" = "No built-in Tor connection is available. Requests use the device's network connection.";
 "menu.navigate" = "Navigate";
 "nav.badges" = "Badge previews";
@@ -1011,3 +1011,13 @@
 "Flutter migration completed." = "Flutter migration completed.";
 "Flutter data migrated and saved." = "Flutter data migrated and saved.";
 "Backup recovered. Original Flutter data remains intact." = "Backup recovered. Original Flutter data remains intact.";
+
+/* Reviewed network and recovery workflows. */
+"Default HTTPS" = "Default HTTPS";
+"Tor / Onion" = "Tor / Onion";
+"Custom server" = "Custom server";
+"HTTPS is the default. Explicit HTTP is supported for your own Bitcoin node or tunnel." = "HTTPS is the default. Explicit HTTP is supported for your own Bitcoin node or tunnel.";
+"Onion connections require a running system VPN that resolves and routes .onion addresses, such as Orbot. The app does not start a Tor proxy or switch to clearnet on failure." = "Onion connections require a running system VPN that resolves and routes .onion addresses, such as Orbot. The app does not start a Tor proxy or switch to clearnet on failure.";
+"The existing portal date is invalid. Saving is disabled to preserve it." = "The existing portal date is invalid. Saving is disabled to preserve it.";
+"Paste backup text" = "Paste backup text";
+"Review pasted backup" = "Review pasted backup";

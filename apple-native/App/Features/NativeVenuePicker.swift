@@ -35,6 +35,11 @@ struct NativeVenuePicker: View {
                 }.frame(maxHeight: 220)
             }
             Text("Tap the map or choose a search result to set the venue.").font(.caption).padding()
+            TextField("Location", text: $location).textFieldStyle(.roundedBorder).padding().accessibilityIdentifier("venue.name")
+            HStack {
+                TextField("Latitude", text: $latitude).accessibilityIdentifier("venue.latitude")
+                TextField("Longitude", text: $longitude).accessibilityIdentifier("venue.longitude")
+            }.textFieldStyle(.roundedBorder).padding(.horizontal)
         }.navigationTitle("Choose location")
             .onChange(of: device.fix) {
                 if let fix = device.fix, device.status == .ready { choose(fix.point.coordinate) }

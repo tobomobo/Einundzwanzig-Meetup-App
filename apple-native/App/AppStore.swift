@@ -43,12 +43,12 @@ final class AppStore {
     private let calendarClient = CalendarClient()
     private let directory: URL
 
-    init(legacyDefaults: UserDefaults = .standard) {
+    init(legacyDefaults: UserDefaults = .standard, identityTransport: (any NostrRelayTransport)? = nil) {
         learning = LearningStore(cacheFile: UITestFixtureMode.directory.appendingPathComponent("public-learning-cache.json"))
         let fixturePreparationError: String?
         do { try UITestFixtureMode.prepare(); fixturePreparationError = nil } catch { fixturePreparationError = error.localizedDescription }
         relay = UITestFixtureMode.relay()
-        identity = IdentityStore(transport: relay, legacySource: FlutterUpgradeSource(defaults: legacyDefaults, allowAccess: !UITestFixtureMode.enabled))
+        identity = IdentityStore(transport: identityTransport ?? relay, legacySource: FlutterUpgradeSource(defaults: legacyDefaults, allowAccess: !UITestFixtureMode.enabled))
         badgeWallet = BadgeStore(relay: relay, persistence: KeychainBadgeWalletPersistence())
         workflow = WorkflowStore(relay: relay, transport: UITestFixtureMode.http)
         directory = UITestFixtureMode.directory
@@ -115,14 +115,16 @@ final class AppStore {
         }
         identity.backupSnapshot = { [weak self] in
             guard let self else { throw IdentityError.identityChanged }
-            var fields: [String: BackupValue] = [
-                "version": .number(5), "exported_at": .string(ISO8601DateFormatter().string(from: .now)),
-                "user": .object(try UserContinuity.fields(for: profile, favoriteIDs: preferences.favoriteIDs, activeNpub: identity.npub)),
-                "badges": .array(try badgeWallet.backupBadges())
-            ]
+            let epoch = identity.generation, owner = identity.publicKey
+            guard identity.state == .unlocked, identity.signer != nil, !preferences.demo else { throw IdentityError.locked }
+            await synchronizeIdentity()
+            guard epoch == identity.generation, owner == identity.publicKey else { throw IdentityError.identityChanged }
+            var fields = try badgeWallet.backupSnapshot(owner: owner)
+            fields["version"] = .number(5); fields["exported_at"] = .string(ISO8601DateFormatter().string(from: .now))
+            fields["user"] = .object(try UserContinuity.fields(for: profile, favoriteIDs: preferences.favoriteIDs, activeNpub: identity.npub))
             if let pending = try KeychainStore.read(account: "pending-imported-proofs-v1"),
                let saved = try? BackupDocument.decode(pending) {
-                for key in ["humanity_proof", "platform_proofs", "reputation", "social_graph"] {
+                for key in ["reputation", "social_graph"] {
                     if let value = saved.fields[key] { fields[key] = value }
                 }
             }
@@ -138,7 +140,17 @@ final class AppStore {
             var safe = document.pendingRevalidation()
             safe.fields.removeValue(forKey: "nostr")
             safe.fields["user"] = .object(UserContinuity.sanitize(safe.fields["user"]?.object ?? [:]))
-            // Pending proof records survive recovery, but never confer authority.
+            // Missing/empty proof sections in an additive import cannot erase
+            // evidence staged by an earlier restore. Current wallet data wins.
+            if decision == .sameIdentity || decision == .addToIdentity,
+               let bytes = try KeychainStore.read(account: "pending-imported-proofs-v1") {
+                let previous = try BackupDocument.decode(bytes)
+                for key in ["humanity_proof", "platform_proofs", "reputation", "social_graph"] {
+                    if safe.fields[key] == nil || safe.fields[key] == .null || safe.fields[key] == .array([]) {
+                        safe.fields[key] = previous.fields[key]
+                    }
+                }
+            }
             try KeychainStore.write(safe.encoded(), account: "pending-imported-proofs-v1")
             let restored = try UserContinuity.restore(safe.fields["user"]?.object ?? [:], current: profile,
                 favoriteIDs: preferences.favoriteIDs, decision: decision, activeNpub: identity.npub)
@@ -201,14 +213,20 @@ final class AppStore {
             .min { $0.start < $1.start }
     }
     func plan(for id: String) -> LocalPlan? { preferences.demo ? preferences.demoPlans[id] : preferences.plans[id] }
-    func isFavorite(_ id: String) -> Bool { (preferences.demo ? preferences.demoFavoriteIDs : preferences.favoriteIDs).contains(id) }
+    var favoriteIDs: Set<String> {
+        UserContinuity.resolveFavoriteIDs(preferences.demo ? preferences.demoFavoriteIDs : preferences.favoriteIDs, among: meetups)
+    }
+    func isFavorite(_ id: String) -> Bool { favoriteIDs.contains(id) }
     func toggleFavorite(_ id: String) {
+        let aliases = Set((preferences.demo ? preferences.demoFavoriteIDs : preferences.favoriteIDs).filter {
+            UserContinuity.resolveFavorite($0, among: meetups)?.id == id || $0 == id
+        })
         updatePreferences { value in
             if value.demo {
-                if value.demoFavoriteIDs.contains(id) { value.demoFavoriteIDs.remove(id) }
+                if !aliases.isEmpty { value.demoFavoriteIDs.subtract(aliases) }
                 else { value.demoFavoriteIDs.insert(id) }
             }
-            else if value.favoriteIDs.contains(id) { value.favoriteIDs.remove(id) }
+            else if !aliases.isEmpty { value.favoriteIDs.subtract(aliases) }
             else { value.favoriteIDs.insert(id) }
         }
     }
@@ -260,6 +278,7 @@ final class AppStore {
                 bitcoinGeneration = UUID()
                 bitcoinLoading = false
                 bitcoin = nil
+                bitcoinDashboard = nil
                 networkIssues.removeAll { $0 == "source.bitcoin.failed" }
             }
             preferences = next

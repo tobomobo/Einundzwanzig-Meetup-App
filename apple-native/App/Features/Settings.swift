@@ -13,8 +13,8 @@ struct SettingsView: View {
                         if store.profile.nickname.isEmpty { Text("profile.title") }
                         else { Text(store.profile.nickname) }
                     } icon: { Image(systemName: "person.crop.circle") }
-                }
-                NavigationLink("Signing identity and recovery") { IdentitySetupView() }
+                }.accessibilityIdentifier("settings.profile")
+                NavigationLink("Signing identity and recovery") { IdentitySetupView() }.accessibilityIdentifier("settings.identity")
                 NavigationLink("Portal account and meetups") { PortalManagementView() }
             }
             Section("settings.appearance") {
@@ -134,22 +134,32 @@ struct MempoolSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var server = ""
     @State private var invalid = false
+    @State private var mode = MempoolConfiguration.Mode.clearnet
     var body: some View {
         Form {
             Section {
+                Picker("Connection", selection: $mode) {
+                    Text("Default HTTPS").tag(MempoolConfiguration.Mode.clearnet)
+                    Text("Tor / Onion").tag(MempoolConfiguration.Mode.tor)
+                    Text("Custom server").tag(MempoolConfiguration.Mode.custom)
+                }.onChange(of: mode) { _, mode in
+                    if mode == .clearnet { server = MempoolConfiguration.clearnet }
+                    if mode == .tor { server = MempoolConfiguration.onion }
+                    invalid = false
+                }
                 TextField("mempool.address", text: $server).autocorrectionDisabled()
-                Text("mempool.https").font(.caption).foregroundStyle(.secondary)
+                Text("HTTPS is the default. Explicit HTTP is supported for your own Bitcoin node or tunnel.").font(.caption).foregroundStyle(.secondary)
                 if invalid { Text("mempool.invalid").foregroundStyle(.red) }
                 Button("action.save") {
-                    guard let url = SafeURL.web(server), url.scheme?.lowercased() == "https", url.query == nil, url.fragment == nil else { invalid = true; return }
-                    if store.updatePreferences({ $0.mempoolServer = url.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")) }) { dismiss() }
+                    guard let url = try? MempoolConfiguration.normalize(server) else { invalid = true; return }
+                    if store.updatePreferences({ $0.mempoolServer = url.absoluteString }) { dismiss() }
                 }
-                Button("mempool.default") { server = "https://mempool.space"; invalid = false }
+                Button("mempool.default") { mode = .clearnet; server = MempoolConfiguration.clearnet; invalid = false }
             }
-            Section { Text("mempool.noTor").font(.caption).foregroundStyle(.secondary) }
+            Section { Text("Onion connections require a running system VPN that resolves and routes .onion addresses, such as Orbot. The app does not start a Tor proxy or switch to clearnet on failure.").font(.caption).foregroundStyle(.secondary) }
         }
         .formStyle(.grouped).navigationTitle("settings.mempool")
-        .onAppear { server = store.preferences.mempoolServer }
+        .onAppear { server = store.preferences.mempoolServer; if let url = try? MempoolConfiguration.normalize(server) { mode = MempoolConfiguration.mode(for: url) } }
     }
 }
 

@@ -61,7 +61,7 @@ The app now connects signing, badge/claim/authority verification, encrypted reco
 | `Glossary` | Implemented | All 55 source entries in German/English/Spanish plus a native seven-step feature tour. |
 | `BitcoinDashboard` | Implemented | Height/fees, seven fiat currencies, partial prices/mempool/mining/difficulty metrics, source status, configurable HTTPS host, widget and public background refresh. |
 | `Converter` | Implemented | Exact sats/BTC/mBTC/µBTC and reverse fiat conversion with excessive precision rejection. |
-| `MempoolSettings` | Partial | Validated configurable HTTPS host and source invalidation. Tor/onion proxy transport is outside this native implementation. |
+| `MempoolSettings` | Implemented | Explicit default HTTPS, source onion and normalized custom HTTP/HTTPS host selection; bounded public-only transport, no redirects or silent clearnet fallback, 45-second onion budget. System VPN supplies Tor routing. |
 | `DiagnosticLog` | Implemented | Sanitized endpoint outcomes/counts and shareable diagnostics, settings/help and public background refresh status; no keys/tokens/raw badge log. |
 
 ## Identity, authority and upgrade boundaries
@@ -80,4 +80,6 @@ Passkeys remain fail-closed pending verified relying-party/domain/provisioning. 
 
 Social edges are signed self-attestations and are labelled as observations, independent of badge ownership. Discovery is bounded to three degrees, 2 MiB/2,500 cached events and per-stage limits. Failed queries retain same-owner reverified cache with stale status; absent records cannot be treated as deletion without relay completeness metadata.
 
-ICS retains bounded WEEKLY/MONTHLY, EXDATE, civil-date and DST handling. Unsupported RDATE/EXRULE/RECURRENCE-ID/custom zones and expansion limits remain visible. Camera, location, keychain access, in-app signer authorization, media/background policy, widgets and accessibility require Apple runtime acceptance. Bitcoin transports use HTTPS; a Tor/onion proxy is not supplied. Payments are reviewed and authorized in the user's external wallet, and app return is never payment proof.
+ICS retains bounded WEEKLY/MONTHLY, EXDATE, civil-date and DST handling. Unsupported RDATE/EXRULE/RECURRENCE-ID/custom zones and expansion limits remain visible. Camera, location, keychain access, in-app signer authorization, media/background policy, widgets and accessibility require Apple runtime acceptance. Bitcoin defaults to HTTPS and supports explicit custom HTTP/onion endpoints through a scoped public-data Network adapter. Onion requires the user’s system VPN; no built-in Tor proxy or silent clearnet fallback is supplied. Payments are reviewed and authorized in the user's external wallet, and app return is never payment proof.
+
+The independent review follow-up additionally prevents locked or unloaded-wallet complete exports, binds mixed Flutter backups to their active remote signer while protecting a retained local key, preserves historical v1 HMAC badge rows outside v2 authority, exports current proofs, and resolves unambiguous legacy city favorites without merging same-city groups. Modal routes, editor draft lifetime, all-day civil dates, naive UTC portal edit dates, selected currency rates and asynchronous chat-draft acknowledgments have dedicated corrections/regressions.

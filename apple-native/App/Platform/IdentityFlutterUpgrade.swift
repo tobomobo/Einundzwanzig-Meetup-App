@@ -41,7 +41,8 @@ enum FlutterUpgradeError: Error, Equatable, LocalizedError {
             var user: [String: BackupValue] = [:]
             let known = ["nickname": "nickname", "full_name": "fullName", "home_meetup": "homeMeetupId", "favorite_meetups": "favoriteMeetupIds",
                          "telegram": "telegramHandle", "twitter": "twitterHandle", "nostr": "nostrNpub"]
-            let nonUser: Set<String> = ["nostr_nsec_key", "nostr_npub_key", "nostr_priv_hex", "badges", "badges_pending"]
+            let nonUser: Set<String> = ["nostr_nsec_key", "nostr_npub_key", "nostr_priv_hex", "badges", "badges_pending",
+                "signing_mode", "nip46_npub", "nip46_bunker_uri", "nip46_client_sk", "nip46_client_pubkey"]
             for (name, value) in preferences {
                 let short = String(name.dropFirst("flutter.".count))
                 if nonUser.contains(short) || short.hasPrefix("badges_") || short.hasPrefix("badge_") || short.contains("encryption_key") { continue }
@@ -77,13 +78,24 @@ enum FlutterUpgradeError: Error, Equatable, LocalizedError {
                 }
             }
             var fields: [String: BackupValue] = ["version": .number(5), "user": .object(user), "badges": .array(rows)]
+            let mode = preference("signing_mode")?.string ?? "local"
+            guard mode == "local" || mode == "nip46" else { throw IdentityError.missingIdentity }
+            var nostr: [String: BackupValue] = ["has_key": .bool(key != nil), "signing_mode": .string(mode)]
             if let key {
-                let publicKey = try IdentityKey.publicKey(key)
-                fields["nostr"] = .object(["nsec": .string(try NIP19.encodeSecretKey(key)), "priv_hex": .string(IdentityKey.hex(key)),
-                    "npub": .string(try NIP19.encodePublicKey(publicKey)), "has_key": .bool(true), "signing_mode": .string("local")])
-            } else if let publicKey = user["nostrNpub"]?.string, !publicKey.isEmpty {
-                throw IdentityError.missingIdentity // External signer must be reconnected explicitly.
+                nostr["nsec"] = .string(try NIP19.encodeSecretKey(key)); nostr["priv_hex"] = .string(IdentityKey.hex(key))
+                nostr["npub"] = .string(try NIP19.encodePublicKey(IdentityKey.publicKey(key)))
             }
+            if mode == "nip46" {
+                let active = preference("nip46_npub")?.string ?? user["nostrNpub"]?.string ?? ""
+                let uri = try secretValue("nip46_bunker_uri") ?? ""
+                guard !active.isEmpty, !uri.isEmpty else { throw IdentityError.missingIdentity }
+                _ = try NIP19.decodePublicKey(active); _ = try BunkerPointer(uri)
+                nostr["active_npub"] = .string(active); nostr["nip46_bunker_uri"] = .string(uri)
+                if key == nil { nostr["npub"] = .string(active) }
+            } else if key == nil, let publicKey = user["nostrNpub"]?.string, !publicKey.isEmpty {
+                throw IdentityError.missingIdentity
+            }
+            if key != nil || mode == "nip46" { fields["nostr"] = .object(nostr) }
             for name in ["platform_proofs", "humanity_proof", "admin_registry", "my_vouches", "co_attendance"] {
                 if let value = preference(name) {
                     if let string = value.string { fields[name] = try JSONDecoder().decode(BackupValue.self, from: Data(string.utf8)) }

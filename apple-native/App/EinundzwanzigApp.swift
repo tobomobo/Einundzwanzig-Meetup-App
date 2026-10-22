@@ -34,7 +34,7 @@ struct EinundzwanzigApp: App {
         #endif
         #if os(macOS)
         Settings {
-            NavigationStack { SettingsView() }
+            NavigationStack { SettingsView().appRouteDestinations() }
                 .environment(store)
                 .environment(store.identity)
                 .environment(store.badgeWallet)
@@ -72,23 +72,32 @@ struct AppRootView: View {
             if store.profile.onboarded {
                 shell
             } else {
-                NavigationStack { OnboardingView() }
+                NavigationStack { OnboardingView().appRouteDestinations() }
             }
         }
-        .sheet(isPresented: $store.bitcoinPresented) { NavigationStack { BitcoinView() } }
+        .sheet(isPresented: $store.bitcoinPresented) { NavigationStack { BitcoinView().appRouteDestinations() } }
         .onOpenURL { url in if url.scheme == "einundzwanzig", url.host == "bitcoin" { store.bitcoinPresented = true } }
         .sheet(isPresented: $store.scanPresented) {
-            NavigationStack { BadgeImportView() }
+            NavigationStack { BadgeImportView().appRouteDestinations() }
                 .presentationDetents([.large])
         }
         .sheet(isPresented: $store.settingsPresented) {
-            NavigationStack { SettingsView() }
+            NavigationStack { SettingsView().appRouteDestinations() }
                 .frame(idealWidth: 620, idealHeight: 720)
         }
         .alert("error.title", isPresented: Binding(get: { store.persistenceIssue != nil }, set: { if !$0 { store.persistenceIssue = nil } })) {
             Button("action.ok") { store.persistenceIssue = nil }
         } message: { Text(store.persistenceIssue ?? "") }
-        .task { store.synchronizeRelays(); await store.refresh() }
+        .task {
+            store.synchronizeRelays(); await store.refresh()
+            #if DEBUG
+            if UITestFixtureMode.enabled {
+                await store.synchronizeIdentity()
+                if ProcessInfo.processInfo.arguments.contains("--seed-navigation-fixtures") { try? await store.workflow.installNavigationFixture() }
+                if ProcessInfo.processInfo.arguments.contains("--open-bitcoin") { store.bitcoinPresented = true }
+            }
+            #endif
+        }
         .task(id: store.identity.generation) { await store.synchronizeIdentity() }
         .onChange(of: store.preferences.relays) { store.synchronizeRelays() }
         .onChange(of: scenePhase) {
@@ -135,11 +144,11 @@ struct SectionNavigation: View {
     var body: some View {
         NavigationStack {
             content
-                .navigationDestination(for: AppRoute.self) { RouteDestination(route: $0) }
+                .appRouteDestinations()
                 .toolbar {
                     ToolbarItemGroup(placement: .automatic) {
                         Button { store.scanPresented = true } label: { Label("scan.title", systemImage: "qrcode.viewfinder") }
-                        Button { store.settingsPresented = true } label: { Label("settings.title", systemImage: "gearshape") }
+                        Button { store.settingsPresented = true } label: { Label("settings.title", systemImage: "gearshape") }.accessibilityIdentifier("root.settings")
                     }
                 }
         }
@@ -154,6 +163,12 @@ struct SectionNavigation: View {
         case .community: CommunityView()
         case .bitcoin: BitcoinView()
         }
+    }
+}
+
+extension View {
+    func appRouteDestinations() -> some View {
+        navigationDestination(for: AppRoute.self) { RouteDestination(route: $0) }
     }
 }
 

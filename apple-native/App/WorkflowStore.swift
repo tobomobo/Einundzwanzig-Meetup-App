@@ -34,6 +34,14 @@ struct KeychainBadgeWalletPersistence: BadgeWalletPersistence {
     private let readMarksKey = "nostr-chat-read-marks-v1"
 
     init(relay: NostrRelayClient, transport: any ProductHTTPTransport = ProductURLSessionTransport()) { self.relay = relay; portal = PortalAPIClient(transport: transport); calendar = CalendarChatService(relay: relay); news = NewsNostrService(relay: relay) }
+    #if DEBUG
+    func installNavigationFixture() async throws {
+        guard UITestFixtureMode.enabled else { return }
+        let fixtureSigner = try LocalIdentitySigner(privateKey: Data(repeating: 0, count: 31) + Data([1]))
+        let event = try await fixtureSigner.sign(kind: 31922, tags: [["d", "fixture-civil-event"], ["title", "Fixture civil date"], ["start", "2026-10-25"], ["location", "Original venue"], ["g", "48.2", "16.3"]], content: "Synthetic navigation fixture", createdAt: Int(Date().timeIntervalSince1970))
+        entries = [try NostrCalendarEntry(event: event)]
+    }
+    #endif
     func configure(signer: (any NostrSigner)?) async {
         generation += 1
         let epoch = generation

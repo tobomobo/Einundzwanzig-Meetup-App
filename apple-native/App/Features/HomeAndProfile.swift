@@ -194,11 +194,12 @@ struct ProfileEditView: View {
     @State private var homeMeetupID = ""
     @State private var telegramHandle = ""
     @State private var twitterHandle = ""
+    @State private var loaded = false
     var body: some View {
         Form {
             Section("profile.local") {
-                TextField("profile.nickname", text: $nickname).textContentType(.nickname)
-                TextField("Full name", text: $fullName).textContentType(.name)
+                TextField("profile.nickname", text: $nickname).textContentType(.nickname).accessibilityIdentifier("profile.editNickname")
+                TextField("Full name", text: $fullName).textContentType(.name).accessibilityIdentifier("profile.fullName")
                 TextField("profile.npub.optional", text: $npub).autocorrectionDisabled()
                 TextField("Telegram handle", text: $telegramHandle).autocorrectionDisabled()
                 TextField("Twitter handle", text: $twitterHandle).autocorrectionDisabled()
@@ -218,6 +219,7 @@ struct ProfileEditView: View {
         .formStyle(.grouped)
         .navigationTitle("profile.title")
         .onAppear {
+            guard !loaded else { return }; loaded = true
             nickname = store.profile.nickname; npub = store.profile.npub; fullName = store.profile.fullName
             homeMeetupID = store.profile.homeMeetupID; telegramHandle = store.profile.telegramHandle; twitterHandle = store.profile.twitterHandle
         }

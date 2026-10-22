@@ -4,9 +4,9 @@ import WidgetKit
 import MeetupCore
 
 struct BitcoinWidgetConfiguration: WidgetConfigurationIntent {
-    static var title: LocalizedStringResource = "Bitcoin network"
-    static var description = IntentDescription("Block height and fee estimate from your chosen HTTPS mempool server.")
-    @Parameter(title: "Mempool HTTPS server", default: "https://mempool.space") var server: String
+    static let title: LocalizedStringResource = "Bitcoin network"
+    static let description = IntentDescription("Block height and fees from your chosen Bitcoin server. Onion requires a system VPN.")
+    @Parameter(title: "Mempool server", default: "https://mempool.space") var server: String
 }
 struct BitcoinWidgetEntry: TimelineEntry {
     let date: Date
@@ -20,8 +20,8 @@ struct BitcoinWidgetProvider: AppIntentTimelineProvider {
         Timeline(entries: [await fetch(configuration)], policy: .after(Date().addingTimeInterval(900)))
     }
     private func fetch(_ configuration: BitcoinWidgetConfiguration) async -> BitcoinWidgetEntry {
-        guard let url = SafeURL.web(configuration.server), url.scheme == "https", url.query == nil, url.fragment == nil else {
-            return BitcoinWidgetEntry(date: .now, snapshot: nil, server: "Invalid HTTPS server")
+        guard let url = try? MempoolConfiguration.normalize(configuration.server) else {
+            return BitcoinWidgetEntry(date: .now, snapshot: nil, server: "Invalid server")
         }
         let snapshot = try? await MempoolClient().snapshot(baseURL: url)
         return BitcoinWidgetEntry(date: .now, snapshot: snapshot, server: url.host ?? "")

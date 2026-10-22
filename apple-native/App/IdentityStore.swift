@@ -133,26 +133,39 @@ final class IdentityStore {
         let stamp = generation, secret = try await decryptRecord(record, password: current)
         let sealed = try await seal(secret, password: replacement)
         guard stamp == generation else { throw IdentityError.identityChanged }
-        let updated = IdentityVault.Record(kind: record.kind, publicKey: record.publicKey, sealedSecret: sealed, bunker: record.bunker)
+        var updated = IdentityVault.Record(kind: record.kind, publicKey: record.publicKey, sealedSecret: sealed, bunker: record.bunker)
+        if let retained = record.retainedLocalSecret {
+            let local = try await Task.detached(priority: .userInitiated) { try NIP49.decrypt(retained, password: current) }.value
+            updated.retainedLocalSecret = try await seal(local, password: replacement)
+        }
+        guard stamp == generation else { throw IdentityError.identityChanged }
         try IdentityVault.write(updated); self.record = updated
     }
     func exportBackup(password: String, vaultPassword: String) async throws -> String {
         try begin(); defer { busy = false }
         guard let snapshot = backupSnapshot else { throw IdentityError.cleanupRequired }
-        let stamp = generation
+        // A locked/unconfigured collection is not an empty complete wallet.
+        guard state == .unlocked, signer != nil, let record else { throw IdentityError.locked }
+        let stamp = generation, owner = publicKey
         var document = try await snapshot()
-        if let record {
-            var block: [String: BackupValue] = ["npub": .string(npub), "has_key": .bool(record.kind == .local),
-                "signing_mode": .string(record.kind == .local ? "local" : "nip46"), "active_npub": .string("")]
-            if record.kind == .local {
-                let secret = try await decryptRecord(record, password: vaultPassword)
-                block["nsec"] = .string(try NIP19.encodeSecretKey(secret)); block["priv_hex"] = .string(IdentityKey.hex(secret))
-            } else {
-                block["nsec"] = .string(""); block["priv_hex"] = .string("")
-                block["nip46_bunker_uri"] = .string(record.bunker?.uri ?? "")
-            }
-            document.fields["nostr"] = .object(block)
+        guard stamp == generation, owner == publicKey, signer != nil else { throw IdentityError.identityChanged }
+        let secret = try await decryptRecord(record, password: vaultPassword)
+        guard stamp == generation else { throw IdentityError.identityChanged }
+        var block: [String: BackupValue] = ["npub": .string(npub), "has_key": .bool(record.kind == .local),
+            "signing_mode": .string(record.kind == .local ? "local" : "nip46"), "active_npub": .string("")]
+        var localSecret: Data? = record.kind == .local ? secret : nil
+        if let retained = record.retainedLocalSecret {
+            localSecret = try await Task.detached(priority: .userInitiated) { try NIP49.decrypt(retained, password: vaultPassword) }.value
+            guard stamp == generation else { throw IdentityError.identityChanged }
         }
+        if let localSecret {
+            block["nsec"] = .string(try NIP19.encodeSecretKey(localSecret)); block["priv_hex"] = .string(IdentityKey.hex(localSecret))
+            block["npub"] = .string(try NIP19.encodePublicKey(IdentityKey.publicKey(localSecret))); block["has_key"] = .bool(true)
+        } else { block["nsec"] = .string(""); block["priv_hex"] = .string("") }
+        if record.kind == .bunker {
+            block["active_npub"] = .string(npub); block["nip46_bunker_uri"] = .string(record.bunker?.uri ?? "")
+        }
+        document.fields["nostr"] = .object(block)
         let data = try document.encoded()
         let payload = try await Task.detached(priority: .userInitiated) { try BackupEncryption.encrypt(data, password: password) }.value
         guard stamp == generation else { throw IdentityError.identityChanged }
@@ -259,7 +272,7 @@ final class IdentityStore {
         let stamp = generation, source = try legacySource.snapshot()
         guard !source.isEmpty else { throw IdentityError.missingIdentity }
         var document = try source.document()
-        if try document.localPrivateKey() == nil { document = try source.document(newPrivateKey: IdentityKey.generate()) }
+        if try document.localPrivateKey() == nil, document.identityNpub.isEmpty { document = try source.document(newPrivateKey: IdentityKey.generate()) }
         do { try await stageFlutterMigration(document, source: source, stamp: stamp, password: vaultPassword, removeOriginals: removeOriginals) }
         catch { legacyAvailable = true; await revoke(); state = .recoveryRequired; throw error }
     }
@@ -379,6 +392,15 @@ final class IdentityStore {
         guard decision != .replacesIdentity || allowReplacement,
               decision != .addToIdentity || allowUnidentified else { throw IdentityError.confirmationRequired }
         let secret = try document.localPrivateKey()
+        let mode = document.fields["nostr"]?.object?["signing_mode"]?.string ?? "local"
+        guard mode == "local" || mode == "nip46" else { throw IdentityError.missingIdentity }
+        if mode == "local", let secret, !document.identityNpub.isEmpty,
+           try NIP19.encodePublicKey(IdentityKey.publicKey(secret)) != document.identityNpub { throw IdentityError.inconsistentBackup }
+        if mode == "nip46" {
+            guard let uri = document.fields["nostr"]?.object?["nip46_bunker_uri"]?.string, !uri.isEmpty,
+                  !document.identityNpub.isEmpty else { throw IdentityError.missingIdentity }
+            _ = try BunkerPointer(uri)
+        }
         if secret == nil, record == nil, (document.fields["nostr"]?.object?["nip46_bunker_uri"]?.string ?? "").isEmpty {
             throw IdentityError.missingIdentity
         }
@@ -393,7 +415,7 @@ final class IdentityStore {
         }
         do {
             if decision == .fresh || decision == .replacesIdentity {
-                if let secret { try await installLocal(secret, password: vaultPassword) }
+                if mode == "local", let secret { try await installLocal(secret, password: vaultPassword) }
                 else if let uri = document.fields["nostr"]?.object?["nip46_bunker_uri"]?.string, !uri.isEmpty {
                     let pointer = try BunkerPointer(uri), clientSecret = try IdentityKey.generate()
                     let (next, key) = try await remote(pointer, secret: clientSecret)
@@ -401,12 +423,23 @@ final class IdentityStore {
                         guard try NIP19.encodePublicKey(key) == document.identityNpub else { throw IdentityError.inconsistentBackup }
                         let sealed = try await seal(clientSecret, password: vaultPassword)
                         guard generation == stamp else { throw IdentityError.identityChanged }
-                        try await replace(IdentityVault.Record(kind: .bunker, publicKey: key, sealedSecret: sealed, bunker: pointer.withoutSecret))
+                        var nextRecord = IdentityVault.Record(kind: .bunker, publicKey: key, sealedSecret: sealed, bunker: pointer.withoutSecret)
+                        if let secret { nextRecord.retainedLocalSecret = try await seal(secret, password: vaultPassword) }
+                        guard generation == stamp else { throw IdentityError.identityChanged }
+                        try await replace(nextRecord)
                         remoteSigner = next; signer = next; state = .unlocked; generation = UUID()
                     } catch { await next.disconnect(); throw error }
                 } else if !document.identityNpub.isEmpty { throw IdentityError.missingIdentity }
             } else if signer == nil {
                 try await activateStoredRecord(password: vaultPassword)
+            }
+            guard document.identityNpub.isEmpty || document.identityNpub == npub else { throw IdentityError.inconsistentBackup }
+            // A same-identity import must also retain its alternate local key.
+            if mode == "nip46", let secret, var current = record, current.kind == .bunker, current.retainedLocalSecret == nil {
+                let fence = generation
+                current.retainedLocalSecret = try await seal(secret, password: vaultPassword)
+                guard generation == fence else { throw IdentityError.identityChanged }
+                try IdentityVault.write(current); record = current
             }
             let applyFence = generation
             try await apply(document.pendingRevalidation(), decision)

@@ -47,7 +47,7 @@ import BackgroundTasks
     #endif
     private static func fetch() async -> Bool {
         let host = UserDefaults.standard.string(forKey: "public-mempool-server") ?? "https://mempool.space"
-        guard let url = SafeURL.web(host), url.scheme == "https" else { return false }
+        guard let url = try? MempoolConfiguration.normalize(host) else { return false }
         do {
             let snapshot = try await MempoolClient().snapshot(baseURL: url)
             try Task.checkCancellation()

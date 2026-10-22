@@ -1,8 +1,8 @@
 import Foundation
 
-enum DateParsing {
+public enum DateParsing {
     /// Portal database dates without an offset are UTC, never device-local time.
-    static func portal(_ text: String?) -> Date? {
+    public static func portal(_ text: String?) -> Date? {
         guard let text else { return nil }
         let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let pattern = #"^([0-9]{4})-([0-9]{2})-([0-9]{2})(?:[Tt ]([0-9]{2}):([0-9]{2})(?::([0-9]{2})(?:\.([0-9]{1,9}))?)?)?([Zz]|[+-][0-9]{2}:?[0-9]{2})?$"#
