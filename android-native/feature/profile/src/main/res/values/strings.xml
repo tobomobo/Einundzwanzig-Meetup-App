@@ -30,4 +30,15 @@
         <item quantity="one">%1$d weiterer Favorit</item>
         <item quantity="other">%1$d weitere Favoriten</item>
     </plurals>
+    <string name="native_recovery_title">Frühere Identität gefunden</string>
+    <string name="native_recovery_body">Beim Übernehmen der Flutter-Daten wurden weitere Schlüssel gesichert. Du kannst sie wiederherstellen, exportieren oder verwerfen.</string>
+    <string name="native_recovery_restore">Identität wiederherstellen</string>
+    <string name="native_recovery_export">Schlüssel exportieren</string>
+    <string name="native_recovery_discard">Gesicherte Kopie verwerfen</string>
+    <string name="native_recovery_restore_confirm">Die aktuelle lokale Identität wird ersetzt und ihre Nachweise werden entfernt. Vorher bei Bedarf den aktuellen Schlüssel sichern. Zum Fortfahren ist die Gerätebestätigung erforderlich.</string>
+    <string name="native_recovery_export_confirm">Der private Schlüssel wird nach der Gerätebestätigung geschützt angezeigt. Teile ihn nur mit vertrauenswürdigen Apps. Die gesicherte Kopie bleibt erhalten.</string>
+    <string name="native_recovery_discard_confirm">Diese gesicherte Kopie wird nach der Gerätebestätigung dauerhaft gelöscht. Stelle vorher sicher, dass du den Schlüssel nicht mehr brauchst oder bereits gesichert hast.</string>
+    <string name="native_recovery_restored">Frühere Identität wiederhergestellt.</string>
+    <string name="native_recovery_discarded">Gesicherte Kopie verworfen.</string>
+    <string name="native_auth_recovery">Gesicherte Identität verwalten</string>
 </resources>

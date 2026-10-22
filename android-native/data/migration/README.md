@@ -67,34 +67,20 @@ flutterMigration.cleanupIfEligible()
   It covers `IMPORTED_WITH_ERRORS` (failed names; every known key if the secure-storage or prefs
   file was unreadable) and `NOT_STARTED` with Flutter files present (aborted attempt, corrupt
   state file).
-- **RELEASE BLOCKER (needs the `:core:data` owner) — spec 14 §4.7 / R3 gating is not wired yet.**
-  `MigrationGate` and `pendingLegacySecrets()` live here and nothing makes `SecureStore.readChecked`
-  return `Unreadable` for pending keys. `:data:migration` no longer depends on `:data:identity`
-  (the recovery prefixes are local, `internal.RecoveryNames`), so `:data:identity` may now depend
-  on `:data:migration` (or, better, on the `:core:data` interfaces below) without a cycle. Required:
-  in `:core:data` add `interface MigrationGate { val isComplete: Boolean; suspend fun await() }`
-  and `interface LegacySecretStatus { suspend fun pending(): Set<String> }`; `KeyValueStore` and
-  `SecureStore` await the gate before their first read/write and `SecureStore` maps pending keys to
-  `SecureRead.Unreadable` (reason e.g. `PENDING_MIGRATION`); plus `@Ungated` raw store bindings for
-  the migration's own writes; and a shared `SecureRecoveryNames` (`legacy_esp`, `legacy_backup`,
-  `legacy_recovered`, overflow `#n`) that `RecoverySource` and this module re-export.
-  This module then `@Binds` both interfaces to `DefaultFlutterMigration` (its `MigrationGate`
-  becomes a typealias/re-export of the `:core:data` one) and injects `@Ungated KeyValueStore` /
-  `@Ungated SecureStore` (otherwise the Hilt graph is a cycle SecureStore → MigrationGate →
-  DefaultFlutterMigration → SecureStore, and the migration would wait on its own gate).
-  `cleanupIfEligible()` already returns `NotYet("GATE")` before the gate completes, so it can never
-  hold the mutex while a gated store waits for the gate; `onAppReset()` touches no store. Until
-  that lands, no domain is protected from generating a replacement identity/badge key over a
-  pending Flutter secret except by `:app` keeping the splash until `gate.isComplete`.
+- **Store barrier.** `:core:data` owns `migration.MigrationGate`, `LegacySecretStatus` and
+  the `@Ungated` qualifier. Production `KeyValueStore` operations (including flow collection)
+  and `SecureStore` operations await the gate. Pending secret reads return
+  `Unreadable(PENDING_MIGRATION)`; writes/deletes cannot replace them. This module binds both
+  interfaces to `DefaultFlutterMigration`, which uses the ungated stores to avoid awaiting its
+  own import. The existing `:data:migration` gate extends the core interface for compatibility.
 - **Recovery copies** are written to `SecureStore` as `legacy_esp/<key>`, `legacy_backup/<key>`,
   `legacy_recovered/<key>` (same prefixes as `RecoverySource` in `:data:identity`).
   `IdentityRecovery` (`:data:identity`) offers the identity ones. A recovery entry is **never
   overwritten**: when the name already holds a different value (e.g. a native-conflict copy and a
   third distinct `_BACKUP` value both target `legacy_recovered/<key>`), the value goes to the first
-  free overflow slot `<name>#2`, `#3`, … (up to `#16`). **Follow-up for the owners:**
-  `IdentityRecovery.candidates()/discardAll()` (`:data:identity`) and the badge candidate scan
-  `isIdentitySecret` (`:data:badges`) should also accept the `#n` suffix (strip
-  `substringBefore('#')` from the key); until then such a value is preserved but not offered. Badge domain: every 64-hex value
+  free overflow slot `<name>#2`, `#3`, … (up to `#16`). `IdentityRecovery` reads and resets every
+  slot and splits mixed slots by the actual public key. Adopting or discarding one candidate
+  preserves other parked identities. Badge domain: every 64-hex value
   among primary, `legacy_*/badge_*` and `*_suspect` secrets is a candidate key for opening blobs
   (Dart `_candidateKeys`); the badge and portal owners delete their own recovery copies on reset.
 - **Reset** must call `onAppReset()` **before** wiping the native stores, so the Flutter files can

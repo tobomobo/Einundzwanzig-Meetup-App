@@ -89,6 +89,7 @@ import space.einundzwanzig.meetup.core.ui.theme.extendedColors
 import space.einundzwanzig.meetup.data.community.v4v.LightningInvoiceLauncher
 import space.einundzwanzig.meetup.data.community.v4v.V4V_LIGHTNING_ADDRESS
 import space.einundzwanzig.meetup.data.community.v4v.V4vErrorKind
+import space.einundzwanzig.meetup.feature.community.R
 import space.einundzwanzig.meetup.feature.community.common.ObserveAsEvents
 import space.einundzwanzig.meetup.core.l10n.R as L10nR
 
@@ -110,11 +111,12 @@ fun ValueForValueRoute(viewModel: ValueForValueViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val copied = stringResource(L10nR.string.v4vCopied)
+    val walletChooserTitle = stringResource(R.string.native_lightning_wallet_chooser)
 
     ObserveAsEvents(viewModel.events) { event ->
         when (event) {
             is ValueForValueEvent.OpenInvoice ->
-                if (!LightningInvoiceLauncher.openWithChooser(context, event.invoice)) {
+                if (!LightningInvoiceLauncher.openWithChooser(context, event.invoice, chooserTitle = walletChooserTitle)) {
                     viewModel.onAction(ValueForValueAction.WalletUnavailable(event.invoice))
                 }
             is ValueForValueEvent.CopyInvoice -> {

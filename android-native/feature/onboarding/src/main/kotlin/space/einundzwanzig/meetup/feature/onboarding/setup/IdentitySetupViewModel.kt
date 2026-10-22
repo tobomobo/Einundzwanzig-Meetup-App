@@ -26,6 +26,7 @@ import space.einundzwanzig.meetup.core.ui.component.AppSnackbarDurations
 import space.einundzwanzig.meetup.core.ui.component.Tone
 import space.einundzwanzig.meetup.data.identity.AmberConnectResult
 import space.einundzwanzig.meetup.data.identity.RecommendedExistingPath
+import space.einundzwanzig.meetup.data.identity.identityErrorMessage
 import space.einundzwanzig.meetup.data.identity.SigningService
 import space.einundzwanzig.meetup.data.identity.easyauth.LocalEasyAuth
 import space.einundzwanzig.meetup.data.identity.keys.LocalKeyVault
@@ -283,7 +284,7 @@ class IdentitySetupViewModel @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(busy = false, error = UiText.Raw(messageOf(e))) }
+                _state.update { it.copy(busy = false, error = UiText.res(e.identityErrorMessage)) }
                 return@launch
             }
             // The fresh identity replaced whatever survived: no resume card any more.
@@ -479,7 +480,7 @@ class IdentitySetupViewModel @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(busy = false, error = UiText.Raw(messageOf(e))) }
+                _state.update { it.copy(busy = false, error = UiText.res(e.identityErrorMessage)) }
             }
         }
     }
@@ -512,7 +513,7 @@ class IdentitySetupViewModel @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(busy = false, error = UiText.Raw(messageOf(e))) }
+                _state.update { it.copy(busy = false, error = UiText.res(e.identityErrorMessage)) }
             }
         }
     }
@@ -530,7 +531,7 @@ class IdentitySetupViewModel @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(busy = false, error = UiText.Raw(messageOf(e))) }
+                _state.update { it.copy(busy = false, error = UiText.res(e.identityErrorMessage)) }
             }
         }
     }
@@ -633,7 +634,7 @@ class IdentitySetupViewModel @Inject constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            _state.update { it.copy(busy = false, error = UiText.Raw(messageOf(e))) }
+            _state.update { it.copy(busy = false, error = UiText.res(e.identityErrorMessage)) }
         }
     }
 
@@ -645,7 +646,7 @@ class IdentitySetupViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 AppLogger.error(TAG, "Unerwarteter Fehler", e)
-                _state.update { it.copy(busy = false, error = UiText.Raw(messageOf(e))) }
+                _state.update { it.copy(busy = false, error = UiText.res(e.identityErrorMessage)) }
             }
         }
     }
@@ -695,7 +696,7 @@ class IdentitySetupViewModel @Inject constructor(
         fun passkeyError(e: Throwable): UiText? = when {
             e is PasskeyPrfException && e.isCancelled -> null
             e is PasskeyPrfException && e.isUnavailable -> UiText.res(L10nR.string.idSetupPasskeyUnavailable)
-            else -> UiText.Raw(messageOf(e))
+            else -> UiText.res(e.identityErrorMessage)
         }
     }
 }

@@ -10,7 +10,10 @@ import java.net.UnknownServiceException
  * Mirrors the app's `network_security_config.xml` (spec 13 §5.8), which Android enforces for
  * OkHttp on the device: cleartext is forbidden except for `*.onion` (the official mempool.space
  * Tor host is `http://…onion`, reached through Orbot), `*.local` and the loopback names
- * `127.0.0.1` / `localhost`. Raw LAN IPs are intentionally blocked. The [CleartextGuard]
+ * `127.0.0.1` / `localhost` for custom mempool servers/tunnels. MempoolHosts accepts both
+ * `http://127.0.0.1:port` and `http://localhost.:port` (trailing dot); removing either exception
+ * would break existing custom configurations. Media3 needs no loopback proxy.
+ * Raw LAN IPs are intentionally blocked. The [CleartextGuard]
  * enforces the same rule inside OkHttp, so it holds in JVM tests and if the manifest config
  * ever regresses.
  */

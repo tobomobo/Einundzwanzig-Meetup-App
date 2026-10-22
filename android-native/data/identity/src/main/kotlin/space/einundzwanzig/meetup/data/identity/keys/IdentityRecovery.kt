@@ -10,7 +10,7 @@ package space.einundzwanzig.meetup.data.identity.keys
  */
 interface IdentityRecovery {
     /**
-     * The recoverable identities, at most one per [RecoverySource]. Identities equal to the
+     * The recoverable identities, including overflow slots of each [RecoverySource]. Identities equal to the
      * active local key are not listed. Empty if nothing was parked.
      *
      * @throws space.einundzwanzig.meetup.data.identity.SecureStorageUnreadableException if the
@@ -27,7 +27,8 @@ interface IdentityRecovery {
      *   ([RecoveryCandidate.needsPassword]).
      * @throws space.einundzwanzig.meetup.data.identity.KeyFormatException if the copy holds no
      *   usable key or the password is missing.
-     * @throws space.einundzwanzig.meetup.core.crypto.Nip49Exception on a wrong password.
+     * @throws space.einundzwanzig.meetup.data.identity.KeyOperationException on a wrong password
+     *   or insufficient memory.
      */
     suspend fun adopt(candidate: RecoveryCandidate, password: String? = null): GeneratedKeys
 
@@ -38,7 +39,11 @@ interface IdentityRecovery {
      */
     suspend fun exportNsec(candidate: RecoveryCandidate): String
 
-    /** Deletes every identity entry of [candidate]'s source (the user dismissed the notice). */
+    /** Exports a parked password wrap without decrypting it; device authentication is required. */
+    suspend fun exportNcryptsec(candidate: RecoveryCandidate): String =
+        throw space.einundzwanzig.meetup.data.identity.KeyFormatException("No encrypted recovery key")
+
+    /** Deletes only [candidate]'s entries, preserving other identities in the same source/slot (the user dismissed the notice). */
     suspend fun discard(candidate: RecoveryCandidate)
 
     /**
@@ -79,4 +84,6 @@ data class RecoveryCandidate(
     val npub: String,
     val hasPrivateKey: Boolean,
     val needsPassword: Boolean,
+    /** 1 is the original name, 2..16 are overflow names ending in #n. */
+    val slot: Int = 1,
 )

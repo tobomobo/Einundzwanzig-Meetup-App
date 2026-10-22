@@ -102,6 +102,8 @@ import space.einundzwanzig.meetup.core.ui.component.AppLoadingIndicator
 import space.einundzwanzig.meetup.core.ui.component.AppSnackbarHost
 import space.einundzwanzig.meetup.core.ui.theme.EinundzwanzigTheme
 import space.einundzwanzig.meetup.core.ui.theme.extendedColors
+import space.einundzwanzig.meetup.data.calendar.format.displayTitle
+import space.einundzwanzig.meetup.data.calendar.format.displayLocation
 import space.einundzwanzig.meetup.data.calendar.model.CalendarItem
 import space.einundzwanzig.meetup.data.calendar.model.CalendarTypeFilter
 import space.einundzwanzig.meetup.feature.events.R
@@ -167,9 +169,9 @@ fun EventCalendarRoute(
                     val item = action.item
                     PlatformActions.addToCalendar(
                         context = context,
-                        title = item.title,
+                        title = item.displayTitle(context.resources),
                         description = item.description,
-                        location = item.location,
+                        location = item.displayLocation(context.resources),
                         begin = item.start,
                         end = item.end ?: item.start.plus(Duration.ofHours(2)),
                         allDay = item.allDay,

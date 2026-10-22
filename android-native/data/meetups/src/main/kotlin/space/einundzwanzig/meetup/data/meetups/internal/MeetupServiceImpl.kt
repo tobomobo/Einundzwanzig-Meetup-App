@@ -20,6 +20,7 @@ import space.einundzwanzig.meetup.data.badges.text.DartString
 import space.einundzwanzig.meetup.data.meetups.MeetupService
 import space.einundzwanzig.meetup.data.meetups.model.Meetup
 import space.einundzwanzig.meetup.data.meetups.portal.PortalUrls
+import space.einundzwanzig.meetup.data.meetups.portal.PortalLogoRegistry
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -28,6 +29,7 @@ import javax.inject.Singleton
 internal class MeetupServiceImpl @Inject constructor(
     private val client: OkHttpClient,
     private val log: DiagnosticLog,
+    private val logos: PortalLogoRegistry,
     @IoDispatcher private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : MeetupService {
 
@@ -73,6 +75,7 @@ internal class MeetupServiceImpl @Inject constructor(
         if (unique.size != list.size) {
             log.warn(TAG, "${list.size - unique.size} Eintrag/Eintraege mit identischer ID entfernt.")
         }
+        logos.seedFrom(unique)
         cache.value = unique
         return unique
     }

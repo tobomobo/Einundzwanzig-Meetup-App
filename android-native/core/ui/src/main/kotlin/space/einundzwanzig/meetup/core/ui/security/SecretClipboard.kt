@@ -1,5 +1,6 @@
 package space.einundzwanzig.meetup.core.ui.security
 
+import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipDescription
 import android.content.ClipboardManager
@@ -48,6 +49,9 @@ object SecretClipboard {
     /** The secret waiting to be cleared (main thread only). */
     private class PendingClear(val context: Context, val secret: String, val dueAtMillis: Long)
 
+    // copySecret stores only context.applicationContext, never an Activity or themed wrapper.
+    // Retaining it lets a due clear survive a configuration change or background/resume cycle.
+    @SuppressLint("StaticFieldLeak")
     private var pending: PendingClear? = null
     private var observerInstalled = false
     private val timer = Runnable { onTimer() }

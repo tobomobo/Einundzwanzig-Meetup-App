@@ -15,6 +15,7 @@ import space.einundzwanzig.meetup.core.common.log.AppLogger
 import space.einundzwanzig.meetup.core.l10n.R as L10nR
 import space.einundzwanzig.meetup.data.identity.Nip46ConnectResult
 import space.einundzwanzig.meetup.data.identity.Nip46Pairing
+import space.einundzwanzig.meetup.data.identity.identityErrorMessage
 import space.einundzwanzig.meetup.data.identity.SigningService
 import space.einundzwanzig.meetup.feature.profile.common.UiText
 
@@ -97,7 +98,7 @@ class BunkerConnectController(
                 throw e
             } catch (e: Exception) {
                 AppLogger.warn(TAG, "Kopplung fehlgeschlagen", e)
-                _state.update { it.copy(busy = false, error = UiText.Raw(e.message ?: e.toString())) }
+                _state.update { it.copy(busy = false, error = UiText.res(e.identityErrorMessage)) }
             }
         }
     }
@@ -126,7 +127,7 @@ class BunkerConnectController(
                 throw e
             } catch (e: Exception) {
                 AppLogger.warn(TAG, "Bunker-Verbindung fehlgeschlagen", e)
-                _state.update { it.copy(busy = false, error = UiText.Raw(e.message ?: e.toString())) }
+                _state.update { it.copy(busy = false, error = UiText.res(e.identityErrorMessage)) }
             }
         }
     }
@@ -141,7 +142,7 @@ class BunkerConnectController(
             Nip46ConnectResult.Timeout ->
                 _state.update { it.copy(busy = false, error = UiText.res(L10nR.string.bunkerTimeout)) }
             is Nip46ConnectResult.Error ->
-                _state.update { it.copy(busy = false, error = UiText.Raw(result.message)) }
+                _state.update { it.copy(busy = false, error = UiText.res(result.cause?.identityErrorMessage ?: space.einundzwanzig.meetup.data.identity.R.string.native_identity_bunker_failure)) }
         }
     }
 

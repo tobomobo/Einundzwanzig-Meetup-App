@@ -64,6 +64,26 @@ class ProfileEditViewModelTest {
     private val profileService = FakeProfileService()
     private val pictures = FakePictureImporter()
 
+    private var parked = listOf(space.einundzwanzig.meetup.data.identity.keys.RecoveryCandidate(
+        space.einundzwanzig.meetup.data.identity.keys.RecoverySource.RECOVERED, NPUB_B, true, false,
+    ))
+    private var recoveryExports = 0
+    private var recoveryRestores = 0
+    private var recoveryDiscards = 0
+    private val recovery = object : space.einundzwanzig.meetup.data.identity.keys.IdentityRecovery {
+        override suspend fun candidates() = parked
+        override suspend fun adopt(candidate: space.einundzwanzig.meetup.data.identity.keys.RecoveryCandidate, password: String?): space.einundzwanzig.meetup.data.identity.keys.GeneratedKeys {
+            recoveryRestores++
+            parked = parked - candidate
+            signing.npubValue = candidate.npub
+            keyStore.keys = StoredKeys(NSEC_A, candidate.npub)
+            return space.einundzwanzig.meetup.data.identity.keys.GeneratedKeys(NSEC_A, candidate.npub, "1".repeat(64))
+        }
+        override suspend fun exportNsec(candidate: space.einundzwanzig.meetup.data.identity.keys.RecoveryCandidate): String { recoveryExports++; return NSEC_A }
+        override suspend fun discard(candidate: space.einundzwanzig.meetup.data.identity.keys.RecoveryCandidate) { recoveryDiscards++; parked = parked - candidate }
+        override suspend fun discardAll() = Unit
+    }
+
     private val snackbars = mutableListOf<SnackbarMessage>()
     private val effects = mutableListOf<ProfileEditEffect>()
 
@@ -76,7 +96,7 @@ class ProfileEditViewModelTest {
     private fun TestScope.vm(): ProfileEditViewModel {
         val vm = ProfileEditViewModel(
             profiles, signing, keyStore, keyService, vault, meetups, platformProofs, humanity,
-            profileService, FakeAuthenticator(), pictures, backgroundScope,
+            profileService, FakeAuthenticator(), pictures, backgroundScope, recovery,
         )
         vm.encodeDispatcher = dispatcher
         vm.ncryptsecEncoder = { priv, pw -> "ncryptsec1-$pw-${priv.take(4)}" }
@@ -129,7 +149,7 @@ class ProfileEditViewModelTest {
     fun `load error shows the error state and retry recovers`() = runTest(dispatcher) {
         profiles.loadError = IllegalStateException("Speicher kaputt")
         val vm = vm()
-        assertEquals("Speicher kaputt", vm.state.value.loadError)
+        assertEquals(space.einundzwanzig.meetup.data.identity.R.string.native_identity_generic, vm.state.value.loadErrorResource)
         profiles.loadError = null
         vm.onAction(ProfileEditAction.Retry)
         advanceUntilIdle()
@@ -299,15 +319,15 @@ class ProfileEditViewModelTest {
     }
 
     @Test
-    fun `invalid nsec keeps the import dialog open and shows the raw error`() = runTest(dispatcher) {
-        keyService.importError = IllegalArgumentException("Ungültiger nsec Key: x")
+    fun `invalid nsec keeps the import dialog open and shows a localized error`() = runTest(dispatcher) {
+        keyService.importError = space.einundzwanzig.meetup.data.identity.KeyFormatException("Ungültiger nsec Key: x")
         val vm = vm()
         vm.onAction(ProfileEditAction.OpenImportNsec)
         vm.onAction(ProfileEditAction.ImportNsec("nsec1bad"))
         advanceUntilIdle()
         assertEquals(ProfileDialog.ImportNsec, vm.state.value.dialog)
         val msg = snackbars.last()
-        assertEquals(UiText.Raw("Ungültiger nsec Key: x"), msg.text)
+        assertEquals(UiText.Res(space.einundzwanzig.meetup.data.identity.R.string.native_identity_key_invalid), msg.text)
         assertEquals(Tone.Error, msg.tone)
         assertTrue(msg.dismissable)
     }
@@ -481,7 +501,7 @@ class ProfileEditViewModelTest {
         signing.amberResult = AmberConnectResult.Error("kaputt")
         vm.onAction(ProfileEditAction.ConnectAmber)
         advanceUntilIdle()
-        assertEquals(UiText.Res(L10nR.string.errorAmber, listOf("kaputt")), snackbars.last().text)
+        assertEquals(UiText.Res(space.einundzwanzig.meetup.data.identity.R.string.native_identity_signer_unreadable), snackbars.last().text)
         assertEquals(Tone.Error, snackbars.last().tone)
     }
 
@@ -527,7 +547,7 @@ class ProfileEditViewModelTest {
         vm.onAction(ProfileEditAction.ConnectBunker)
         vm.onAction(ProfileEditAction.Bunker(BunkerAction.StartSignerApp))
         advanceUntilIdle()
-        assertEquals(UiText.Raw("Keine Relays"), vm.bunker.state.value.error)
+        assertEquals(UiText.Res(space.einundzwanzig.meetup.data.identity.R.string.native_identity_generic), vm.bunker.state.value.error)
         assertFalse(vm.bunker.state.value.busy)
     }
 
@@ -610,4 +630,67 @@ class ProfileEditViewModelTest {
         assertNull(vm.state.value.localPicture)
         assertEquals(L10nR.string.homeImageLoadError, snackbars.single().resId())
     }
+    @Test
+    fun `recovery export requires confirmation and successful device authentication`() = runTest(dispatcher) {
+        val vm = vm()
+        val candidate = vm.state.value.recoveryCandidates.single()
+        vm.onAction(ProfileEditAction.RecoveryRequest(candidate, RecoveryOperation.EXPORT))
+        assertEquals(0, recoveryExports)
+        vm.onAction(ProfileEditAction.RecoveryConfirmed(null))
+        assertEquals(AuthPurpose.RECOVERY, vm.state.value.pendingAuth)
+        vm.onAction(ProfileEditAction.AuthResult(AuthPurpose.RECOVERY, false))
+        advanceUntilIdle()
+        assertEquals(0, recoveryExports)
+        assertNull(vm.state.value.dialog)
+        vm.onAction(ProfileEditAction.RecoveryRequest(candidate, RecoveryOperation.EXPORT))
+        vm.onAction(ProfileEditAction.RecoveryConfirmed(null))
+        vm.onAction(ProfileEditAction.AuthResult(AuthPurpose.RECOVERY, true))
+        advanceUntilIdle()
+        assertEquals(1, recoveryExports)
+        assertTrue(vm.state.value.dialog is ProfileDialog.NsecBackup)
+        assertFalse(vm.state.value.dialog.toString().contains(NSEC_A))
+        assertEquals(listOf(candidate), vm.state.value.recoveryCandidates)
+    }
+
+    @Test
+    fun `recovery restore clears the vault switches local mode and removes the chosen notice`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onAction(ProfileEditAction.RecoveryRequest(parked.single(), RecoveryOperation.RESTORE))
+        vm.onAction(ProfileEditAction.RecoveryConfirmed(null))
+        vm.onAction(ProfileEditAction.AuthResult(AuthPurpose.RECOVERY, true))
+        advanceUntilIdle()
+        assertEquals(1, recoveryRestores)
+        assertEquals(1, vault.clearCalls)
+        assertEquals(SigningMode.LOCAL, vm.state.value.signingMode)
+        assertTrue(vm.state.value.recoveryCandidates.isEmpty())
+        assertFalse(vm.state.value.recoveryBusy)
+    }
+
+    @Test
+    fun `discarding a recovery key also requires device authentication`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onAction(ProfileEditAction.RecoveryRequest(parked.single(), RecoveryOperation.DISCARD))
+        vm.onAction(ProfileEditAction.RecoveryConfirmed(null))
+        assertEquals(0, recoveryDiscards)
+        vm.onAction(ProfileEditAction.AuthResult(AuthPurpose.RECOVERY, true))
+        advanceUntilIdle()
+        assertEquals(1, recoveryDiscards)
+        assertTrue(vm.state.value.recoveryCandidates.isEmpty())
+    }
+
+    @Test
+    fun `scrypt export memory failure shows a localized error and releases busy state`() = runTest(dispatcher) {
+        withLocalKey()
+        val vm = vm()
+        vm.ncryptsecEncoder = { _, _ -> throw OutOfMemoryError("simulated") }
+        vm.onAction(ProfileEditAction.ExportEncrypted)
+        vm.onAction(ProfileEditAction.AuthResult(AuthPurpose.EXPORT, true))
+        advanceUntilIdle()
+        vm.onAction(ProfileEditAction.ExportPassword("pw"))
+        advanceUntilIdle()
+        assertFalse(vm.state.value.isExporting)
+        assertEquals(space.einundzwanzig.meetup.data.identity.R.string.native_identity_key_memory, snackbars.last().resId())
+        assertEquals(Tone.Error, snackbars.last().tone)
+    }
+
 }

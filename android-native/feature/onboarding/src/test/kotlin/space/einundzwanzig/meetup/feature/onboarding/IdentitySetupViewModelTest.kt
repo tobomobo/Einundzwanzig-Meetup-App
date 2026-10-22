@@ -21,6 +21,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import space.einundzwanzig.meetup.core.l10n.R as L10nR
+import space.einundzwanzig.meetup.data.identity.R as IdentityR
+import space.einundzwanzig.meetup.data.identity.IdentityStorageException
+import space.einundzwanzig.meetup.data.identity.IdentityError
+import space.einundzwanzig.meetup.data.identity.nip46.Nip46RemoteException
 import space.einundzwanzig.meetup.data.identity.AmberConnectResult
 import space.einundzwanzig.meetup.data.identity.KeyFormatException
 import space.einundzwanzig.meetup.data.identity.LocalEasyAuthException
@@ -207,12 +211,12 @@ class IdentitySetupViewModelTest {
     }
 
     @Test
-    fun `register error shows the service text`() = runTest(dispatcher) {
-        easyAuth.registerFailure = LocalEasyAuthException("Schlüssel konnte nicht gespeichert werden.")
+    fun `register storage error uses a localized reason`() = runTest(dispatcher) {
+        easyAuth.registerFailure = IdentityStorageException("Schlüssel konnte nicht gespeichert werden.")
         val vm = create()
         vm.fillNew()
         vm.onAction(SetupAction.Register)
-        assertEquals(UiText.Raw("Schlüssel konnte nicht gespeichert werden."), vm.s.error)
+        assertEquals(UiText.res(IdentityR.string.native_identity_storage), vm.s.error)
         assertFalse(vm.s.busy)
         assertEquals(SetupStep.NEW, vm.s.step)
     }
@@ -528,12 +532,12 @@ class IdentitySetupViewModelTest {
     }
 
     @Test
-    fun `import error shows the text without a type prefix`() = runTest(dispatcher) {
-        keys.failure = KeyFormatException("FormatException: Ungültiges Format. Der Key muss mit \"nsec1\" beginnen.")
+    fun `import errors use the localized key-format reason`() = runTest(dispatcher) {
+        keys.failure = KeyFormatException("FormatException: Ungültiges Format. Der Key muss mit \"nsec1\" beginnen.", reason = IdentityError.NSEC_PREFIX)
         val vm = create()
         vm.onAction(SetupAction.ImportChanged("xyz"))
         vm.onAction(SetupAction.ImportKey)
-        assertEquals(UiText.Raw("Ungültiges Format. Der Key muss mit \"nsec1\" beginnen."), vm.s.error)
+        assertEquals(UiText.res(IdentityR.string.native_identity_key_prefix), vm.s.error)
         assertFalse(vm.s.busy)
         assertEquals(0, vault.clearAllCalls)
     }
@@ -706,9 +710,9 @@ class IdentitySetupViewModelTest {
         vm.onAction(SetupAction.Bunker(BunkerAction.ConnectPasted))
         assertEquals(UiText.res(L10nR.string.bunkerTimeout), vm.bunkerState.value.error)
         assertTrue(vm.s.showBunkerSheet)
-        signing.bunkerResult = Nip46ConnectResult.Error("Der Signer hat abgelehnt: nein")
+        signing.bunkerResult = Nip46ConnectResult.Error("Der Signer hat abgelehnt: nein", Nip46RemoteException("nein"))
         vm.onAction(SetupAction.Bunker(BunkerAction.ConnectPasted))
-        assertEquals(UiText.Raw("Der Signer hat abgelehnt: nein"), vm.bunkerState.value.error)
+        assertEquals(UiText.res(IdentityR.string.native_identity_bunker_rejected), vm.bunkerState.value.error)
         assertFalse(vm.bunkerState.value.busy)
     }
 
@@ -749,7 +753,7 @@ class IdentitySetupViewModelTest {
         vm.onAction(SetupAction.ConnectBunker)
         vm.onAction(SetupAction.Bunker(BunkerAction.StartSignerApp))
         assertEquals(BunkerStep.SIGNER_APP, vm.bunkerState.value.step)
-        assertEquals(UiText.Raw("Relays nicht erreichbar"), vm.bunkerState.value.error)
+        assertEquals(UiText.res(IdentityR.string.native_identity_generic), vm.bunkerState.value.error)
         assertFalse(vm.bunkerState.value.busy)
     }
 
@@ -769,7 +773,7 @@ class IdentitySetupViewModelTest {
         assertEquals("x", IdentitySetupViewModel.messageOf(IllegalStateException("Exception: x")))
         assertNull(IdentitySetupViewModel.passkeyError(PasskeyPrfException(PasskeyPrfException.CANCELLED)))
         assertEquals(
-            UiText.Raw("Zeitüberschreitung"),
+            UiText.res(IdentityR.string.native_identity_generic),
             IdentitySetupViewModel.passkeyError(PasskeyPrfException(PasskeyPrfException.FAILED, "Zeitüberschreitung")),
         )
     }

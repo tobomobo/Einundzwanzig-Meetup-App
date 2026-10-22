@@ -1,0 +1,27 @@
+<resources>
+    <string name="native_identity_key_invalid">Ungültiger privater Schlüssel. Bitte den vollständigen Schlüssel prüfen.</string>
+    <string name="native_identity_key_prefix">Der Schlüssel muss mit nsec1 beginnen.</string>
+    <string name="native_identity_key_encrypted">Der verschlüsselte Schlüssel konnte nicht geöffnet werden. Bitte Schlüssel und Passwort prüfen.</string>
+    <string name="native_identity_key_memory">Nicht genug Arbeitsspeicher für die Schlüssel-Verschlüsselung. Bitte andere Apps schließen und erneut versuchen.</string>
+    <string name="native_identity_name_required">Bitte einen Namen wählen.</string>
+    <string name="native_identity_password_short">Das Passwort muss mindestens 8 Zeichen haben.</string>
+    <string name="native_identity_no_local_key">Kein lokaler privater Schlüssel vorhanden.</string>
+    <string name="native_identity_no_saved_key">Kein gespeicherter Schlüssel vorhanden.</string>
+    <string name="native_identity_no_passkey">Kein gespeicherter Passkey vorhanden.</string>
+    <string name="native_identity_sign_cancelled">Signaturanfrage abgebrochen.</string>
+    <string name="native_identity_amber_missing">Amber ist nicht installiert.</string>
+    <string name="native_identity_wrong_account">Der Signer hat mit einem anderen Konto signiert. Bitte das verbundene Konto wählen.</string>
+    <string name="native_identity_signer_no_event">Der Signer hat kein signiertes Ereignis zurückgegeben.</string>
+    <string name="native_identity_signer_kind">Der Signer hat die Ereignisart verändert. Die Antwort wurde verworfen.</string>
+    <string name="native_identity_signer_content">Der Signer hat den Inhalt verändert. Die Antwort wurde verworfen.</string>
+    <string name="native_identity_signer_signature">Die Signatur des Signers ist ungültig.</string>
+    <string name="native_identity_signer_unreadable">Die Antwort des Signers konnte nicht gelesen werden.</string>
+    <string name="native_identity_bunker_timeout">Der Signer hat nicht geantwortet. Bitte die Signer-App öffnen und erneut versuchen.</string>
+    <string name="native_identity_bunker_rejected">Die Signaturanfrage wurde abgewiesen. Bitte die Freigabe im Signer prüfen.</string>
+    <string name="native_identity_bunker_failure">Die Verbindung zum Signer ist fehlgeschlagen. Bitte Adresse, Relay und Freigabe prüfen.</string>
+    <string name="native_identity_signer_no_key">Kein Schlüssel für den gewählten Signer verbunden. Bitte erneut verbinden.</string>
+    <string name="native_identity_no_session">Keine Signer-Sitzung gespeichert. Bitte den Signer erneut verbinden.</string>
+    <string name="native_identity_web_only">Browsererweiterungen sind nur in der Web-App verfügbar.</string>
+    <string name="native_identity_storage">Der sichere Speicher ist nicht verfügbar. Bitte erneut versuchen; vorhandene Schlüssel bleiben erhalten.</string>
+    <string name="native_identity_generic">Der Vorgang ist fehlgeschlagen. Bitte erneut versuchen.</string>
+</resources>

@@ -63,6 +63,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,6 +73,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
@@ -156,6 +158,7 @@ internal fun ReputationQrRoute(viewModel: ReputationQrViewModel = hiltViewModel(
     val localHost = remember { SnackbarHostState() }
     val host = appHost ?: localHost
     val context = LocalContext.current
+    val resources by rememberUpdatedState(LocalResources.current)
     val scope = rememberCoroutineScope()
     val capturer = rememberComposableCapturer()
     var cardSize by remember { mutableStateOf(DpSize.Zero) }
@@ -163,16 +166,16 @@ internal fun ReputationQrRoute(viewModel: ReputationQrViewModel = hiltViewModel(
     var sharing by remember { mutableStateOf(false) }
     val fontScale = LocalDensity.current.fontScale
 
-    LaunchedEffect(viewModel) {
+    LaunchedEffect(viewModel, host) {
         viewModel.events.collect { event ->
             when (event) {
                 is ReputationQrEvent.Published -> host.showAppSnackbar(
-                    message = publishMessage(context, event.result),
+                    message = publishMessage(resources, event.result),
                     tone = if (event.result.success) Tone.Success else Tone.Error,
                     durationMillis = AppSnackbarDurations.Medium,
                 )
                 ReputationQrEvent.SignFailed -> host.showAppSnackbar(
-                    message = context.getString(R.string.native_repSignFailed),
+                    message = resources.getString(R.string.native_repSignFailed),
                     tone = Tone.Error,
                     durationMillis = AppSnackbarDurations.VeryLong,
                     withDismissAction = true,
@@ -200,7 +203,7 @@ internal fun ReputationQrRoute(viewModel: ReputationQrViewModel = hiltViewModel(
                             } catch (e: CancellationException) {
                                 throw e
                             } catch (e: Exception) {
-                                host.showAppSnackbar(context.getString(L10nR.string.repShareError, e.toString()), Tone.Error)
+                                host.showAppSnackbar(resources.getString(L10nR.string.repShareError, e.toString()), Tone.Error)
                             } finally {
                                 sharing = false
                             }
@@ -216,9 +219,9 @@ internal fun ReputationQrRoute(viewModel: ReputationQrViewModel = hiltViewModel(
     )
 }
 
-private fun publishMessage(context: android.content.Context, result: PublishResult): String {
+private fun publishMessage(resources: android.content.res.Resources, result: PublishResult): String {
     val (res, args) = result.toUiText()
-    return context.getString(res, *args)
+    return resources.getString(res, *args)
 }
 
 @Composable

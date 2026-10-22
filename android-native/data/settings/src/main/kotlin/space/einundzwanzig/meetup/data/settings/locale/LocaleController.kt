@@ -50,8 +50,8 @@ interface LocaleController {
     suspend fun syncWithSystem()
 
     /**
-     * Stored language code read synchronously, for `attachBaseContext` (runs before DI and
-     * coroutines are available). Blocks on the first DataStore read; never call it elsewhere.
+     * Last asynchronously loaded language code, for `attachBaseContext`. Returns system/null
+     * before the first read completes and never blocks on storage or Flutter migration.
      */
     fun currentBlocking(): String?
 

@@ -267,6 +267,19 @@ class ReputationScreensUiTest {
     }
 
     @Test
+    fun `format only verify result does not claim a checked signature`() {
+        val state = ReputationVerifyUiState(
+            input = "21rep::$OTHER_NPUB::telegram::x::sig=${"a".repeat(128)}",
+            result = ProofVerifyResult(VerifyLevel.SIGNATURE_ONLY, VerifyMessage.NoReputation, npub = OTHER_NPUB),
+        )
+        show { ReputationVerifyScreen(state, onAction = {}, onPaste = {}, onBack = {}) }
+        rule.onNodeWithText(s(R.string.native_rvFormatOnly), substring = true, ignoreCase = true).performScrollTo().assertExists()
+        rule.onNodeWithText(s(R.string.native_rvMsgNoReputation)).performScrollTo().assertExists()
+        rule.onNodeWithText(s(L10nR.string.rvSignatureOnly), substring = true, ignoreCase = true).assertDoesNotExist()
+        rule.onNodeWithText("Signatur gültig", substring = true).assertDoesNotExist()
+    }
+
+    @Test
     fun `verify shows the status line of the running layer loader`() {
         val state = ReputationVerifyUiState(
             input = OTHER_NPUB,

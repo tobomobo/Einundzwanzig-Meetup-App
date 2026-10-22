@@ -42,7 +42,7 @@ class DiagnosticLogRouteTest {
     private val navigator = BackRecorder()
 
     private fun show(log: FakeDiagnosticLog, writeClip: ((Context, String) -> Unit)? = null) {
-        val vm = DiagnosticLogViewModel(log, FakeNip44Probe())
+        val vm = DiagnosticLogViewModel(log, FakeNip44Probe(), FakeMigration())
         rule.setContent {
             EinundzwanzigTheme {
                 CompositionLocalProvider(LocalNavigator provides navigator) {

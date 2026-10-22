@@ -21,4 +21,5 @@
     <string name="native_onboarding_bunker_scan_invalid">Kein bunker://-Code erkannt.</string>
     <string name="native_onboarding_meetup_favorite">Favorit</string>
     <string name="native_onboarding_meetup_not_favorite">Kein Favorit</string>
+    <string name="native_onboarding_storage_diagnostics">Diagnose und alte Daten übernehmen</string>
 </resources>

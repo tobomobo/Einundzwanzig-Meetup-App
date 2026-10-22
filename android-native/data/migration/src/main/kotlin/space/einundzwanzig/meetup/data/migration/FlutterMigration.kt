@@ -16,7 +16,7 @@ package space.einundzwanzig.meetup.data.migration
  * State lives in `noBackupFilesDir/flutter_migration/state.json` (never in `app_prefs`), so an app
  * reset cannot trigger a re-import. Nothing here ever logs a value (spec 14 §4.10).
  */
-interface FlutterMigration {
+interface FlutterMigration : space.einundzwanzig.meetup.core.data.migration.LegacySecretStatus {
 
     /** Completes when the current process has finished (or skipped) the migration. */
     val gate: MigrationGate
@@ -63,7 +63,7 @@ interface FlutterMigration {
      * the key is absent natively); for `NOT_STARTED` with Flutter files present (an attempt
      * aborted before finishing) every legacy secret name; otherwise empty.
      */
-    suspend fun pendingLegacySecrets(): Set<String>
+    override suspend fun pendingLegacySecrets(): Set<String>
 
     /**
      * Deletes the Flutter legacy files, Keystore aliases and the snapshot when the migration is
@@ -99,13 +99,7 @@ interface FlutterMigration {
  * Barrier for code that must not touch `KeyValueStore`/`SecureStore` before the Flutter data has
  * been imported (widgets, workers, anything that can start the process without an activity).
  */
-interface MigrationGate {
-    /** `true` once the migration of this process has finished (successfully or not). */
-    val isComplete: Boolean
-
-    /** Suspends until the migration has finished; starts it if nobody has yet. Never throws. */
-    suspend fun await()
-}
+interface MigrationGate : space.einundzwanzig.meetup.core.data.migration.MigrationGate
 
 /**
  * Optional hook run after an import attempt wrote data (state `IMPORTED` or

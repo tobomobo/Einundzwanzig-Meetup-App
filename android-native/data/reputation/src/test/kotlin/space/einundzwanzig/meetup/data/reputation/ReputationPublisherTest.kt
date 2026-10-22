@@ -1,6 +1,7 @@
 package space.einundzwanzig.meetup.data.reputation
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -42,6 +43,18 @@ import java.time.ZoneOffset
 /** `ReputationPublisher.publish` order of operations (spec 04 §5.2) and the native FIXes. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReputationPublisherTest {
+
+    @Test
+    fun identitySwitchDuringLoadingNeverPublishesOldProofsUnderNewKey() = runTest {
+        val h = Harness(this)
+        h.social.delayMs = 1000
+        val pending = async { h.publisher.publish(badges, force = true) }
+        testScheduler.runCurrent()
+        h.signer.keyPair = space.einundzwanzig.meetup.core.crypto.KeyPair.generate()
+        testScheduler.advanceUntilIdle()
+        assertTrue(pending.await() is PublishResult.Error)
+        assertTrue(h.relays.published.isEmpty())
+    }
 
     private val relayA = RelayConfig.DEFAULT_RELAYS[0]
     private val relayB = RelayConfig.DEFAULT_RELAYS[1]

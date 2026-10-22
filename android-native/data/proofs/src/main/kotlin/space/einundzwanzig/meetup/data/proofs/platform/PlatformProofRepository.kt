@@ -55,6 +55,9 @@ sealed interface ProofCreateResult {
  * did not touch are written back verbatim (unknown keys and malformed entries survive).
  * Every read-modify-write runs in one atomic `KeyValueStore.edit` transaction, so it cannot
  * interleave with `HumanityKeys.clearIdentityProofs` (identity switch, spec 06 §14 R20).
+ * Commits also compare the durable identity generation and its intended npub inside that transaction. Native
+ * ownership metadata is checked by all readers and publishers; legacy proof JSON and backup
+ * entries retain their original format and are adopted by the current identity.
  * All calls are main-safe (work runs on the default dispatcher).
  *
  * After [createProof]/[removeProof] the caller republishes the reputation event
@@ -106,6 +109,6 @@ interface PlatformProofRepository {
      */
     suspend fun unionRaw(incoming: List<JsonElement>): Boolean
 
-    /** Removes the key (identity switch, app reset). @return `false` if the write failed. */
+    /** Removes the current identity's key. @return `false` if the write failed or was fenced. */
     suspend fun clear(): Boolean
 }

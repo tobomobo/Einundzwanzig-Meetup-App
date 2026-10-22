@@ -8,6 +8,8 @@ import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoSet
 import space.einundzwanzig.meetup.core.common.AppStartupTask
 import space.einundzwanzig.meetup.data.identity.SigningService
+import space.einundzwanzig.meetup.data.identity.IdentityChangeHook
+import space.einundzwanzig.meetup.data.proofs.internal.ProofIdentityChangeHook
 import space.einundzwanzig.meetup.data.proofs.humanity.HumanityProofRepository
 import space.einundzwanzig.meetup.data.proofs.internal.DefaultHumanityProofRepository
 import space.einundzwanzig.meetup.data.proofs.internal.DefaultNip05Service
@@ -28,6 +30,10 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 internal abstract class ProofsModule {
+
+    @Binds
+    @IntoSet
+    abstract fun proofIdentityChangeHook(impl: ProofIdentityChangeHook): IdentityChangeHook
 
     @Binds
     @Singleton

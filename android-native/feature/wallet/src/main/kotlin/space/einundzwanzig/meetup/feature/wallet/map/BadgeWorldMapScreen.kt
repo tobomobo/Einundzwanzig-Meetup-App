@@ -47,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -114,6 +115,7 @@ internal fun WorldMapRouteContent(viewModel: WorldMapViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val navigator = LocalNavigator.current
     val context = LocalContext.current
+    val resources = LocalResources.current
     val scope = rememberCoroutineScope()
     val first = state.located.firstOrNull()
     val camera = rememberOsmCameraState(
@@ -143,7 +145,7 @@ internal fun WorldMapRouteContent(viewModel: WorldMapViewModel) {
                                 context = context,
                                 bitmap = bitmap,
                                 fileName = WorldMap.fileName(System.currentTimeMillis()),
-                                text = context.getString(L10nR.string.mapShareText, count.toString()),
+                                text = resources.getString(L10nR.string.mapShareText, count.toString()),
                             )
                             // Silent as in Flutter, but keep a diagnostic entry.
                             if (!shared) AppLogger.warn("Wallet", "Weltkarte teilen: kein Ziel zum Teilen")

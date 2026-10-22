@@ -15,7 +15,7 @@ sealed interface AmberConnectResult {
     data object Cancelled : AmberConnectResult
 
     /** Anything else; [message] is the user-facing (German) reason. */
-    data class Error(val message: String) : AmberConnectResult
+    data class Error(val message: String, val cause: Throwable? = null) : AmberConnectResult
 }
 
 /** Outcome of [SigningService.connectNip07]. Always [Missing] on Android (web only). */
@@ -30,7 +30,7 @@ sealed interface Nip07ConnectResult {
     data object Rejected : Nip07ConnectResult
 
     /** Anything else. */
-    data class Error(val message: String) : Nip07ConnectResult
+    data class Error(val message: String, val cause: Throwable? = null) : Nip07ConnectResult
 }
 
 /** Outcome of a NIP-46 connection attempt. */
@@ -42,7 +42,7 @@ sealed interface Nip46ConnectResult {
     data object Timeout : Nip46ConnectResult
 
     /** Anything else; [message] is the raw service text (spec 01 §8.10). */
-    data class Error(val message: String) : Nip46ConnectResult
+    data class Error(val message: String, val cause: Throwable? = null) : Nip46ConnectResult
 }
 
 /**

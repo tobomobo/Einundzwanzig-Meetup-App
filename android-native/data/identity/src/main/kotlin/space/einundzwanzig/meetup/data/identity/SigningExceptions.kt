@@ -6,7 +6,7 @@ import space.einundzwanzig.meetup.data.identity.signer.SignerActor
  * Every signer failure the app shows to the user (Dart `SigningException`). [message] is the
  * user-facing German text of the Flutter app. [error] is the machine-readable reason with its
  * arguments, so features can show the localized `err*` string (spec 01 §8.10) without parsing
- * German text; `null` means "no specific resource, show [message]".
+ * German text; `null` uses a generic localized message rather than exposing exception text.
  */
 open class SigningException(
     override val message: String,
@@ -101,9 +101,9 @@ class SecureStorageUnreadableException(
 class IdentityStorageException(message: String) : SigningException(message)
 
 /** Invalid `nsec` / private key input (Dart `FormatException`, without the type prefix). */
-class KeyFormatException(message: String, cause: Throwable? = null) : SigningException(message, cause)
+class KeyFormatException(message: String, cause: Throwable? = null, val reason: IdentityError = IdentityError.INVALID_KEY) : SigningException(message, cause)
 
 /** User-facing failure of the password / passkey registration and unlock (Dart `LocalEasyAuthException`). */
-class LocalEasyAuthException(override val message: String) : Exception(message) {
+class LocalEasyAuthException(override val message: String, val reason: IdentityError = IdentityError.NO_LOCAL_KEY) : Exception(message) {
     override fun toString(): String = message
 }

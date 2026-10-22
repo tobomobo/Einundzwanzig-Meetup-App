@@ -17,6 +17,7 @@ internal class DefaultSecureKeyStore @Inject constructor(
     private val secure: SecureStore,
     private val prefs: KeyValueStore,
     private val changes: IdentityChanges,
+    private val identitySwitch: IdentitySwitchBarrier? = null,
 ) : SecureKeyStore {
 
     private val migrationMutex = Mutex()
@@ -54,6 +55,7 @@ internal class DefaultSecureKeyStore @Inject constructor(
 
     override suspend fun saveKeys(nsec: String, npub: String, privHex: String) {
         ensureMigrated()
+        identitySwitch?.beforeChange(npub)
         secure.writeAllOrThrow(
             linkedMapOf(IdentityKeys.NSEC to nsec, IdentityKeys.NPUB to npub, IdentityKeys.PRIV_HEX to privHex),
         )
@@ -91,6 +93,7 @@ internal class DefaultSecureKeyStore @Inject constructor(
 
     override suspend fun deleteKeys() {
         ensureMigrated()
+        identitySwitch?.beforeChange(null)
         try {
             secure.deleteOrThrow(IdentityKeys.NSEC)
             secure.deleteOrThrow(IdentityKeys.NPUB)

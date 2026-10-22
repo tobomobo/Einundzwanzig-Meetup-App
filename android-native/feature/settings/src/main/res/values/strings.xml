@@ -32,4 +32,22 @@
     <string name="native_log_clear">Log leeren</string>
     <!-- Native-only: the clipboard rejected the log (too large for Binder). German like the rest of the screen. -->
     <string name="native_log_copy_failed">Log konnte nicht kopiert werden</string>
+    <string name="native_migration_title">Datenübernahme aus Flutter</string>
+    <string name="native_migration_not_started">Übernahme noch nicht abgeschlossen.</string>
+    <string name="native_migration_not_needed">Keine alten Flutter-Daten vorhanden.</string>
+    <string name="native_migration_imported">Datenübernahme abgeschlossen.</string>
+    <string name="native_migration_pending">Einige alte Schlüssel sind noch nicht lesbar. Neue Schlüssel werden erst nach deiner ausdrücklichen Freigabe erlaubt.</string>
+    <string name="native_migration_cleaned">Alte Flutter-Daten wurden entfernt.</string>
+    <string name="native_migration_attempts">Versuche: %1$d</string>
+    <string name="native_migration_failed_keys">Noch offen:
+%1$s</string>
+    <string name="native_migration_recovered">Gesicherte Kopien (im Profil wiederherstellen):
+%1$s</string>
+    <string name="native_migration_warnings">Diagnosehinweise:
+%1$s</string>
+    <string name="native_migration_error">Datenübernahme nicht verfügbar. Bitte erneut versuchen.</string>
+    <string name="native_migration_retry">Alte Daten erneut übernehmen</string>
+    <string name="native_migration_abandon">Offene alte Schlüssel aufgeben</string>
+    <string name="native_migration_abandon_confirm">Die noch nicht lesbaren alten Schlüssel werden nicht mehr als ausstehend geschützt. Die App darf danach neue Identitäten und Schlüssel anlegen. Alte Badges oder Identitäten können ohne den ursprünglichen Schlüssel unzugänglich bleiben. Die alten Dateien bleiben für einen späteren manuellen Versuch erhalten. Wirklich fortfahren?</string>
+    <string name="native_migration_cancel">Abbrechen</string>
 </resources>

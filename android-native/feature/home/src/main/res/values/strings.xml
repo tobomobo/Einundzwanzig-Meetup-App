@@ -60,4 +60,5 @@
     <string name="native_home_unread_cd">%1$s ungelesen</string>
     <string name="native_home_nostr_new">Neu</string>
     <string name="native_home_logo">Einundzwanzig</string>
+    <string name="native_home_token_not_stored">Token konnte nicht gespeichert werden</string>
 </resources>

@@ -79,3 +79,14 @@ the missing-FragmentActivity path), `ProfileEditScreenTest` (26, Robolectric Com
 ncryptsec sheet, picker and bunker sheet), `RelaySettingsViewModelTest` (6, incl. a stale relay test
 after reopening the dialog), `RelaySettingsScreenTest` (7), `SnackbarEffectTest` (3, replace drops
 a queued message). The importer itself is tested in `:data:profile` (`LocalPictureImporterTest`).
+
+## Migration recovery and identity safety
+
+The profile offers parked Flutter identities (including overflow slots) for authenticated restore,
+export or discard. Confirmation precedes device authentication; passwords live only in ordinary
+memory, and exported keys use secure windows and SecretClipboard. Recovery remains accessible
+when the active identity cannot be loaded. Restoring clears stale vault wraps before enabling
+local signing. The data-layer IdentityChangeHook runs synchronously before identity persistence;
+the app binds proof cleanup and must throw if that cleanup fails. Key errors use the shared typed
+identity message resources in German, English and Spanish, including scrypt memory failures.
+The profile avatar uses the Nostr picture; local gallery selection belongs to Home.

@@ -98,7 +98,9 @@ import space.einundzwanzig.meetup.core.ui.component.AppLargeTopBar
 import space.einundzwanzig.meetup.core.ui.component.AppSnackbarHost
 import space.einundzwanzig.meetup.core.ui.component.FullScreenLoading
 import space.einundzwanzig.meetup.core.ui.component.GlassCard
+import space.einundzwanzig.meetup.core.ui.component.LocalAppSnackbarController
 import space.einundzwanzig.meetup.core.ui.component.LocalAppSnackbarHostState
+import space.einundzwanzig.meetup.core.ui.component.AppSnackbarDurations
 import space.einundzwanzig.meetup.core.ui.component.SectionHeader
 import space.einundzwanzig.meetup.core.ui.component.Tone
 import space.einundzwanzig.meetup.core.ui.component.showAppSnackbar
@@ -107,6 +109,7 @@ import space.einundzwanzig.meetup.core.ui.theme.EinundzwanzigTheme
 import space.einundzwanzig.meetup.core.ui.theme.MonoStyle
 import space.einundzwanzig.meetup.core.ui.theme.extendedColors
 import space.einundzwanzig.meetup.data.proofs.platform.PlatformCatalog
+import space.einundzwanzig.meetup.data.proofs.platform.ProofCreateResult
 import space.einundzwanzig.meetup.data.proofs.platform.PlatformProof
 import space.einundzwanzig.meetup.feature.proofs.R
 import space.einundzwanzig.meetup.core.l10n.R as L10nR
@@ -129,6 +132,7 @@ internal fun PlatformProofsRoute(viewModel: PlatformProofsViewModel = hiltViewMo
     val localHost = remember { SnackbarHostState() }
     val host = appHost ?: localHost
     val resources = LocalContext.current.resources
+    val controller = LocalAppSnackbarController.current
 
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
@@ -137,7 +141,7 @@ internal fun PlatformProofsRoute(viewModel: PlatformProofsViewModel = hiltViewMo
                     // Flutter shows the snackbar on the root messenger and then pops the screen.
                     // Only the app host outlives this screen; a local fallback host would leave
                     // composition with it, so then the screen just closes.
-                    if (appHost != null) {
+                    if (appHost != null && controller == null) {
                         viewModel.showLinkSavedOnAppHost(appHost, resources.getString(L10nR.string.ppLinkSaved))
                     }
                     navigator.back()
@@ -154,7 +158,25 @@ internal fun PlatformProofsRoute(viewModel: PlatformProofsViewModel = hiltViewMo
 
     PlatformProofsScreen(
         state = state,
-        onAction = viewModel::onAction,
+        onAction = { action ->
+            if (action == PlatformProofsAction.Create && controller != null) {
+                viewModel.create { result ->
+                    when (result) {
+                        is ProofCreateResult.Success -> controller.show(
+                            resources.getString(L10nR.string.ppLinkSaved), Tone.Success,
+                        )
+                        is ProofCreateResult.Failure -> controller.show(
+                            createErrorMessage(resources, result.error, result.detail),
+                            Tone.Error,
+                            AppSnackbarDurations.VeryLong,
+                            withDismissAction = true,
+                        )
+                    }
+                }
+            } else {
+                viewModel.onAction(action)
+            }
+        },
         onBack = navigator::back,
         snackbarHostState = if (appHost == null) localHost else null,
     )

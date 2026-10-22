@@ -20,6 +20,8 @@ internal class DefaultNostrKeyService @Inject constructor(
     @param:DefaultDispatcher private val cpu: CoroutineDispatcher,
 ) : NostrKeyService {
 
+    internal var decryptKey: (String, String) -> String = Nip49::decrypt
+
     override suspend fun generateKeyPair(): GeneratedKeys {
         return store(KeyPair.generate().privateKeyHex)
     }
@@ -27,7 +29,7 @@ internal class DefaultNostrKeyService @Inject constructor(
     override suspend fun importNsec(nsec: String): GeneratedKeys {
         val trimmed = nsec.dartTrim()
         if (!trimmed.startsWith("nsec1")) {
-            throw KeyFormatException("Ungültiges Format. Der Key muss mit \"nsec1\" beginnen.")
+            throw KeyFormatException("Ungültiges Format. Der Key muss mit \"nsec1\" beginnen.", reason = space.einundzwanzig.meetup.data.identity.IdentityError.NSEC_PREFIX)
         }
         val hex = try {
             Nip19.decodeNsec(trimmed)
@@ -48,7 +50,7 @@ internal class DefaultNostrKeyService @Inject constructor(
     }
 
     override suspend fun importNcryptsec(ncryptsec: String, password: String): GeneratedKeys {
-        val priv = withContext(cpu) { Nip49.decrypt(ncryptsec.dartTrim(), password) }
+        val priv = withContext(cpu) { keyCrypto { decryptKey(ncryptsec.dartTrim(), password) } }
         return importPrivHex(priv)
     }
 

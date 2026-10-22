@@ -1,4 +1,12 @@
+import com.android.build.api.artifact.ScopedArtifact
+import com.android.build.api.variant.ScopedArtifacts
+import com.android.tools.r8.tracereferences.TraceReferences
+import com.android.tools.r8.tracereferences.TraceReferencesCommand
+import com.android.tools.r8.tracereferences.TraceReferencesKeepRules
 import java.util.Properties
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
+import java.util.zip.ZipOutputStream
 
 plugins {
     id("einundzwanzig.android.application")
@@ -7,8 +15,71 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// Instrumentation APKs share the app's dependencies, but app R8 cannot otherwise see their calls.
+// Trace the complete test bytecode (including the runner) before shrinking the app, so only APIs
+// actually called across the APK boundary are pinned. AGP applies the app mapping to the test APK.
+@CacheableTask
+abstract class DeviceTestKeepRules : DefaultTask() {
+    @get:Classpath abstract val appJars: ListProperty<RegularFile>
+    @get:Classpath abstract val appDirectories: ListProperty<Directory>
+    @get:Classpath abstract val testJars: ListProperty<RegularFile>
+    @get:Classpath abstract val testDirectories: ListProperty<Directory>
+    @get:Classpath abstract val bootClasspath: ConfigurableFileCollection
+    @get:OutputFile abstract val rulesFile: RegularFileProperty
+
+    @TaskAction
+    fun generate() {
+        val appClasses = mutableSetOf<String>()
+        fun archive(name: String, jars: List<RegularFile>, directories: List<Directory>, isApp: Boolean): File {
+            val output = File(temporaryDir, name)
+            val written = mutableSetOf<String>()
+            ZipOutputStream(output.outputStream().buffered()).use { zip ->
+                fun write(path: String, bytes: () -> ByteArray) {
+                    if (!path.endsWith(".class") || (!isApp && path in appClasses) || !written.add(path)) return
+                    if (isApp) appClasses.add(path)
+                    zip.putNextEntry(ZipEntry(path))
+                    zip.write(bytes())
+                    zip.closeEntry()
+                }
+                jars.forEach { jar ->
+                    ZipFile(jar.asFile).use { input ->
+                        input.entries().asSequence().filter { !it.isDirectory }.forEach { entry ->
+                            write(entry.name) { input.getInputStream(entry).use { it.readBytes() } }
+                        }
+                    }
+                }
+                directories.forEach { directory ->
+                    directory.asFile.walkTopDown().filter { it.isFile }.forEach { file ->
+                        write(file.relativeTo(directory.asFile).invariantSeparatorsPath) { file.readBytes() }
+                    }
+                }
+            }
+            return output
+        }
+        val app = archive("app.jar", appJars.get(), appDirectories.get(), true)
+        val tests = archive("tests.jar", testJars.get(), testDirectories.get(), false)
+        val output = rulesFile.get().asFile
+        output.parentFile.mkdirs()
+        TraceReferences.run(
+            TraceReferencesCommand.builder()
+                .addLibraryFiles(bootClasspath.files.map { it.toPath() })
+                .addTargetFiles(app.toPath())
+                .addSourceFiles(tests.toPath())
+                .setConsumer(TraceReferencesKeepRules.builder().setAllowObfuscation(true)
+                    .setOutputPath(output.toPath()).build())
+                .build()
+        )
+    }
+}
+
+val instrumentationBuildType = providers.gradleProperty("instrumentationBuildType").getOrElse("debug")
+require(instrumentationBuildType in setOf("debug", "preview", "migrationTest")) {
+    "instrumentationBuildType must be debug, preview or migrationTest"
+}
+
 android {
     namespace = "space.einundzwanzig.meetup"
+    testBuildType = instrumentationBuildType
 
     defaultConfig {
         // Same applicationId as the Flutter app: the native app ships as an upgrade and
@@ -34,13 +105,13 @@ android {
             val f = rootProject.file("keystore.properties")
             if (f.exists()) f.inputStream().use { load(it) }
         }
-        val releaseStore = props.getProperty("storeFile") ?: System.getenv("RELEASE_STORE_FILE")
+        val releaseStore = props.getProperty("storeFile") ?: System.getenv("E21_KEYSTORE_FILE")
         if (releaseStore != null) {
             create("release") {
                 storeFile = rootProject.file(releaseStore)
-                storePassword = props.getProperty("storePassword") ?: System.getenv("RELEASE_STORE_PASSWORD")
-                keyAlias = props.getProperty("keyAlias") ?: System.getenv("RELEASE_KEY_ALIAS")
-                keyPassword = props.getProperty("keyPassword") ?: System.getenv("RELEASE_KEY_PASSWORD")
+                storePassword = props.getProperty("storePassword") ?: System.getenv("E21_KEYSTORE_PASSWORD")
+                keyAlias = props.getProperty("keyAlias") ?: System.getenv("E21_KEY_ALIAS")
+                keyPassword = props.getProperty("keyPassword") ?: System.getenv("E21_KEY_PASSWORD")
                 // Spec 14 §5.2.1: minSdk 26, v2 + v3 are sufficient.
                 enableV1Signing = false
                 enableV2Signing = true
@@ -92,20 +163,30 @@ android {
         // Release code with its own applicationId: installs next to the Flutter app for testing.
         create("preview") {
             initWith(getByName("release"))
+            isDebuggable = false
             applicationIdSuffix = ".preview"
             versionNameSuffix = "-preview"
             signingConfig = signingConfigs.getByName("preview")
             matchingFallbacks += listOf("release")
         }
-        // Spec 14 §5.2.5 / F10: minified release code WITHOUT applicationId suffix, debuggable
-        // (`run-as` for shared_prefs/), to test the Flutter → native upgrade in place on a device.
+        // Spec 14 §5.2.5 / F10: release source WITHOUT applicationId suffix, debuggable for
+        // `run-as` upgrade fixtures. AGP disables optimization/obfuscation for debuggable apps;
+        // explicitly leave this variant unminified. Preview instrumentation covers genuine R8.
         create("migrationTest") {
             initWith(getByName("release"))
             isDebuggable = true
+            isMinifyEnabled = false
+            isShrinkResources = false
             versionNameSuffix = "-migrationtest"
             signingConfig = signingConfigs.findByName("migrationTest") ?: signingConfigs.getByName("debug")
             matchingFallbacks += listOf("release")
         }
+    }
+
+    // Device assertions access production bindings through an entry point confined to test builds.
+    sourceSets.getByName("migrationTest").java.srcDir("src/debug/java")
+    if (instrumentationBuildType == "preview") {
+        sourceSets.getByName("preview").java.srcDir("src/debug/java")
     }
 
     buildFeatures {
@@ -120,6 +201,25 @@ android {
 
     packaging {
         resources.excludes += listOf("/META-INF/{AL2.0,LGPL2.1}", "META-INF/versions/9/OSGI-INF/MANIFEST.MF")
+    }
+}
+
+androidComponents {
+    onVariants(selector().withBuildType("preview")) { variant ->
+        variant.androidTest?.let { tests ->
+            val keepRules = tasks.register<DeviceTestKeepRules>("generatePreviewDeviceTestKeepRules") {
+                bootClasspath.from(sdkComponents.bootClasspath)
+                rulesFile.set(layout.buildDirectory.file("generated/deviceTest/preview/referenced-api.pro"))
+            }
+            variant.artifacts.forScope(ScopedArtifacts.Scope.ALL).use(keepRules).toGet(
+                ScopedArtifact.CLASSES, DeviceTestKeepRules::appJars, DeviceTestKeepRules::appDirectories
+            )
+            tests.artifacts.forScope(ScopedArtifacts.Scope.ALL).use(keepRules).toGet(
+                ScopedArtifact.CLASSES, DeviceTestKeepRules::testJars, DeviceTestKeepRules::testDirectories
+            )
+            variant.proguardFiles.add(keepRules.flatMap { it.rulesFile })
+            variant.proguardFiles.add(layout.projectDirectory.file("device-test-app.pro"))
+        }
     }
 }
 
@@ -186,4 +286,12 @@ dependencies {
 
     // Glance size-mode tests of the widget (spec 14 §3.2).
     testImplementation(libs.androidx.glance.appwidget.testing)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation(project(":core:crypto"))
+    androidTestImplementation(project(":core:nostr"))
+    androidTestImplementation(libs.kotlinx.serialization.json)
+    androidTestImplementation(libs.mlkit.barcode.scanning)
+    androidTestImplementation(libs.zxing.core)
+    androidTestImplementation(libs.osmdroid)
 }

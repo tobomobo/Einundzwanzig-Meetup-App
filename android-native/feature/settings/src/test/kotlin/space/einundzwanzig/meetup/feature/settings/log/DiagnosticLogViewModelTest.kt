@@ -32,7 +32,7 @@ class DiagnosticLogViewModelTest {
     private val probe = FakeNip44Probe()
 
     private fun vm(): DiagnosticLogViewModel {
-        val vm = DiagnosticLogViewModel(log, probe)
+        val vm = DiagnosticLogViewModel(log, probe, FakeMigration())
         CoroutineScope(main.dispatcher).launch { vm.uiState.collect {} }
         return vm
     }

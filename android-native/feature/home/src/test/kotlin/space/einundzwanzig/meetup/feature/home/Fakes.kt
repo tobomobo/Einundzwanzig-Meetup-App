@@ -196,8 +196,10 @@ class FakeHomeDataSource : HomeDataSource {
     override val dashboard: StateFlow<BitcoinDashboardData?> = dashboardFlow
     override val currency: StateFlow<String> = currencyFlow
     var dashboardRefreshes = 0
-    override suspend fun refreshDashboard() {
+    var dashboardResult: BitcoinDashboardData? = null
+    override suspend fun refreshDashboard(): BitcoinDashboardData {
         dashboardRefreshes++
+        return dashboardResult ?: checkNotNull(dashboardFlow.value)
     }
 
     var duell = DuellStatus(0, 0, 0)

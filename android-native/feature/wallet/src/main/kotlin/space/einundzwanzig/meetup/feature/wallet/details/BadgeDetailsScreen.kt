@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -162,6 +163,7 @@ internal fun BadgeDetailsRouteContent(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val navigator = LocalNavigator.current
     val context = LocalContext.current
+    val resources = LocalResources.current
     val appHost = LocalAppSnackbarHostState.current
     val localHost = remember { SnackbarHostState() }
     val snackbars = appHost ?: localHost
@@ -187,13 +189,13 @@ internal fun BadgeDetailsRouteContent(
                             if (!shareImage(context, badge, tagline)) {
                                 // No chooser could start (spec 03 §2.2 step 5).
                                 AppLogger.warn("Wallet", "Badge-Bild teilen: kein Ziel zum Teilen")
-                                snackbars.showAppSnackbar(context.getString(L10nR.string.repShareError, context.getString(R.string.native_wallet_no_share_target)), Tone.Error)
+                                snackbars.showAppSnackbar(resources.getString(L10nR.string.repShareError, resources.getString(R.string.native_wallet_no_share_target)), Tone.Error)
                             }
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
                             AppLogger.warn("Wallet", "Badge-Bild teilen fehlgeschlagen", e)
-                            snackbars.showAppSnackbar(context.getString(L10nR.string.repShareError, e.toString()), Tone.Error)
+                            snackbars.showAppSnackbar(resources.getString(L10nR.string.repShareError, e.toString()), Tone.Error)
                         } finally {
                             viewModel.endShare()
                         }

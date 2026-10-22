@@ -53,11 +53,13 @@ fun ProfileEditRoute(viewModel: ProfileEditViewModel = hiltViewModel()) {
     val pending = state.pendingAuth
     val showTitle = stringResource(R.string.native_auth_show_key)
     val exportTitle = stringResource(R.string.native_auth_export_key)
+    val recoveryTitle = stringResource(R.string.native_auth_recovery)
     LaunchedEffect(pending) {
         if (pending == null) return@LaunchedEffect
         val title = when (pending) {
             AuthPurpose.SHOW_NEW_KEY, AuthPurpose.SHOW_NSEC -> showTitle
             AuthPurpose.EXPORT, AuthPurpose.EXPORT_NEW_PASSWORD -> exportTitle
+            AuthPurpose.RECOVERY -> recoveryTitle
         }
         // A configuration change cancels the running prompt (DeviceAuthenticator cancels it on
         // cancellation / ON_DESTROY); pendingAuth is still set, so the new composition shows it again.

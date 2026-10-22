@@ -16,13 +16,11 @@ import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.withTimeoutOrNull
 import space.einundzwanzig.meetup.core.common.log.DiagnosticLog
 import space.einundzwanzig.meetup.data.calendar.widget.HomeWidgetStore
 import space.einundzwanzig.meetup.data.mempool.widget.BitcoinWidgetBridge
 import space.einundzwanzig.meetup.data.migration.MigrationGate
 import space.einundzwanzig.meetup.data.news.NewsService
-import kotlin.time.Duration.Companion.seconds
 
 /** Widget "⟳" (spec 14 §3.1.6, §3.2): enqueues the unique refresh worker. */
 class RefreshWidgetAction : ActionCallback {
@@ -58,24 +56,22 @@ class WidgetRefreshWorker @AssistedInject constructor(
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
-        withTimeoutOrNull(GATE_TIMEOUT) { gate.await() }
-        refreshWidget(bitcoin, news, widgetStore, log)
+        refreshWidget(gate, bitcoin, news, widgetStore, log)
         MeetupWidget().updateAll(applicationContext)
         return Result.success()
-    }
-
-    private companion object {
-        val GATE_TIMEOUT = 20.seconds
     }
 }
 
 /** The worker body without Android types (unit-tested). */
 internal suspend fun refreshWidget(
+    gate: MigrationGate,
     bitcoin: BitcoinWidgetBridge,
     news: NewsService,
     widgetStore: HomeWidgetStore,
     log: DiagnosticLog,
 ) {
+    // WorkManager cancellation stops this attempt; it must never bypass an unfinished import.
+    gate.await()
     try {
         bitcoin.refreshBitcoin()
     } catch (e: CancellationException) {
@@ -84,8 +80,8 @@ internal suspend fun refreshWidget(
         log.warn("WidgetService", "refreshBitcoin fehlgeschlagen", e)
     }
     try {
-        val latest = news.fetchArticles(limit = 1).firstOrNull()
-        widgetStore.publishLatestNews(latest?.id.orEmpty(), latest?.title ?: "News")
+        val latest = news.fetchArticles(limit = 1).firstOrNull() ?: return
+        widgetStore.publishLatestNews(latest.id, latest.title)
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {

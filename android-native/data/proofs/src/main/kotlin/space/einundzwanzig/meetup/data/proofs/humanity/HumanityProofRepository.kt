@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.json.JsonObject
 import space.einundzwanzig.meetup.core.data.prefs.KeyValueEditor
 import space.einundzwanzig.meetup.data.proofs.platform.PlatformProof
+import space.einundzwanzig.meetup.data.proofs.internal.ProofOwnership
 
 /**
  * Proof of Humanity (Dart `HumanityProofService`, spec 06 §8.3): a NIP-57 zap receipt in which
@@ -71,7 +72,9 @@ interface HumanityProofRepository {
 
     /**
      * Identity switch (Dart `BadgeSyncService.clearIdentityProofs` without the badge-sync key):
-     * see [HumanityKeys.clearIdentityProofs]. @return `false` if the write failed.
+     * see [HumanityKeys.clearIdentityProofs]. This cleanup belongs to the calling identity and
+     * retains the transition binding. The synchronous IdentityChangeHook prepares that binding
+     * for the next identity before persistence. @return `false` if the write failed or was fenced.
      */
     suspend fun clearForIdentitySwitch(): Boolean
 }
@@ -90,7 +93,10 @@ object HumanityKeys {
     /**
      * The identity-switch wipe of Dart `BadgeSyncService.clearIdentityProofs()` inside one
      * transaction: `humanity_verified = false`, removes the other humanity keys and
-     * `platform_proofs`. `:data:badgesync` adds `badge_restore_proofs = true` in the same edit:
+     * `platform_proofs`. Also advances the durable generation and removes native ownership
+     * metadata in the same transaction, invalidating pending platform/humanity writes even
+     * across repository instances. Retains the intended identity binding prepared by the
+     * synchronous transition hook. `:data:badgesync` adds `badge_restore_proofs = true` in the same edit:
      *
      * ```
      * val ok = store.edit { HumanityKeys.clearIdentityProofs(this); setBool("badge_restore_proofs", true) }
@@ -98,6 +104,7 @@ object HumanityKeys {
      * ```
      */
     fun clearIdentityProofs(editor: KeyValueEditor) {
+        ProofOwnership.invalidate(editor)
         editor.setBool(VERIFIED, false)
         editor.remove(NEEDS_REVERIFICATION)
         editor.remove(RECEIPT_ID)

@@ -27,4 +27,22 @@
     <string name="native_log_count">%1$d Einträge</string>
     <string name="native_log_clear">Log leeren</string>
     <string name="native_log_copy_failed">Log konnte nicht kopiert werden</string>
+    <string name="native_migration_title">Importación de datos de Flutter</string>
+    <string name="native_migration_not_started">La importación aún no ha finalizado.</string>
+    <string name="native_migration_not_needed">No se encontraron datos antiguos de Flutter.</string>
+    <string name="native_migration_imported">Importación de datos completada.</string>
+    <string name="native_migration_pending">Algunas claves antiguas aún no se pueden leer. Las claves de reemplazo requieren tu aprobación explícita.</string>
+    <string name="native_migration_cleaned">Se han eliminado los datos antiguos de Flutter.</string>
+    <string name="native_migration_attempts">Intentos: %1$d</string>
+    <string name="native_migration_failed_keys">Pendiente:
+%1$s</string>
+    <string name="native_migration_recovered">Copias guardadas (restaurar en Perfil):
+%1$s</string>
+    <string name="native_migration_warnings">Avisos de diagnóstico:
+%1$s</string>
+    <string name="native_migration_error">La importación no está disponible. Inténtalo de nuevo.</string>
+    <string name="native_migration_retry">Reintentar importación de datos antiguos</string>
+    <string name="native_migration_abandon">Abandonar claves antiguas pendientes</string>
+    <string name="native_migration_abandon_confirm">Las claves antiguas ilegibles dejarán de protegerse como pendientes. La aplicación podrá crear nuevas identidades y claves. Las insignias o identidades antiguas podrían seguir inaccesibles sin la clave original. Se conservan los archivos antiguos para reintentarlo manualmente más adelante. ¿Continuar?</string>
+    <string name="native_migration_cancel">Cancelar</string>
 </resources>

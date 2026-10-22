@@ -9,6 +9,7 @@ import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.flow.Flow
 import space.einundzwanzig.meetup.core.ui.component.Tone
 import space.einundzwanzig.meetup.core.ui.component.showAppSnackbar
+import space.einundzwanzig.meetup.data.meetups.portal.PortalLoginFailure
 import space.einundzwanzig.meetup.data.meetups.portal.PortalErrorKind
 import space.einundzwanzig.meetup.data.meetups.portal.PortalResult
 import space.einundzwanzig.meetup.feature.meetups.R
@@ -23,7 +24,7 @@ sealed interface UiText {
 
     /**
      * A portal error (spec 09 §5.3): fixed texts are localized from [kind]; server messages and
-     * login failures keep the portal/Flutter text in [error]; nothing at all gives "Fehler".
+     * login failures decode the legacy envelope in [error]; nothing at all gives "Fehler".
      */
     data class Portal(val error: String?, val kind: PortalErrorKind?) : UiText
 
@@ -52,7 +53,12 @@ fun UiText.resolve(context: Context): String = when (this) {
             val code = HTTP_CODE.find(error.orEmpty())?.groupValues?.get(1)?.toIntOrNull()
             if (code != null) context.getString(R.string.native_portal_error_http, code) else error.orEmpty()
         }
-        PortalErrorKind.SERVER_MESSAGE, PortalErrorKind.LOGIN_FAILED, null ->
+        PortalErrorKind.LOGIN_FAILED -> when (val cause = PortalLoginFailure.cause(error)) {
+            PortalLoginFailure.TOKEN_NOT_STORED -> context.getString(R.string.native_portal_error_token_not_stored)
+            "" -> context.getString(R.string.native_portal_error_generic)
+            else -> cause
+        }
+        PortalErrorKind.SERVER_MESSAGE, null ->
             error?.takeIf { it.isNotEmpty() } ?: context.getString(R.string.native_portal_error_generic)
     }
 }

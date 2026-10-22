@@ -1,6 +1,9 @@
 package space.einundzwanzig.meetup.feature.settings.sheet
 
 import androidx.activity.compose.LocalActivity
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -70,6 +73,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -168,8 +175,7 @@ private const val V4V_TITLE = "V4V"
  * neither ends nor restarts a running tour; the host must keep [visible] across it
  * (`rememberSaveable` or ViewModel state).
  *
- * Sheet height: a fixed 92 % sheet without a partially expanded stop (Flutter: draggable 50–95 %,
- * opening at 85 %); dragging it down closes it. See the module README.
+ * The Material sheet opens at 85 %; its accessible grabber resizes it continuously from 50–95 %.
  *
  * @param onDismissRequest the sheet was closed (set [visible] to false).
  * @param onResetApp "App zurücksetzen": the caller runs the reset flow of spec 12 §2.5.12
@@ -209,6 +215,12 @@ fun SettingsSheet(
 
     if (!visible) return
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var heightFraction by rememberSaveable { mutableStateOf(0.85f) }
+    val windowHeightPx = LocalWindowInfo.current.containerSize.height.toFloat().coerceAtLeast(1f)
+    val heightDp = with(LocalDensity.current) { (windowHeightPx * heightFraction).toDp() }
+    val resize = rememberDraggableState { delta ->
+        heightFraction = settingsSheetFractionAfterDrag(heightFraction, delta, windowHeightPx)
+    }
     // Remembered below the `visible` check, so every opening starts with a fresh `false`.
     var closing by remember { mutableStateOf(false) }
 
@@ -232,11 +244,19 @@ fun SettingsSheet(
         onDismissRequest = onDismissRequest,
         modifier = modifier,
         sheetState = sheetState,
+        sheetGesturesEnabled = false,
         containerColor = MaterialTheme.colorScheme.background,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-        dragHandle = { SheetGrabber() },
+        dragHandle = {
+            SheetGrabber(Modifier
+                .draggable(resize, Orientation.Vertical)
+                .semantics {
+                    progressBarRangeInfo = ProgressBarRangeInfo(heightFraction, 0.5f..0.95f)
+                    setProgress { value -> heightFraction = value.coerceIn(0.5f, 0.95f); true }
+                })
+        },
     ) {
-        GuideWindowHost(Modifier.fillMaxHeight(0.92f)) {
+        GuideWindowHost(Modifier.height((heightDp - 48.dp).coerceAtLeast(1.dp))) {
             if (LocalGuideTargetRegistry.current != null) {
                 SettingsTourEffects()
             }
@@ -287,12 +307,13 @@ private fun SettingsTourEffects() {
  * expand/dismiss accessibility actions; the description makes that node focusable for TalkBack.
  */
 @Composable
-private fun SheetGrabber() {
+private fun SheetGrabber(modifier: Modifier = Modifier) {
     val description = stringResource(R.string.native_settings_drag_handle)
     Box(
-        Modifier
+        modifier
             .semantics { contentDescription = description }
-            .padding(top = 12.dp, bottom = 20.dp)
+            .heightIn(min = 48.dp)
+            .padding(horizontal = 24.dp, vertical = 22.dp)
             .size(width = 40.dp, height = 4.dp)
             .background(MaterialTheme.extendedColors.textTertiary, RoundedCornerShape(2.dp)),
     )
@@ -722,3 +743,7 @@ private fun SettingsSheetLightPreview() {
         ) {}
     }
 }
+
+/** Positive drag moves the grabber down, shrinking the sheet. */
+internal fun settingsSheetFractionAfterDrag(current: Float, deltaPx: Float, windowHeightPx: Float): Float =
+    (current - deltaPx / windowHeightPx.coerceAtLeast(1f)).coerceIn(0.5f, 0.95f)

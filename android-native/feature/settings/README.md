@@ -26,10 +26,11 @@ Settings bottom sheet and diagnostic log (spec 12 §2.6, §2.8, §2.9.1; NIP-44 
 
 ## Deviations
 
-- Sheet height: a fixed 92 % `ModalBottomSheet` without a partially expanded stop. Flutter uses a
-  `DraggableScrollableSheet` (opens at 85 %, draggable 50–95 %, closes below 50 %). M3's partial
-  stop is always half the screen and the sheet would open there instead of near-full height, so
-  the native sheet opens almost full and closes when dragged down.
+- Sheet height: Material 3 `ModalBottomSheet`, initially 85 %, with an accessible resize
+  handle spanning 50–95 %. Back and scrim dismissal use the native sheet behavior.
+- Diagnostics includes the persisted Flutter migration report (state, attempts, failed/recovered
+  key names and warning codes), manual retry and a separately confirmed abandon action. Busy
+  actions are single-flight; reports contain no secret values.
 
 - The log copy is clipped to the newest ~500 KB when the buffer is larger (Flutter copies all of
   it); a larger clip would crash `setPrimaryClip`. Sharing still sends the full log as a file.

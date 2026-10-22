@@ -10,4 +10,5 @@
     <string name="native_community_add_to_calendar">Add to calendar</string>
     <string name="native_community_open_link">Open link</string>
     <string name="native_community_seek">Position in song</string>
+    <string name="native_lightning_wallet_chooser">Choose Lightning wallet</string>
 </resources>

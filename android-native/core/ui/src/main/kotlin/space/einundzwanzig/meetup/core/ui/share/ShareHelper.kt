@@ -50,7 +50,9 @@ object ShareHelper {
      * @throws IOException if the file cannot be written.
      */
     suspend fun writePng(context: Context, bitmap: Bitmap, fileName: String): Uri = withContext(Dispatchers.IO) {
-        val file = File(shareDir(context), sanitize(fileName))
+        val directory = shareDir(context)
+        cleanOldShares(directory)
+        val file = File(directory, sanitize(fileName))
         file.outputStream().use { out ->
             if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)) throw IOException("PNG-Kodierung fehlgeschlagen")
         }
@@ -62,7 +64,9 @@ object ShareHelper {
      * (backups, exports).
      */
     suspend fun writeFile(context: Context, bytes: ByteArray, fileName: String): Uri = withContext(Dispatchers.IO) {
-        val file = File(shareDir(context), sanitize(fileName))
+        val directory = shareDir(context)
+        cleanOldShares(directory)
+        val file = File(directory, sanitize(fileName))
         file.writeBytes(bytes)
         uriFor(context, file)
     }
@@ -133,7 +137,7 @@ object ShareHelper {
             try {
                 val chooser = Intent.createChooser(send, title, ShareChoices.callback(context, token).intentSender)
                 if (context.findActivity() == null) chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                if (!launch(context, chooser)) return@withContext ShareResult.Unavailable
+                if (!launch(context, chooser)) return@withContext ShareResult.Dismissed
                 val lifecycle = (context.findActivity() as? LifecycleOwner)?.lifecycle
                     ?: return@withContext ShareResult.Unavailable
                 ShareChoices.awaitChoice(lifecycle, chosen)
@@ -172,8 +176,21 @@ object ShareHelper {
         } catch (e: ActivityNotFoundException) {
             UiLog.warn("Share", "Kein Ziel zum Teilen verfügbar", e)
             false
+        } catch (e: SecurityException) {
+            UiLog.warn("Share", "Teilen wurde vom System abgelehnt", e)
+            false
         }
     }
+
+    /** Keep recent files available to receivers, but expire cached location-history images. */
+    internal fun cleanOldShares(directory: File, nowMillis: Long = System.currentTimeMillis()) {
+        directory.listFiles()?.filter { it.isFile && nowMillis - it.lastModified() > SHARE_RETENTION_MS }
+            ?.forEach { file ->
+                if (!file.delete()) UiLog.warn("Share", "Alte geteilte Datei konnte nicht gelöscht werden")
+            }
+    }
+
+    internal const val SHARE_RETENTION_MS = 60 * 60 * 1_000L
 
     /** Keeps file names inside the share dir (no path separators). */
     internal fun sanitize(fileName: String): String =

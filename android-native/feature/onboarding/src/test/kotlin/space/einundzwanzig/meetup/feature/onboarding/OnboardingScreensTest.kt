@@ -62,10 +62,13 @@ class OnboardingScreensTest {
     @Test
     fun splashStorageErrorOffersRetry() {
         var retries = 0
-        show { SplashScreen(SplashUiState.StorageUnavailable, onRetry = { retries++ }) }
+        var diagnostics = 0
+        show { SplashScreen(SplashUiState.StorageUnavailable, onRetry = { retries++ }, onDiagnostics = { diagnostics++ }) }
         rule.onNodeWithTag(SplashTags.STORAGE_ERROR).assertIsDisplayed()
         rule.onNodeWithText("Sicherer Speicher nicht lesbar").assertIsDisplayed()
         rule.onNodeWithTag(SplashTags.RETRY).performClick()
+        rule.onNodeWithTag(SplashTags.DIAGNOSTICS).assertIsDisplayed().performClick()
+        org.junit.Assert.assertEquals(1, diagnostics)
         assertEquals(1, retries)
     }
 

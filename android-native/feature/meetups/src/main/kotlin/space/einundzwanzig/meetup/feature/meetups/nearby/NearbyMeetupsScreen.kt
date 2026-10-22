@@ -72,8 +72,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -125,7 +125,6 @@ import space.einundzwanzig.meetup.feature.meetups.common.MeetupFormats
 import space.einundzwanzig.meetup.feature.meetups.common.rememberLinkOpener
 import java.time.Instant
 import java.time.ZoneId
-import java.util.Locale
 import space.einundzwanzig.meetup.core.l10n.R as L10nR
 
 internal object NearbyTags {
@@ -663,7 +662,7 @@ private fun ResultCard(
 
 @Composable
 private fun NextEventBox(next: MeetupEventInfo, total: Int, now: Instant, zone: ZoneId) {
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = LocalResources.current.configuration.locales[0]
     val whenText = when (val d = MeetupFormats.nearbyDate(next.start, now, zone, locale)) {
         is MeetupFormats.NearbyDate.Today -> "${stringResource(L10nR.string.nbToday)}, ${d.time}"
         is MeetupFormats.NearbyDate.Tomorrow -> "${stringResource(L10nR.string.nbTomorrow)}, ${d.time}"

@@ -60,6 +60,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -74,6 +75,8 @@ import space.einundzwanzig.meetup.core.ui.component.StatusChip
 import space.einundzwanzig.meetup.core.ui.nostr.NpubChip
 import space.einundzwanzig.meetup.core.ui.theme.MonoStyle
 import space.einundzwanzig.meetup.core.ui.theme.extendedColors
+import space.einundzwanzig.meetup.data.calendar.format.displayTitle
+import space.einundzwanzig.meetup.data.calendar.format.displayLocation
 import space.einundzwanzig.meetup.data.calendar.model.NostrCalendarEvent
 import space.einundzwanzig.meetup.data.calendar.model.RsvpStatus
 import space.einundzwanzig.meetup.feature.events.R
@@ -112,7 +115,7 @@ fun ColumnScope.CalendarDetailsContent(
         TypeDot(color, size = 10.dp)
         Spacer(Modifier.width(10.dp))
         Text(
-            item.title,
+            item.displayTitle(LocalResources.current),
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.ExtraBold,
@@ -133,7 +136,7 @@ fun ColumnScope.CalendarDetailsContent(
     IconLine(Icons.Rounded.Schedule, fmtWhen(item, showDate = true, zone = zone), iconSize = 16.dp, maxLines = 2)
     if (item.location.isNotEmpty()) {
         Spacer(Modifier.height(6.dp))
-        IconLine(Icons.Rounded.Place, item.location, iconSize = 16.dp, maxLines = 3)
+        IconLine(Icons.Rounded.Place, item.displayLocation(LocalResources.current), iconSize = 16.dp, maxLines = 3)
     }
     if (item.description.isNotEmpty()) {
         Spacer(Modifier.height(12.dp))

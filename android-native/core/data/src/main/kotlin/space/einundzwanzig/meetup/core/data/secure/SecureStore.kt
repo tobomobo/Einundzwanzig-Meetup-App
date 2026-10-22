@@ -105,6 +105,9 @@ sealed interface SecureRead {
             /** The storage file could not be read (I/O error). Transient; whether the key exists is unknown. */
             STORAGE_IO(isPermanent = false),
 
+            /** A Flutter secret is still pending; retry migration or explicitly abandon it. */
+            PENDING_MIGRATION(isPermanent = false),
+
             /** The storage file is corrupt (a copy was kept for support). Whether the key existed is unknown. */
             STORAGE_CORRUPT(isPermanent = true),
 

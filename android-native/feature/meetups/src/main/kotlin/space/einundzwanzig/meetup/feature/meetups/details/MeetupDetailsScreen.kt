@@ -45,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -67,6 +68,8 @@ import space.einundzwanzig.meetup.core.ui.crest.MeetupCrestWatermark
 import space.einundzwanzig.meetup.core.ui.nostr.NpubFormat
 import space.einundzwanzig.meetup.core.ui.theme.EinundzwanzigTheme
 import space.einundzwanzig.meetup.core.ui.theme.extendedColors
+import space.einundzwanzig.meetup.data.calendar.format.displayTitle
+import space.einundzwanzig.meetup.data.calendar.format.displayLocation
 import space.einundzwanzig.meetup.data.calendar.model.MeetupDate
 import space.einundzwanzig.meetup.data.meetups.model.Meetup
 import space.einundzwanzig.meetup.feature.meetups.R
@@ -257,10 +260,10 @@ private fun DateRow(date: MeetupDate, zone: ZoneId, modifier: Modifier = Modifie
             MonoText(chip, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, maxLines = 2)
         }
         Column(Modifier.weight(1f)) {
-            Text(date.title, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(date.displayTitle(LocalContext.current.resources), fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (date.location.isNotEmpty()) {
                 Text(
-                    date.location,
+                    date.displayLocation(LocalContext.current.resources),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -350,7 +353,7 @@ private fun DateSheet(date: MeetupDate, zone: ZoneId, onDismiss: () -> Unit) {
                 .testTag(MeetupDetailsTags.SHEET),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(date.title, color = MaterialTheme.colorScheme.primary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text(date.displayTitle(LocalContext.current.resources), color = MaterialTheme.colorScheme.primary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.CalendarMonth, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
@@ -360,7 +363,7 @@ private fun DateSheet(date: MeetupDate, zone: ZoneId, onDismiss: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.Place, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text(date.location)
+                    Text(date.displayLocation(LocalContext.current.resources))
                 }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

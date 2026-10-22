@@ -39,4 +39,5 @@
     <string name="native_nearby_locating">Standort wird ermittelt …</string>
     <string name="native_meetups_save_failed">Favoriten konnten nicht gespeichert werden.</string>
     <string name="native_meetups_load_failed_sub">Ohne Verzeichnis können keine Favoriten gespeichert werden. Bitte prüfe deine Verbindung.</string>
+    <string name="native_portal_error_token_not_stored">Token konnte nicht gespeichert werden</string>
 </resources>

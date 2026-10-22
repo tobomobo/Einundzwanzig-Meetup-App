@@ -62,6 +62,7 @@ object CalendarMerger {
                 }
                 out += CalendarItem(
                     title = cname,
+                    titleIsFallback = c.str("name") == null && c.str("title") == null,
                     description = cdesc,
                     location = location,
                     start = start,

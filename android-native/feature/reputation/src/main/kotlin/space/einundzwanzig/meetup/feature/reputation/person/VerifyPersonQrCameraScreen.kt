@@ -1,5 +1,6 @@
 package space.einundzwanzig.meetup.feature.reputation.person
 
+import android.annotation.SuppressLint
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -78,6 +79,9 @@ internal fun VerifyPersonQrCameraRoute(
 }
 
 /** Stateless npub camera: transparent top bar, camera [content] and the hint box. */
+// The viewfinder draws beneath the translucent top bar. QrScanner positions its torch using
+// the safe top inset, and the hint below applies navigationBarsPadding itself.
+@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun VerifyPersonQrCameraScreen(

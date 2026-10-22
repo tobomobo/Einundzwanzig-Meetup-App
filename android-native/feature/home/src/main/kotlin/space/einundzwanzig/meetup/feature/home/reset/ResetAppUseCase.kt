@@ -79,6 +79,10 @@ class ResetAppUseCase @Inject constructor(
         optional("Sprache zurücksetzen") { locale.setLocale(null) }
         optional("Tour beenden") { guide.endTour() }
         optional("Widget leeren") { widget.updateMeetup("", null) }
+        optional("Diagnose-Log zurücksetzen") {
+            log.setVerbose(false)
+            log.clear()
+        }
         log.info(TAG, "App zurückgesetzt.")
         true
     }

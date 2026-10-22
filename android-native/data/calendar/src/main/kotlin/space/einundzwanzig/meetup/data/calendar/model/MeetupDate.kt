@@ -34,6 +34,9 @@ data class MeetupDate(
     val logo: String = "",
     val attendees: Int? = null,
     val mightAttendees: Int? = null,
+    /** True only for synthesized text; raw fields remain stable for matching and de-duplication. */
+    val titleIsFallback: Boolean = false,
+    val locationIsFallback: Boolean = false,
 ) {
     /** The fields the nearby search of `:data:meetups` needs. */
     fun toEventInfo(): MeetupEventInfo = MeetupEventInfo(

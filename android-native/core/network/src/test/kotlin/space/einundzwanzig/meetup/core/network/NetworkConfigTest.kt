@@ -57,6 +57,7 @@ class NetworkConfigTest {
             "local",
             "127.0.0.1",
             "localhost",
+            "localhost.", // MempoolHosts accepts the trailing-dot custom URL.
         ).forEach { assertTrue(it, CleartextPolicy.isCleartextPermitted(it)) }
 
         listOf(

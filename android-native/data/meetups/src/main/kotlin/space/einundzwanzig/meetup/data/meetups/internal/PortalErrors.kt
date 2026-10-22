@@ -4,6 +4,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import space.einundzwanzig.meetup.core.common.json.DartJson
+import space.einundzwanzig.meetup.data.meetups.portal.PortalLoginFailure
 import space.einundzwanzig.meetup.data.meetups.portal.PortalErrorKind
 
 /** Dart `PortalApiService._errorFrom` and the fixed German portal messages (spec 09 §5.2–§5.3). */
@@ -11,7 +12,7 @@ internal object PortalErrors {
     const val NOT_LOGGED_IN = "Nicht angemeldet. Bitte zuerst mit dem Portal verbinden."
     const val NETWORK = "Netzwerkfehler. Bist du online?"
     const val NO_TOKEN = "Kein Token vom Portal erhalten."
-    const val LOGIN_FAILED_PREFIX = "Anmeldung fehlgeschlagen: "
+    const val LOGIN_FAILED_PREFIX = PortalLoginFailure.PREFIX
 
     /** Message + kind for an error response with [status] and raw [body]. */
     fun errorFrom(status: Int, body: String): Pair<String, PortalErrorKind> {

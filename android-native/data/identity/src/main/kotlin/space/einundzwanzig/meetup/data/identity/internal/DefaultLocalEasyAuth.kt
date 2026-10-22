@@ -36,8 +36,8 @@ internal class DefaultLocalEasyAuth @Inject constructor(
 
     override suspend fun register(nickname: String, password: String) {
         val name = nickname.dartTrim()
-        if (name.isEmpty() || name == UserProfile.DEFAULT_NICKNAME) throw LocalEasyAuthException("Bitte einen Namen wählen.")
-        if (password.length < LocalEasyAuth.MIN_PASSWORD_LENGTH) throw LocalEasyAuthException("Passwort muss mindestens 8 Zeichen haben.")
+        if (name.isEmpty() || name == UserProfile.DEFAULT_NICKNAME) throw LocalEasyAuthException("Bitte einen Namen wählen.", space.einundzwanzig.meetup.data.identity.IdentityError.NAME_REQUIRED)
+        if (password.length < LocalEasyAuth.MIN_PASSWORD_LENGTH) throw LocalEasyAuthException("Passwort muss mindestens 8 Zeichen haben.", space.einundzwanzig.meetup.data.identity.IdentityError.PASSWORD_SHORT)
 
         // Key in memory, wrap computed, only then persist: an aborted scrypt must not leave a key
         // without the wrap the user just set a password for.
@@ -93,7 +93,7 @@ internal class DefaultLocalEasyAuth @Inject constructor(
 
     override suspend fun unlockWithPassword(password: String) {
         val wrap = vault.getPasswordWrap()
-        if (wrap.isNullOrEmpty()) throw LocalEasyAuthException("Kein gespeicherter Schlüssel.")
+        if (wrap.isNullOrEmpty()) throw LocalEasyAuthException("Kein gespeicherter Schlüssel.", space.einundzwanzig.meetup.data.identity.IdentityError.NO_SAVED_KEY)
         val priv = scrypt { Nip49.decrypt(wrap, password) }
         keys.importPrivHex(priv)
         signing.useLocalMode()
@@ -102,13 +102,13 @@ internal class DefaultLocalEasyAuth @Inject constructor(
     override suspend fun passkeyCredentialIds(): List<String> {
         val wrap = vault.getPasskeyWrap()
         val credId = vault.getPasskeyCredentialId()
-        if (wrap.isNullOrEmpty() || credId.isNullOrEmpty()) throw LocalEasyAuthException(NO_PASSKEY)
+        if (wrap.isNullOrEmpty() || credId.isNullOrEmpty()) throw LocalEasyAuthException(NO_PASSKEY, space.einundzwanzig.meetup.data.identity.IdentityError.NO_PASSKEY)
         return listOf(credId)
     }
 
     override suspend fun unlockWithPrfSecret(result: PasskeyPrfResult) {
         val wrap = vault.getPasskeyWrap()
-        if (wrap.isNullOrEmpty()) throw LocalEasyAuthException(NO_PASSKEY)
+        if (wrap.isNullOrEmpty()) throw LocalEasyAuthException(NO_PASSKEY, space.einundzwanzig.meetup.data.identity.IdentityError.NO_PASSKEY)
         val priv = scrypt { Nip49.decrypt(wrap, result.prfSecretHex) }
         keys.importPrivHex(priv)
         signing.useLocalMode()
@@ -123,7 +123,7 @@ internal class DefaultLocalEasyAuth @Inject constructor(
         try {
             block()
         } catch (e: OutOfMemoryError) {
-            throw LocalEasyAuthException("Nicht genug Arbeitsspeicher für die Schlüssel-Verschlüsselung.")
+            throw LocalEasyAuthException("Nicht genug Arbeitsspeicher für die Schlüssel-Verschlüsselung.", space.einundzwanzig.meetup.data.identity.IdentityError.MEMORY)
         }
     }
 

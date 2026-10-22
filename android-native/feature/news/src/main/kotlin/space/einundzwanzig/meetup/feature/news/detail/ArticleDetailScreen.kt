@@ -49,6 +49,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +57,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -133,6 +135,7 @@ fun ArticleDetailRoute(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val navigator = LocalNavigator.current
     val context = LocalContext.current
+    val resources by rememberUpdatedState(LocalResources.current)
     val appHost = LocalAppSnackbarHostState.current
     val localHost = remember { SnackbarHostState() }
     val snackbars = appHost ?: localHost
@@ -141,12 +144,12 @@ fun ArticleDetailRoute(
 
     // Only while STARTED: an invoice that arrives in the background stays buffered in the channel
     // and opens the wallet once the user is back (no blocked background activity start).
-    LaunchedEffect(viewModel, lifecycleOwner) {
+    LaunchedEffect(viewModel, lifecycleOwner, context, snackbars) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             viewModel.events.collect { event ->
                 when (event) {
                     is ArticleDetailEvent.Message -> scope.launch {
-                        snackbars.showAppSnackbar(context.getString(event.text), event.tone, SNACKBAR_MILLIS)
+                        snackbars.showAppSnackbar(resources.getString(event.text), event.tone, SNACKBAR_MILLIS)
                     }
                     is ArticleDetailEvent.OpenInvoice ->
                         if (!ZapInvoiceLauncher.open(context, event.invoice, viewModel.log)) {
@@ -170,7 +173,7 @@ fun ArticleDetailRoute(
                         SecretClipboard.copyPlain(context, text, "news")
                         scope.launch {
                             snackbars.showAppSnackbar(
-                                context.getString(L10nR.string.newsShareCopied),
+                                resources.getString(L10nR.string.newsShareCopied),
                                 Tone.Warning,
                                 SNACKBAR_MILLIS,
                             )

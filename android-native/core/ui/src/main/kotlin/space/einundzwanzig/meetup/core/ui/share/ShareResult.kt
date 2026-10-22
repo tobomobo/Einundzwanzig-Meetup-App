@@ -26,7 +26,7 @@ sealed interface ShareResult {
     /** The user picked [chosenComponent] in the chooser (null if the system did not say which). */
     data class Success(val chosenComponent: ComponentName?) : ShareResult
 
-    /** The chooser closed without a choice. The backup flow treats this as "not shared". */
+    /** The chooser could not start, or closed without a choice. The backup flow treats this as "not shared". */
     data object Dismissed : ShareResult
 
     /** The outcome cannot be observed (no lifecycle-aware activity, or the chooser did not cover it). */

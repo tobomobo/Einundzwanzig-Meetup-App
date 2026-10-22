@@ -135,7 +135,7 @@ interface HomeDataSource {
     val currency: StateFlow<String>
 
     /** BTC tile poll: fetch the dashboard and feed the widget (dead data is skipped). */
-    suspend fun refreshDashboard()
+    suspend fun refreshDashboard(): BitcoinDashboardData
     suspend fun duellStatus(): DuellStatus
 
     val plebrapIndex: StateFlow<Int?>
@@ -310,9 +310,10 @@ internal class DefaultHomeDataSource @Inject constructor(
     override val dashboard: StateFlow<BitcoinDashboardData?> get() = mempool.lastDashboard
     override val currency: StateFlow<String> get() = currencyRepository.current
 
-    override suspend fun refreshDashboard() {
+    override suspend fun refreshDashboard(): BitcoinDashboardData {
         val d = mempool.getDashboardData()
         widgetBridge.publish(d)
+        return d
     }
 
     override suspend fun duellStatus(): DuellStatus = duell.fetchStatus()

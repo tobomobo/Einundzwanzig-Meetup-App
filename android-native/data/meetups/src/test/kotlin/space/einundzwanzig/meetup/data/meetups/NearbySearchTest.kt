@@ -117,13 +117,13 @@ class NearbySearchTest {
             var eventLoads = 0
             val event = MeetupEventInfo(title = "Würzburg Stammtisch", location = "Würzburg", start = Instant.parse("2030-01-01T18:00:00Z"))
             val source = MeetupEventsSource { eventLoads++; listOf(event) }
-            val nearby = NearbyMeetupServiceImpl(MeetupServiceImpl(server.client, testLog()), Optional.of(source), FakeTime(), testLog())
+            val nearby = NearbyMeetupServiceImpl(MeetupServiceImpl(server.client, testLog(), testLogos()), Optional.of(source), FakeTime(), testLog())
             val r = nearby.search(49.79, 9.95, 100.0, DateMode.ANY)
             assertEquals(listOf("1"), r.map { it.meetup.id })
             assertEquals(1, eventLoads)
             nearby.search(49.79, 9.95, 100.0, DateMode.ANY)
             assertEquals(1, eventLoads) // cached
-            assertEquals(listOf("1", "3", "4"), NearbyMeetupServiceImpl.dedupeByCity(MeetupServiceImpl(server.client, testLog()).fetchMeetups()).map { it.id })
+            assertEquals(listOf("1", "3", "4"), NearbyMeetupServiceImpl.dedupeByCity(MeetupServiceImpl(server.client, testLog(), testLogos()).fetchMeetups()).map { it.id })
 
             body = "[]"
             nearby.preload(forceReload = true)
@@ -141,7 +141,7 @@ class NearbySearchTest {
             var eventLoads = 0
             val event = MeetupEventInfo(title = "Würzburg Stammtisch", location = "Würzburg", start = Instant.parse("2030-01-01T18:00:00Z"))
             val source = MeetupEventsSource { eventLoads++; if (online) listOf(event) else emptyList() }
-            val nearby = NearbyMeetupServiceImpl(MeetupServiceImpl(server.client, testLog()), Optional.of(source), FakeTime(), testLog())
+            val nearby = NearbyMeetupServiceImpl(MeetupServiceImpl(server.client, testLog(), testLogos()), Optional.of(source), FakeTime(), testLog())
 
             // Offline: the bundled list (Berlin is m_b) and no dates.
             assertEquals(listOf("m_b"), nearby.search(52.52, 13.405, 10.0, DateMode.ANY).map { it.meetup.id })

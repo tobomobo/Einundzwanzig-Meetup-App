@@ -18,4 +18,5 @@
     <string name="native_onboarding_bunker_scan_invalid">No se detectó ningún código bunker://.</string>
     <string name="native_onboarding_meetup_favorite">Favorito</string>
     <string name="native_onboarding_meetup_not_favorite">No favorito</string>
+    <string name="native_onboarding_storage_diagnostics">Diagnóstico y recuperar datos anteriores</string>
 </resources>

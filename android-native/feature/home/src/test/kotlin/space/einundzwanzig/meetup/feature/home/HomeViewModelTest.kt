@@ -1,10 +1,14 @@
 package space.einundzwanzig.meetup.feature.home
 
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -447,6 +451,66 @@ class HomeViewModelTest {
         vm.onStart()
         assertEquals(1, fx.data.dashboardRefreshes)
         vm.onStop()
+    }
+
+    private fun dashboard(height: Int = 950_000, sources: Int = 6) = BitcoinDashboardData(
+        blockHeight = height, feeLow = 1, feeMedium = 2, feeHigh = 3, priceEur = 56_200.0, priceUsd = 60_000.0,
+        supply = 0, hashrateEhs = 0.0, difficultyChangePct = 0.0, difficultyRemainingBlocks = 0,
+        lnCapacityBtc = 0.0, lnNodeCount = 0, lnChannelCount = 0, updatedAtMillis = 0, sourcesOk = sources,
+    )
+
+    @Test
+    fun `latest dead tile poll stays offline despite the shared last good cache`() {
+        fx.data.dashboardFlow.value = dashboard()
+        val vm = fx.create()
+        vm.onStart()
+        assertTrue(vm.state.value.btc.live)
+        vm.onStop()
+        fx.time.millis += 60_000
+        fx.data.dashboardResult = dashboard(sources = 0)
+        vm.onStart()
+        assertFalse(vm.state.value.btc.live)
+        assertEquals("950.000", vm.state.value.btc.blockText)
+        assertEquals("56.200 €", vm.state.value.btc.priceText)
+        fx.data.currencyFlow.value = "USD"
+        fx.data.dashboardFlow.value = dashboard(height = 950_001)
+        assertFalse(vm.state.value.btc.live)
+        assertEquals("60.000 $", vm.state.value.btc.priceText)
+        vm.onStop()
+    }
+
+    @Test
+    fun `unknown block height displays a dash even when other sources succeeded`() {
+        fx.data.dashboardFlow.value = dashboard(height = 0, sources = 5)
+        val vm = fx.create()
+        vm.onStart()
+        assertEquals("––", vm.state.value.btc.blockText)
+        assertTrue(vm.state.value.btc.live)
+        vm.onStop()
+    }
+
+    @Test
+    fun `returning home waits for the remaining sixty second poll interval`() = runTest(main.dispatcher) {
+        fx.data.dashboardFlow.value = dashboard()
+        val vm = fx.create()
+        vm.onStart()
+        assertEquals(1, fx.data.dashboardRefreshes)
+        fx.time.millis += 10_000
+        advanceTimeBy(10_000)
+        vm.onStop()
+        vm.onStart()
+        vm.onStart() // duplicate STARTED callback also must not create another loop
+        assertEquals(1, fx.data.dashboardRefreshes)
+        fx.time.millis += 49_999
+        advanceTimeBy(49_999)
+        runCurrent()
+        assertEquals(1, fx.data.dashboardRefreshes)
+        fx.time.millis += 1
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(2, fx.data.dashboardRefreshes)
+        vm.onStop()
+        vm.viewModelScope.cancel()
     }
 
     @Test

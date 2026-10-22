@@ -2,13 +2,11 @@ package space.einundzwanzig.meetup.data.backup.internal
 
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import space.einundzwanzig.meetup.core.data.prefs.KeyValueStore
 import space.einundzwanzig.meetup.data.admin.model.AdminEntry
 import space.einundzwanzig.meetup.data.admin.registry.AdminRegistry
 import space.einundzwanzig.meetup.data.identity.SigningMode
 import space.einundzwanzig.meetup.data.identity.SigningService
 import space.einundzwanzig.meetup.data.identity.keys.SecureKeyStore
-import space.einundzwanzig.meetup.data.proofs.humanity.HumanityKeys
 import space.einundzwanzig.meetup.data.proofs.humanity.HumanityProofRepository
 import space.einundzwanzig.meetup.data.proofs.platform.PlatformProofRepository
 import javax.inject.Inject
@@ -93,13 +91,14 @@ internal class RegistryBackupAdmins @Inject constructor(
 internal class RepositoryBackupProofs @Inject constructor(
     private val platform: PlatformProofRepository,
     private val humanity: HumanityProofRepository,
-    private val prefs: KeyValueStore,
 ) : BackupProofs {
     override suspend fun platformProofEntries(): List<JsonObject> = platform.getSavedProofs().map { it.toStorageJson() }
     override suspend fun replacePlatformProofs(validated: List<JsonElement>): Boolean = platform.replaceAllRaw(validated)
     override suspend fun unionPlatformProofs(validated: List<JsonElement>): Boolean = platform.unionRaw(validated)
     override suspend fun humanityBackupJson(): JsonObject = humanity.getStatus().toBackupJson()
-    override suspend fun humanityVerifiedPref(): Boolean = prefs.getBool(HumanityKeys.VERIFIED) == true
+    // The proof repository checks durable ownership. A late old-identity callback must not
+    // make additive restore skip a valid proof for the currently selected identity.
+    override suspend fun humanityVerifiedPref(): Boolean = humanity.getStatus().verified
     override suspend fun restoreHumanity(proof: JsonObject, additive: Boolean): Boolean =
         humanity.restoreFromBackup(proof, additive)
 }

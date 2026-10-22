@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.union
@@ -110,9 +111,10 @@ fun IdentitySetupScreen(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0),
         snackbarHost = { snackbarHostState?.let { AppSnackbarHost(it) } },
-    ) { _ ->
+    ) { padding ->
         OnboardingBackground(subtle = state.step.subtle && !state.bootstrapping) {
-            Column(Modifier.fillMaxSize()) {
+            // The background fills the window; the top bar and form handle their own system insets.
+            Column(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
                 TopAppBar(
                     title = {
                         AnimatedContent(targetState = state.step.titleRes, label = "setupTitle") { res ->

@@ -29,6 +29,7 @@ import space.einundzwanzig.meetup.data.chat.ChatRelayUnavailable
 import space.einundzwanzig.meetup.data.community.CommunityLinks
 import space.einundzwanzig.meetup.data.community.plebrap.PlebSongs
 import space.einundzwanzig.meetup.data.identity.profile.UserProfile
+import space.einundzwanzig.meetup.data.mempool.BitcoinDashboardData
 import space.einundzwanzig.meetup.data.mempool.currency.CurrencyFormat
 import space.einundzwanzig.meetup.data.mempool.format.BtcFormat
 import space.einundzwanzig.meetup.data.trust.ZoneIdProvider
@@ -90,6 +91,8 @@ class HomeViewModel @Inject constructor(
     private var sessionJob: Job? = null
     private var midnightJob: Job? = null
     private var btcJob: Job? = null
+    private var lastBtcPollMillis: Long? = null
+    private val tileDashboard = MutableStateFlow<BitcoinDashboardData?>(null)
     private var refreshJob: Job? = null
 
     init {
@@ -106,16 +109,18 @@ class HomeViewModel @Inject constructor(
         }
         viewModelScope.launch { data.profile.collect { onProfileChanged(it) } }
         viewModelScope.launch {
-            combine(data.dashboard, data.currency) { d, cur -> d to cur }.collect { (d, cur) ->
+            combine(data.dashboard, data.currency, tileDashboard) { cached, cur, polled ->
+                Triple(polled ?: cached, cached, cur)
+            }.collect { (d, cached, cur) ->
                 val price = d?.priceIn(cur) ?: 0.0
                 mutableState.update {
                     it.copy(
                         btc = BtcUi(
-                            blockText = d?.let { dd -> BtcFormat.fmtInt(dd.blockHeight) } ?: BtcFormat.DASH,
+                            blockText = d?.let { dd -> BtcFormat.intOrDash(dd.blockHeight.toLong()) } ?: BtcFormat.DASH,
                             live = d != null && !d.isDead,
                             priceText = if (d != null && price > 0) CurrencyFormat.formatPrice(price, cur) else null,
                         ),
-                        converterText = BtcFormat.converterTile(price, cur),
+                        converterText = BtcFormat.converterTile(cached?.priceIn(cur) ?: 0.0, cur),
                     )
                 }
             }
@@ -141,8 +146,13 @@ class HomeViewModel @Inject constructor(
         if (btcJob?.isActive == true) return
         btcJob = viewModelScope.launch {
             while (isActive) {
-                safe("BTC-Kachel") { data.refreshDashboard() }
-                delay(BTC_POLL_MS)
+                val elapsed = lastBtcPollMillis?.let { time.nowMillis() - it }
+                if (elapsed == null || elapsed < 0 || elapsed >= BTC_POLL_MS) {
+                    lastBtcPollMillis = time.nowMillis()
+                    safe("BTC-Kachel") { data.refreshDashboard() }?.let { tileDashboard.value = it }
+                }
+                val remaining = lastBtcPollMillis?.let { BTC_POLL_MS - (time.nowMillis() - it) } ?: BTC_POLL_MS
+                delay(remaining.coerceIn(1L, BTC_POLL_MS))
             }
         }
     }

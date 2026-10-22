@@ -45,6 +45,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -84,6 +85,7 @@ import space.einundzwanzig.meetup.core.ui.guide.LocalGuideTargetRegistry
 import space.einundzwanzig.meetup.core.ui.guide.guideAnchor
 import space.einundzwanzig.meetup.core.ui.theme.EinundzwanzigTheme
 import space.einundzwanzig.meetup.core.ui.util.SafeUrlLauncher
+import space.einundzwanzig.meetup.data.meetups.portal.PortalLoginFailure
 import space.einundzwanzig.meetup.data.community.CommunityLinks
 import space.einundzwanzig.meetup.feature.home.FavCardUi
 import space.einundzwanzig.meetup.feature.home.HomeAction
@@ -319,8 +321,8 @@ private fun rememberMessageTexts(): (HomeMessage) -> MessageSpec {
     val offline = stringResource(L10nR.string.chatOffline)
     val relay = stringResource(L10nR.string.chatRelayUnavailable)
     val resetFailed = stringResource(R.string.native_home_reset_failed)
-    val context = LocalContext.current
-    return remember(refreshRunning, unreadable, hint, mismatch, searching, resetFailed, context) {
+    val resources = LocalResources.current
+    return remember(refreshRunning, unreadable, hint, mismatch, searching, resetFailed, resources) {
         { m ->
             when (m) {
                 HomeMessage.RefreshRunning -> MessageSpec(refreshRunning, Tone.Neutral, 2_000)
@@ -330,14 +332,19 @@ private fun rememberMessageTexts(): (HomeMessage) -> MessageSpec {
                 HomeMessage.TokenMismatch -> MessageSpec(mismatch, Tone.Warning, 6_000)
                 HomeMessage.PortalConnecting -> MessageSpec(connecting, Tone.Neutral, 8_000)
                 HomeMessage.PortalConnected -> MessageSpec(connected, Tone.Success, 4_000)
-                is HomeMessage.PortalLoginFailed -> MessageSpec("$loginFailed: ${m.error}", Tone.Error, 4_000)
+                is HomeMessage.PortalLoginFailed -> {
+                    val cause = PortalLoginFailure.cause(m.error).let {
+                        if (it == PortalLoginFailure.TOKEN_NOT_STORED) resources.getString(R.string.native_home_token_not_stored) else it
+                    }
+                    MessageSpec("$loginFailed: $cause", Tone.Error, 4_000)
+                }
                 HomeMessage.ChatSearching -> MessageSpec(searching, Tone.Neutral, 4_000)
                 HomeMessage.ChatOffline -> MessageSpec(offline, Tone.Neutral, 5_000)
                 HomeMessage.ChatRelayUnavailable -> MessageSpec(relay, Tone.Neutral, 5_000)
-                is HomeMessage.ChatNoRoom -> MessageSpec(context.getString(L10nR.string.chatNoRoom, m.label), Tone.Neutral, 4_000)
+                is HomeMessage.ChatNoRoom -> MessageSpec(resources.getString(L10nR.string.chatNoRoom, m.label), Tone.Neutral, 4_000)
                 is HomeMessage.ImageLoadError ->
-                    MessageSpec(context.getString(L10nR.string.homeImageLoadError, m.detail), Tone.Error, 4_000)
-                is HomeMessage.CouldNotOpen -> MessageSpec(context.getString(L10nR.string.homeCouldNotOpen, m.url), Tone.Error, 4_000)
+                    MessageSpec(resources.getString(L10nR.string.homeImageLoadError, m.detail), Tone.Error, 4_000)
+                is HomeMessage.CouldNotOpen -> MessageSpec(resources.getString(L10nR.string.homeCouldNotOpen, m.url), Tone.Error, 4_000)
                 HomeMessage.ResetFailed -> MessageSpec(resetFailed, Tone.Error, 6_000)
             }
         }

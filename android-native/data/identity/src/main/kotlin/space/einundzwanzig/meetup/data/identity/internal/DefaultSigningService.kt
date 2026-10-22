@@ -65,6 +65,7 @@ internal class DefaultSigningService @Inject constructor(
     private val clientFactory: Nip46ClientFactory,
     private val timeSource: TimeSource,
     @param:DefaultDispatcher private val cpu: CoroutineDispatcher,
+    private val identitySwitch: IdentitySwitchBarrier? = null,
 ) : SigningService {
 
     private val readyFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 8, onBufferOverflow = BufferOverflow.DROP_OLDEST)
@@ -258,6 +259,7 @@ internal class DefaultSigningService @Inject constructor(
     override suspend fun connectAmber(): AmberConnectResult {
         val result = AmberNostrSigner.connect(nip55)
         if (result is AmberConnectResult.Success) {
+            identitySwitch?.beforeChange(result.npub)
             writePrefs(IdentityKeys.AMBER_PUBKEY_HEX to result.pubkeyHex, IdentityKeys.AMBER_NPUB to result.npub)
             setMode(SigningMode.AMBER)
             AppLogger.security("SigningService", "Amber verbunden: ${short(result.npub)} — nsec bleibt in Amber.")
@@ -267,18 +269,21 @@ internal class DefaultSigningService @Inject constructor(
     }
 
     override suspend fun useLocalMode() {
+        identitySwitch?.beforeChange(keyStore.getNpub())
         setMode(SigningMode.LOCAL)
         noteSignerReady()
     }
 
     override suspend fun restoreAmber(npub: String) {
         val hex = Nip19.decodeNpub(npub.dartTrim())
+        identitySwitch?.beforeChange(npub.dartTrim())
         writePrefs(IdentityKeys.AMBER_PUBKEY_HEX to hex, IdentityKeys.AMBER_NPUB to npub.dartTrim())
         setMode(SigningMode.AMBER)
         noteSignerReady()
     }
 
     override suspend fun disconnectAmber() {
+        identitySwitch?.beforeChange(keyStore.getNpub())
         prefs.removeOrThrow(IdentityKeys.AMBER_PUBKEY_HEX)
         prefs.removeOrThrow(IdentityKeys.AMBER_NPUB)
         setMode(SigningMode.LOCAL)
@@ -290,12 +295,14 @@ internal class DefaultSigningService @Inject constructor(
 
     override suspend fun restoreNip07(npub: String) {
         val hex = Nip19.decodeNpub(npub.dartTrim())
+        identitySwitch?.beforeChange(npub.dartTrim())
         writePrefs(IdentityKeys.NIP07_PUBKEY_HEX to hex, IdentityKeys.NIP07_NPUB to npub.dartTrim())
         setMode(SigningMode.NIP07)
         noteSignerReady()
     }
 
     override suspend fun disconnectNip07() {
+        identitySwitch?.beforeChange(keyStore.getNpub())
         prefs.removeOrThrow(IdentityKeys.NIP07_PUBKEY_HEX)
         prefs.removeOrThrow(IdentityKeys.NIP07_NPUB)
         setMode(SigningMode.LOCAL)
@@ -395,10 +402,10 @@ internal class DefaultSigningService @Inject constructor(
             Nip46ConnectResult.Timeout
         } catch (e: Nip46Exception) {
             client?.let { closeIfNotAdopted(it) }
-            Nip46ConnectResult.Error(e.message)
+            Nip46ConnectResult.Error(e.message, e)
         } catch (e: Exception) {
             client?.let { closeIfNotAdopted(it) }
-            Nip46ConnectResult.Error(e.toString())
+            Nip46ConnectResult.Error(e.toString(), e)
         }
     }
 
@@ -444,10 +451,10 @@ internal class DefaultSigningService @Inject constructor(
         Nip46ConnectResult.Timeout
     } catch (e: Nip46Exception) {
         closeIfNotAdopted(pairing.client)
-        Nip46ConnectResult.Error(e.message)
+        Nip46ConnectResult.Error(e.message, e)
     } catch (e: Exception) {
         closeIfNotAdopted(pairing.client)
-        Nip46ConnectResult.Error(e.toString())
+        Nip46ConnectResult.Error(e.toString(), e)
     }
 
     /** Failure cleanup: closes [client] unless it already became the live session. */
@@ -467,6 +474,7 @@ internal class DefaultSigningService @Inject constructor(
         userPubkeyHex: String,
         bunkerUri: String,
     ) {
+        identitySwitch?.beforeChange(Nip19.encodeNpub(userPubkeyHex))
         replaceNip46Session(client) {
             writeNip46Session(clientSecretKeyHex, userPubkeyHex, bunkerUri)
         }
@@ -511,6 +519,7 @@ internal class DefaultSigningService @Inject constructor(
         val hex = Nip19.decodeNpub(npub.dartTrim())
         // Throws on garbage before anything is stored.
         BunkerPointer.parse(bunkerUri)
+        identitySwitch?.beforeChange(npub.dartTrim())
         val clientKey = clientSecretKeyHex?.dartTrim().orEmpty()
         replaceNip46Session(null) {
             writeNip46Session(clientKey.ifEmpty { null }, hex, bunkerUri.dartTrim())
@@ -520,6 +529,7 @@ internal class DefaultSigningService @Inject constructor(
     }
 
     override suspend fun disconnectNip46() {
+        identitySwitch?.beforeChange(keyStore.getNpub())
         clearNip46Artifacts()
         setMode(SigningMode.LOCAL)
     }

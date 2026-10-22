@@ -1,5 +1,7 @@
 package space.einundzwanzig.meetup
 
+import android.Manifest.permission.ACCESS_COARSE_LOCATION
+import android.Manifest.permission.ACCESS_FINE_LOCATION
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.pm.ActivityInfo
@@ -52,6 +54,7 @@ import space.einundzwanzig.meetup.core.ui.theme.ThemeMode
 import space.einundzwanzig.meetup.data.calendar.widget.WidgetLaunchTargetStore
 import space.einundzwanzig.meetup.data.identity.SigningService
 import space.einundzwanzig.meetup.data.identity.nip55.ExternalSignerBridge
+import space.einundzwanzig.meetup.data.meetups.location.LocationPermissionBridge
 import space.einundzwanzig.meetup.data.migration.MigrationGate
 import space.einundzwanzig.meetup.data.settings.SettingsRepository
 import space.einundzwanzig.meetup.data.settings.di.SettingsEntryPoint
@@ -69,6 +72,7 @@ import space.einundzwanzig.meetup.feature.network.networkEntries
 import space.einundzwanzig.meetup.feature.news.newsEntries
 import space.einundzwanzig.meetup.feature.onboarding.onboardingEntries
 import space.einundzwanzig.meetup.feature.onboarding.splash.SplashViewModel
+import space.einundzwanzig.meetup.feature.onboarding.splash.SplashUiState
 import space.einundzwanzig.meetup.feature.profile.profileEntries
 import space.einundzwanzig.meetup.feature.proofs.proofsEntries
 import space.einundzwanzig.meetup.feature.reputation.reputationEntries
@@ -109,6 +113,7 @@ class MainActivity : FragmentActivity() {
     @Inject lateinit var crestSource: MeetupCrestSource
     @Inject lateinit var homeRefreshRequests: HomeRefreshRequests
     @Inject lateinit var widgetLaunchTargets: WidgetLaunchTargetStore
+    @Inject lateinit var locationPermissionBridge: LocationPermissionBridge
 
     /** One splash session check per start (feature/onboarding README): Activity-scoped. */
     private val splashViewModel: SplashViewModel by viewModels()
@@ -124,6 +129,17 @@ class MainActivity : FragmentActivity() {
     private var launchedSignerId = 0L
     private val signerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         externalSignerBridge.onResult(launchedSignerId, result.resultCode, result.data)
+    }
+
+    private val locationLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        val granted = result[ACCESS_FINE_LOCATION] == true || result[ACCESS_COARSE_LOCATION] == true
+        // Use the bridge's launched request: ActivityResult redelivers after Activity recreation.
+        locationPermissionBridge.onResult(
+            granted = granted,
+            permanentlyDenied = !granted &&
+                !shouldShowRequestPermissionRationale(ACCESS_FINE_LOCATION) &&
+                !shouldShowRequestPermissionRationale(ACCESS_COARSE_LOCATION),
+        )
     }
 
     override fun attachBaseContext(newBase: Context) {
@@ -143,13 +159,17 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         launchedSignerId = savedInstanceState?.getLong(STATE_SIGNER_ID) ?: 0L
         gateDone = migrationGate.isComplete
-        splash.setKeepOnScreenCondition { keepSystemSplash(gateDone, themeLoaded, firstRouteShown, splashTimedOut) }
+        splash.setKeepOnScreenCondition {
+            // An unreadable identity stays on Splash so users can open diagnostics safely.
+            // It is a finished routing check, and must be visible beneath the system splash.
+            val routeVisible = firstRouteShown || (gateDone && splashViewModel.state.value == SplashUiState.StorageUnavailable)
+            keepSystemSplash(gateDone, themeLoaded, routeVisible, splashTimedOut)
+        }
         hideNavigationBar()
 
         lifecycleScope.launch {
-            // Never compose the app before the gate (data/migration README, RELEASE BLOCKER): until the
-            // stores gate themselves, a domain could create a replacement identity or badge key over
-            // a Flutter secret that is still being imported. After 20 s only the system splash
+            // Stores protect pending secrets. Keep the initial app UI behind migration as well
+            // so the startup state stays clear. After 20 s only the system splash
             // gives way to the in-app wait screen; the wait itself has no limit.
             if (withTimeoutOrNull(MIGRATION_TIMEOUT) { migrationGate.await() } == null) {
                 AppLogger.warn(TAG, "Datenübernahme dauert länger als 20 s, Warteanzeige statt Splash")
@@ -164,6 +184,7 @@ class MainActivity : FragmentActivity() {
         }
         observeLocale()
         hostExternalSigner()
+        hostLocationPermission()
 
         setContent {
             val ready = gateDone
@@ -290,6 +311,24 @@ class MainActivity : FragmentActivity() {
         if (!localeController.isManagedByPlatform) {
             lifecycleScope.launch {
                 localeController.appLocale.collect { if (it != appliedLocale) recreate() }
+            }
+        }
+    }
+
+    /** Nearby, location picker and badge presence all share this foreground permission host. */
+    private fun hostLocationPermission() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                locationPermissionBridge.pendingRequest.collect { request ->
+                    if (request != null && locationPermissionBridge.onLaunched(request.id)) {
+                        try {
+                            locationLauncher.launch(arrayOf(ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION))
+                        } catch (e: RuntimeException) {
+                            AppLogger.warn(TAG, "Standortberechtigung konnte nicht angefragt werden", e)
+                            locationPermissionBridge.onLaunchFailed(request.id)
+                        }
+                    }
+                }
             }
         }
     }

@@ -63,8 +63,8 @@ import javax.inject.Singleton
 @Singleton
 internal class DefaultFlutterMigration @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val keyValueStore: KeyValueStore,
-    private val secureStore: SecureStore,
+    @space.einundzwanzig.meetup.core.data.migration.Ungated private val keyValueStore: KeyValueStore,
+    @space.einundzwanzig.meetup.core.data.migration.Ungated private val secureStore: SecureStore,
     private val keystore: LegacyKeystore,
     private val logImporter: LegacyLogImporter,
     private val hooks: Set<@JvmSuppressWildcards MigrationCompletedHook>,

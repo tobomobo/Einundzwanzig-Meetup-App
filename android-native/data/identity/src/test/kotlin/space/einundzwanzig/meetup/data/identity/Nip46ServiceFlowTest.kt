@@ -209,7 +209,8 @@ class Nip46ServiceFlowTest {
         signer.respond = { r -> jsonObjectOf("id" to r["id"], "error" to "user denied") }
         val id = identity()
         val result = id.signing.connectNip46Bunker("bunker://${signer.pubkey}?relay=$relay")
-        assertEquals(Nip46ConnectResult.Error("user denied"), result)
+        assertEquals("user denied", (result as Nip46ConnectResult.Error).message)
+        assertTrue(result.cause is space.einundzwanzig.meetup.data.identity.nip46.Nip46RemoteException)
         assertTrue(signer.links.all { it.closed })
     }
 

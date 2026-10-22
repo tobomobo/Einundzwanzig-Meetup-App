@@ -5,6 +5,8 @@ import android.content.Intent
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -23,6 +25,7 @@ import space.einundzwanzig.meetup.data.calendar.widget.HomeWidgetStore
 import space.einundzwanzig.meetup.data.calendar.widget.WidgetTarget
 import space.einundzwanzig.meetup.data.mempool.BitcoinDashboardData
 import space.einundzwanzig.meetup.data.mempool.widget.BitcoinWidgetBridge
+import space.einundzwanzig.meetup.data.migration.MigrationGate
 import space.einundzwanzig.meetup.data.news.NewsArticle
 import space.einundzwanzig.meetup.data.news.NewsService
 import space.einundzwanzig.meetup.widget.countdownText
@@ -40,6 +43,10 @@ class WidgetTest {
     private val context: Application = ApplicationProvider.getApplicationContext()
     private val zone: ZoneId = ZoneOffset.UTC
     private val today: LocalDate = LocalDate.of(2026, 10, 22)
+    private val gate = object : MigrationGate {
+        override val isComplete = true
+        override suspend fun await() = Unit
+    }
 
     private fun startOf(day: LocalDate) = day.atTime(19, 0).toInstant(ZoneOffset.UTC).toEpochMilli()
 
@@ -97,23 +104,66 @@ class WidgetTest {
         val bridge = FakeBridge()
         val store = FakeWidgetStore()
         val news = FakeNews(listOf(article("a1", "Halving")))
-        refreshWidget(bridge, news, store, AppLogger)
+        refreshWidget(gate, bridge, news, store, AppLogger)
         assertEquals(1, bridge.refreshes)
         assertEquals(1, news.lastLimit)
         assertEquals(listOf("a1" to "Halving"), store.published)
     }
 
     @Test
-    fun `refresh without articles writes the News placeholder, failures are isolated`() = runTest {
+    fun `empty feed preserves the last headline and new marker, failures are isolated`() = runTest {
         val store = FakeWidgetStore()
-        refreshWidget(FakeBridge(fail = true), FakeNews(emptyList()), store, AppLogger)
-        assertEquals(listOf("" to "News"), store.published)
+        val previous = HomeWidgetSnapshot(newsTitle = "Last good headline", newsIsNew = true)
+        store.current = previous
+        refreshWidget(gate, FakeBridge(fail = true), FakeNews(emptyList()), store, AppLogger)
+        assertTrue(store.published.isEmpty())
+        assertEquals(previous, store.snapshot())
 
         val store2 = FakeWidgetStore()
         val bridge = FakeBridge()
-        refreshWidget(bridge, FakeNews(emptyList(), fail = true), store2, AppLogger)
+        refreshWidget(gate, bridge, FakeNews(emptyList(), fail = true), store2, AppLogger)
         assertEquals(1, bridge.refreshes)
         assertTrue(store2.published.isEmpty())
+    }
+
+    @Test
+    fun `slow migration prevents all widget refresh work until it completes`() = runTest {
+        val ready = CompletableDeferred<Unit>()
+        val pendingGate = object : MigrationGate {
+            override val isComplete get() = ready.isCompleted
+            override suspend fun await() = ready.await()
+        }
+        val bridge = FakeBridge()
+        val news = FakeNews(listOf(article("a1", "Imported news")))
+        val store = FakeWidgetStore()
+        val refresh = launch { refreshWidget(pendingGate, bridge, news, store, AppLogger) }
+        testScheduler.advanceTimeBy(60_000)
+        testScheduler.runCurrent()
+        assertEquals(0, bridge.refreshes)
+        assertEquals(-1, news.lastLimit)
+        assertTrue(store.published.isEmpty())
+        ready.complete(Unit)
+        refresh.join()
+        assertEquals(1, bridge.refreshes)
+        assertEquals(listOf("a1" to "Imported news"), store.published)
+    }
+
+    @Test
+    fun `cancelling a worker while migration is pending never starts refresh`() = runTest {
+        val pendingGate = object : MigrationGate {
+            override val isComplete = false
+            override suspend fun await() = CompletableDeferred<Unit>().await()
+        }
+        val bridge = FakeBridge()
+        val news = FakeNews(emptyList())
+        val store = FakeWidgetStore()
+        val refresh = launch { refreshWidget(pendingGate, bridge, news, store, AppLogger) }
+        testScheduler.runCurrent()
+        refresh.cancel()
+        refresh.join()
+        assertEquals(0, bridge.refreshes)
+        assertEquals(-1, news.lastLimit)
+        assertTrue(store.published.isEmpty())
     }
 
     private fun article(id: String, title: String) = NewsArticle(id, "", title, "", "", "", 0, "")
@@ -143,7 +193,8 @@ class WidgetTest {
 
     private class FakeWidgetStore : HomeWidgetStore {
         val published = mutableListOf<Pair<String, String>>()
-        override suspend fun snapshot() = HomeWidgetSnapshot()
+        var current = HomeWidgetSnapshot()
+        override suspend fun snapshot() = current
         override suspend fun writeBitcoin(values: Map<String, String>) = Unit
         override suspend fun updateMeetup(city: String, start: java.time.Instant?) = Unit
         override suspend fun publishLatestNews(id: String, title: String) {

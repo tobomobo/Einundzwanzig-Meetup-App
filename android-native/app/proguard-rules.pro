@@ -33,3 +33,8 @@
 # Glance widget receiver / router are referenced from the manifest (kept by AAPT rules); the
 # action callback is instantiated by class name.
 -keep class space.einundzwanzig.meetup.widget.RefreshWidgetAction { <init>(); }
+# ML Kit discovers component registrars from manifest metadata and invokes their no-arg
+# constructors reflectively. Keeping their names alone leaves the QR scanner without components.
+-keepclassmembers class * implements com.google.firebase.components.ComponentRegistrar {
+    public <init>();
+}

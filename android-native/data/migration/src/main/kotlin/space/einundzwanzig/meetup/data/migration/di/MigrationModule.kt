@@ -30,6 +30,12 @@ internal abstract class MigrationModule {
     @Binds
     abstract fun migrationGate(impl: DefaultFlutterMigration): MigrationGate
 
+    @Binds
+    abstract fun coreMigrationGate(impl: DefaultFlutterMigration): space.einundzwanzig.meetup.core.data.migration.MigrationGate
+
+    @Binds
+    abstract fun legacySecretStatus(impl: DefaultFlutterMigration): space.einundzwanzig.meetup.core.data.migration.LegacySecretStatus
+
     /** Lets the set be empty when no module contributes a hook. */
     @Multibinds
     abstract fun completionHooks(): Set<MigrationCompletedHook>

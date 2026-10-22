@@ -53,6 +53,8 @@ object IcsMeetupDates {
             location = component.string("location") ?: MeetupDate.UNKNOWN_LOCATION,
             start = start,
             url = "",
+            titleIsFallback = component.string("summary") == null,
+            locationIsFallback = component.string("location") == null,
         )
     }
 

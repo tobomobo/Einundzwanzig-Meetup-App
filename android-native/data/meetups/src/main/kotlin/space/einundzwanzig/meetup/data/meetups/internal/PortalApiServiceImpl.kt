@@ -25,6 +25,7 @@ import space.einundzwanzig.meetup.core.data.secure.SecureRead
 import space.einundzwanzig.meetup.core.data.secure.SecureStore
 import space.einundzwanzig.meetup.core.network.HttpResult
 import space.einundzwanzig.meetup.data.identity.SigningService
+import space.einundzwanzig.meetup.data.meetups.portal.PortalLoginFailure
 import space.einundzwanzig.meetup.data.meetups.portal.Attendee
 import space.einundzwanzig.meetup.data.meetups.portal.PortalApiService
 import space.einundzwanzig.meetup.data.meetups.portal.PortalApiService.Companion.RSVP_CACHE_PREFIX
@@ -544,7 +545,7 @@ internal class PortalApiServiceImpl @Inject constructor(
 
     companion object {
         private const val TAG = "PortalAPI"
-        private const val TOKEN_NOT_STORED = "Token konnte nicht gespeichert werden"
+        private const val TOKEN_NOT_STORED = PortalLoginFailure.TOKEN_NOT_STORED
         private const val TAG_PORTAL = "Portal"
         private const val API = PortalUrls.API_BASE
         private const val JSON = "application/json"

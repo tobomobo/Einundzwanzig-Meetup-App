@@ -152,10 +152,25 @@ class ProfileEditScreenTest {
     }
 
     @Test
-    fun `avatar is a labelled button that opens the picker`() {
+    fun `recovery remains available when the active key cannot be loaded`() {
+        val candidate = space.einundzwanzig.meetup.data.identity.keys.RecoveryCandidate(
+            space.einundzwanzig.meetup.data.identity.keys.RecoverySource.RECOVERED,
+            NPUB_A, hasPrivateKey = true, needsPassword = false, slot = 2,
+        )
+        show(loaded.copy(
+            loadErrorResource = space.einundzwanzig.meetup.data.identity.R.string.native_identity_storage,
+            recoveryCandidates = listOf(candidate),
+        ))
+        rule.onNodeWithText(str(space.einundzwanzig.meetup.feature.profile.R.string.native_recovery_restore))
+            .performScrollTo().performClick()
+        assertEquals(listOf(ProfileEditAction.RecoveryRequest(candidate, RecoveryOperation.RESTORE)), actions)
+    }
+
+    @Test
+    fun `profile form leaves the gallery picker on the home screen`() {
         show(loaded)
-        rule.onNodeWithContentDescription("Profilbild").performClick()
-        assertEquals(listOf<ProfileEditAction>(ProfileEditAction.PickAvatar), actions)
+        rule.onNodeWithContentDescription("Profilbild").assertDoesNotExist()
+        assertTrue(actions.isEmpty())
     }
 
     @Test

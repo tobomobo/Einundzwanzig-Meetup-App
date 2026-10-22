@@ -19,6 +19,24 @@ import space.einundzwanzig.meetup.data.settings.locale.PlatformLocales
 
 class LocaleControllerTest {
 
+    @Test
+    fun `attachBaseContext reads no gated preferences and async load warms the cache`() = runTest {
+        val backing = InMemoryKeyValueStore()
+        backing.setString("app_locale", "es")
+        var reads = 0
+        val gated = object : space.einundzwanzig.meetup.core.data.prefs.KeyValueStore by backing {
+            override suspend fun get(key: String): PrefValue? {
+                reads++
+                return backing.get(key)
+            }
+        }
+        val c = LocaleControllerImpl(KeyValueSettingsRepository(gated, backgroundScope), gated, FakePlatform(isAvailable = false))
+        assertNull(c.currentBlocking())
+        assertEquals(0, reads)
+        assertEquals("es", c.current())
+        assertEquals("es", c.currentBlocking())
+    }
+
     private class FakePlatform(var tag: String? = null, override val isAvailable: Boolean = true) : PlatformLocales {
         val writes = mutableListOf<String?>()
         override fun applicationLanguageTag(): String? = tag

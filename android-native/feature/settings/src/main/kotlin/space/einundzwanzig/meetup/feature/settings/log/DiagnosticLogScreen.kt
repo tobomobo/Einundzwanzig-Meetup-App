@@ -54,11 +54,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
@@ -120,6 +122,8 @@ fun DiagnosticLogRoute(viewModel: DiagnosticLogViewModel = hiltViewModel()) {
 internal fun DiagnosticLogRoute(viewModel: DiagnosticLogViewModel, writeClip: (Context, String) -> Unit) {
     val navigator = LocalNavigator.current
     val context = LocalContext.current
+    val resources by rememberUpdatedState(LocalResources.current)
+    val currentWriteClip by rememberUpdatedState(writeClip)
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -127,22 +131,22 @@ internal fun DiagnosticLogRoute(viewModel: DiagnosticLogViewModel, writeClip: (C
     // "Log kopiert" only after a successful copy; a clipboard failure (e.g. Binder limit) shows
     // an error snackbar instead of crashing the collector.
     fun copyAndReport(text: String) {
-        val ok = LogClipboard.copy(context, text, writeClip)
+        val ok = LogClipboard.copy(context, text, currentWriteClip)
         scope.launch {
             snackbar.showAppSnackbar(
-                context.getString(if (ok) R.string.native_log_copied else R.string.native_log_copy_failed),
+                resources.getString(if (ok) R.string.native_log_copied else R.string.native_log_copy_failed),
                 tone = if (ok) Tone.Neutral else Tone.Error,
                 durationMillis = if (ok) AppSnackbarDurations.Short else DEFAULT_SNACKBAR_MILLIS,
             )
         }
     }
 
-    LaunchedEffect(viewModel) {
+    LaunchedEffect(viewModel, context, snackbar) {
         viewModel.uiEvents.collect { event ->
             when (event) {
                 is DiagnosticLogEvent.Snackbar -> scope.launch {
                     snackbar.showAppSnackbar(
-                        context.getString(event.message.res),
+                        resources.getString(event.message.res),
                         tone = if (event.message == LogMessage.ProbeFailed) Tone.Error else Tone.Neutral,
                         durationMillis = DEFAULT_SNACKBAR_MILLIS,
                     )
@@ -250,21 +254,20 @@ fun DiagnosticLogScreen(
         },
         bottomBar = { LogFooter(count = state.entries.size, onClear = { onAction(DiagnosticLogAction.Clear) }) },
     ) { padding ->
-        Box(
-            Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) {
-            if (state.entries.isEmpty()) {
-                EmptyState(
-                    icon = Icons.Rounded.ReceiptLong,
-                    title = stringResource(R.string.native_log_empty),
-                    subtitle = "",
-                    modifier = Modifier.testTag(DiagnosticLogTags.EMPTY),
-                    accentColor = MaterialTheme.extendedColors.textTertiary,
-                )
-            } else {
-                LogList(state.entries)
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            MigrationDiagnostics(state.migration, onAction)
+            Box(Modifier.weight(1f)) {
+                if (state.entries.isEmpty()) {
+                    EmptyState(
+                        icon = Icons.Rounded.ReceiptLong,
+                        title = stringResource(R.string.native_log_empty),
+                        subtitle = "",
+                        modifier = Modifier.testTag(DiagnosticLogTags.EMPTY),
+                        accentColor = MaterialTheme.extendedColors.textTertiary,
+                    )
+                } else {
+                    LogList(state.entries)
+                }
             }
         }
     }

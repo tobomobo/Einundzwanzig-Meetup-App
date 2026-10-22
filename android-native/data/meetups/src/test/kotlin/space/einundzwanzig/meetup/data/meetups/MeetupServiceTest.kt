@@ -18,7 +18,8 @@ import space.einundzwanzig.meetup.data.meetups.model.Meetup
 class MeetupServiceTest {
 
     private val server = FakeServer()
-    private val service = MeetupServiceImpl(server.client, testLog())
+    private val logos = testLogos()
+    private val service = MeetupServiceImpl(server.client, testLog(), logos)
 
     @After
     fun tearDown() = server.close()
@@ -98,6 +99,15 @@ class MeetupServiceTest {
         assertSame(list, service.cached)
         assertEquals(list, service.cachedFlow.value)
         assertEquals("https://portal.einundzwanzig.space/api/mobile/meetups", "https://${server.seen[0].host}${server.seen[0].path}")
+    }
+
+    @Test
+    fun `directory load seeds crests for groups without upcoming events`() = runTest {
+        load("""{"id":1,"city":"Wien","name":"Einundzwanzig Wien","logo":"/storage/wien.png"}""")
+        assertEquals("https://portal.einundzwanzig.space/storage/wien.png", logos.logoFor("Wien"))
+        assertEquals("https://portal.einundzwanzig.space/storage/wien.png", logos.logoFor("Einundzwanzig Wien"))
+        logos.put("Einundzwanzig Wien", "/storage/calendar.png")
+        assertEquals("https://portal.einundzwanzig.space/storage/calendar.png", logos.logoFor("Wien"))
     }
 
     @Test

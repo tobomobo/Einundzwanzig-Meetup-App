@@ -1,0 +1,286 @@
+{
+  "baselineFindings": 40,
+  "sourceInspectedAssertions": 626,
+  "items": [
+    {
+      "id": "13-bitcoin-tools:01",
+      "module": ":feature:home",
+      "title": "btc_dashboard tile status dot stays green while offline",
+      "status": "fixed",
+      "resolution": "HomeViewModel uses its latest poll result for live status; HomeViewModelTest covers good-to-dead polls."
+    },
+    {
+      "id": "13-bitcoin-tools:02",
+      "module": ":feature:home",
+      "title": "BTC tile shows \"0\" instead of \"––\" when the block height is unknown",
+      "status": "fixed",
+      "resolution": "Unknown block height uses intOrDash; covered by HomeViewModelTest."
+    },
+    {
+      "id": "13-bitcoin-tools:03",
+      "module": ":feature:home",
+      "title": "BTC tile re-fetches on every return to Home, not on a 60 s cadence",
+      "status": "fixed",
+      "resolution": "Home polls no more often than once per 60 seconds; covered by HomeViewModelTest."
+    },
+    {
+      "id": "06-proofs:01",
+      "module": ":feature:profile",
+      "title": "Identity switch via nsec import or Amber/NIP-46 connect keeps the old identity's platform and humanity proofs",
+      "status": "fixed",
+      "resolution": "Synchronous identity hook binds each durable proof generation to the intended next identity before key persistence. All proof writes check both inside the transaction; reads/export/publishing reject foreign ownership. 136 proof tests cover old writes released after the new identity commits fresh proofs; eight identity barrier regressions pass."
+    },
+    {
+      "id": "06-proofs:02",
+      "module": ":feature:proofs",
+      "title": "Create result snackbar is lost if the user leaves the platform proof screen while the signer is open",
+      "status": "fixed",
+      "resolution": "Completion feedback uses the app snackbar controller; ViewModel and screen tests cover route removal."
+    },
+    {
+      "id": "04-trust-reputation:01",
+      "module": ":feature:reputation",
+      "title": "Verify-string screen still says the platform-proof signature was checked (S-9 fix only half done)",
+      "status": "fixed",
+      "resolution": "Removed unsupported signature-verification claims in de/en/es; ReputationScreensUiTest covers the honest result text."
+    },
+    {
+      "id": "08-backup-sync:01",
+      "module": ":core:ui",
+      "title": "Export share fallback reports success when the share chooser could not be started",
+      "status": "fixed",
+      "resolution": "Failed chooser launch yields Dismissed, preventing reset authorization; ShareHelperTest covers it."
+    },
+    {
+      "id": "05-social-graph-admin:01",
+      "module": ":feature:admin",
+      "title": "Start flow aborts with an error snackbar when session creation fails; Flutter still records attendance and opens the QR screen",
+      "status": "documented_deviation",
+      "resolution": "Spec 05 risk 18 allows surfacing session-creation failure. Native stays on the organizer panel with an error and does not record successful attendance for a failed session."
+    },
+    {
+      "id": "05-social-graph-admin:02",
+      "module": ":feature:reputation",
+      "title": "VerifyPerson path tap does not fall back to njump.me when the nostr: launch throws SecurityException",
+      "status": "fixed",
+      "resolution": "nostr: SecurityException also opens njump fallback; NostrFallbackTest covers it."
+    },
+    {
+      "id": "03-badge-wallet-ui:01",
+      "module": ":core:ui",
+      "title": "Shared PNGs in cacheDir/share are never cleaned up (world-map images pile up)",
+      "status": "fixed",
+      "resolution": "Shared images expire after one hour; ShareHelperTest covers cleanup."
+    },
+    {
+      "id": "03-badge-wallet-ui:02",
+      "module": ":data:meetups",
+      "title": "PortalLogoRegistry.seedFrom (crest seeding from the meetup directory) is never called",
+      "status": "fixed",
+      "resolution": "MeetupServiceImpl seeds PortalLogoRegistry after directory load; MeetupServiceTest covers it."
+    },
+    {
+      "id": "11-chat-news-community:01",
+      "module": ":app",
+      "title": "Cleartext exception for 127.0.0.1/localhost kept although the native PlebRap player uses no loopback proxy",
+      "status": "required_compatibility",
+      "resolution": "Preserved both loopback policy exceptions. Compiled MempoolHosts accepts 127.0.0.1 and trailing-dot localhost.; network tests and a real loopback-server device check verify required custom-mempool usage."
+    },
+    {
+      "id": "09-meetups-portal:01",
+      "module": ":app",
+      "title": "Location permission is never requested: LocationPermissionBridge has no Activity collector",
+      "status": "fixed",
+      "resolution": "MainActivity collects LocationPermissionBridge requests and registers the ActivityResult launcher. Real API 36 system prompt, denial, retry and grant exercised."
+    },
+    {
+      "id": "09-meetups-portal:02",
+      "module": ":feature:meetups",
+      "title": "Login-failure snackbar keeps a hard-coded German inner prefix in EN/ES",
+      "status": "fixed",
+      "resolution": "Typed PortalLoginFailure is localized at the UI boundary; PortalErrorLocalizationTest covers de/en/es."
+    },
+    {
+      "id": "07-nostr-infra-profile:01",
+      "module": ":feature:profile",
+      "title": "Signer disconnect reloads only the identity, not the full profile (Dart calls _loadData)",
+      "status": "fixed",
+      "resolution": "Signer disconnect reloads the complete profile through loadData; profile ViewModel tests cover it."
+    },
+    {
+      "id": "07-nostr-infra-profile:02",
+      "module": ":feature:profile",
+      "title": "Profile screen adds a gallery avatar picker and shows the local picture, which Flutter's profile screen does not",
+      "status": "fixed",
+      "resolution": "Profile avatar follows Nostr metadata; gallery avatar remains a Home concern."
+    },
+    {
+      "id": "07-nostr-infra-profile:03",
+      "module": ":data:identity",
+      "title": "Legacy NostrService kind-21000 sign/verify/signBadge API not ported",
+      "status": "fixed",
+      "resolution": "LegacyNostrService exposes kind-21000 sign/verify/signBadge; NostrLegacyServiceTest covers the facade."
+    },
+    {
+      "id": "07-nostr-infra-profile:04",
+      "module": ":feature:profile",
+      "title": "nsec import error text lacks the 'FormatException: ' prefix",
+      "status": "documented_deviation",
+      "resolution": "Typed localized key errors replace raw exception-prefix text. This preserves actionable failure meaning in de/en/es rather than exposing a Dart FormatException prefix."
+    },
+    {
+      "id": "10-calendar-events:01",
+      "module": ":app",
+      "title": "Widget refresh worker overwrites the news row when the feed returns no article",
+      "status": "fixed",
+      "resolution": "Empty news refresh retains the previous widget headline; WidgetRefreshTest covers it."
+    },
+    {
+      "id": "10-calendar-events:02",
+      "module": ":data:calendar",
+      "title": "Hard-coded German fallbacks 'Ort unbekannt' and 'Kurs' are shown to users without localization",
+      "status": "fixed",
+      "resolution": "CalendarDisplay provides resource-based place/course fallbacks; meetup and event UI use display values without altering raw matching/dedup values. CalendarDisplayTest covers three locales."
+    },
+    {
+      "id": "10-calendar-events:03",
+      "module": ":feature:events",
+      "title": "Event calendar card: badge marker is a bare icon instead of the orange chip, and the title is limited to 2 lines",
+      "status": "documented_deviation",
+      "resolution": "Event cards use the native Material presentation. The badge remains represented; visual chip shape and title wrapping follow the native UI rather than Flutter pixel parity."
+    },
+    {
+      "id": "14-android-platform-migration:01",
+      "module": ":core:data",
+      "title": "KeyValueStore/SecureStore are not gated by the migration, and pending Flutter secrets are never reported as Unreadable",
+      "status": "fixed",
+      "resolution": "Store-level migration gate and pending-key protection cover reads, observations and writes; core:data and migration regression suites cover them."
+    },
+    {
+      "id": "14-android-platform-migration:02",
+      "module": ":feature:profile",
+      "title": "No UI for parked Flutter identities (legacy_esp/legacy_backup/legacy_recovered): no restore/export notice",
+      "status": "fixed",
+      "resolution": "Authenticated profile recovery lists actual derived identities, supports restore/export/discard and preserves unrelated candidates; profile and identity regression suites cover it."
+    },
+    {
+      "id": "14-android-platform-migration:03",
+      "module": ":feature:settings",
+      "title": "Settings → Diagnose lacks 'Alte Daten erneut übernehmen' (retryNow) and the give-up action (abandonPendingSecrets)",
+      "status": "fixed",
+      "resolution": "Diagnostics offers explicit retryNow and confirmed abandon; settings ViewModel/UI tests cover both."
+    },
+    {
+      "id": "14-android-platform-migration:04",
+      "module": ":app",
+      "title": "Release CI/signing pipeline from §5.2.1/§5.2.7 not implemented (cert pin, 16 KB check, mapping upload, exported allow-list, release naming)",
+      "status": "implemented_external_validation_required",
+      "resolution": "Strict APK verifier, prerelease and manual signed-release workflows added. Preview signature/alignment/ABIs/mapping/exports verified locally. Actual production key/certificate pin is external."
+    },
+    {
+      "id": "14-android-platform-migration:05",
+      "module": ":app",
+      "title": "FlutterMigration.cleanupIfEligible() is never called, so Flutter files, orphaned ESP secrets and Keystore aliases are never removed",
+      "status": "fixed",
+      "resolution": "MigrationCleanupStartupTask calls cleanupIfEligible after the gate; eligibility and preservation covered by migration tests."
+    },
+    {
+      "id": "14-android-platform-migration:06",
+      "module": ":data:identity",
+      "title": "IdentityRecovery ignores overflow recovery slots '<name>#n'",
+      "status": "fixed",
+      "resolution": "Recovery includes #n overflow slots and groups by derived identity; regression tests cover independently allocated slots."
+    },
+    {
+      "id": "14-android-platform-migration:07",
+      "module": ":app",
+      "title": "Widget provider and refresh worker continue after a 10 s / 20 s gate timeout instead of awaiting the migration",
+      "status": "fixed",
+      "resolution": "Widget provider and refresh await migration without timing out into store access; app tests cover the gate."
+    },
+    {
+      "id": "14-android-platform-migration:08",
+      "module": ":app",
+      "title": "Launcher label changes from '21Meetup' to 'Einundzwanzig' on update",
+      "status": "fixed",
+      "resolution": "Launcher label restored to 21Meetup."
+    },
+    {
+      "id": "14-android-platform-migration:09",
+      "module": ":app",
+      "title": "Widget picker preview shows Glance's loading layout instead of a preview",
+      "status": "fixed",
+      "resolution": "Static real widget picker preview supplied with app label and sample content."
+    },
+    {
+      "id": "14-android-platform-migration:10",
+      "module": ":feature:community",
+      "title": "Lightning wallet chooser title not localized",
+      "status": "fixed",
+      "resolution": "Lightning chooser title uses localized de/en/es resources."
+    },
+    {
+      "id": "14-android-platform-migration:11",
+      "module": ":data:community",
+      "title": "Extra exported component (PlebrapPlaybackService) beyond the §6 exported allow-list",
+      "status": "required_compatibility",
+      "resolution": "Playback service remains exported for notification, lock-screen, Bluetooth and trusted system media controllers. ConnectionGate rejects untrusted controllers. Its exact service and intent filter are explicitly allowed by the APK verifier, which rejects unexpected exports or expanded filters."
+    },
+    {
+      "id": "14-android-platform-migration:12",
+      "module": ":data:migration",
+      "title": "No instrumented (androidTest) migration / release-variant tests",
+      "status": "fixed",
+      "resolution": "Five actual AndroidKeystore/legacy ESP tests and a real Flutter in-place upgrade were verified. Nine genuine R8 preview device tests pass, including JNI Schnorr, NIP-44, NIP-49, bundled ML Kit QR decoding, map, all route types, Activity recreation, actual identity/proof Hilt integration and pending-secret diagnostics navigation."
+    },
+    {
+      "id": "01-identity-keys:01",
+      "module": ":data:identity",
+      "title": "Signer and key service error messages are never localized (spec 01 §8.10)",
+      "status": "fixed",
+      "resolution": "Typed identity failures map to localized resources in onboarding/profile; IdentityErrorMessageTest covers translations and typed mapping."
+    },
+    {
+      "id": "01-identity-keys:02",
+      "module": ":data:identity",
+      "title": "ncryptsec import does not catch scrypt OutOfMemoryError (logN 16, 64 MiB)",
+      "status": "fixed",
+      "resolution": "Scrypt OOM is converted to a typed memory failure; import regression covers it."
+    },
+    {
+      "id": "01-identity-keys:03",
+      "module": ":feature:profile",
+      "title": "Profile ncryptsec export does not catch scrypt OutOfMemoryError",
+      "status": "fixed",
+      "resolution": "Encrypted export maps scrypt OOM to actionable UI failure; export regression covers it."
+    },
+    {
+      "id": "01-identity-keys:04",
+      "module": ":data:identity",
+      "title": "\"Mit Passkey sichern\" step is never offered: PASSKEY_RP_ASSOCIATED defaults to false and no build sets it",
+      "status": "external_prerequisite",
+      "resolution": "Passkey creation remains gated until the relying-party assetlinks.json associates the actual app certificate. The configured site returned HTTP 404 on 2026-10-22; migrated unwrap remains available on supported APIs. Do not enable the build flag without verified association."
+    },
+    {
+      "id": "12-shell-home-settings:01",
+      "module": ":feature:home",
+      "title": "App reset keeps the diagnostic 'verbose' flag (and log file) that Flutter's prefs.clear() removed",
+      "status": "fixed",
+      "resolution": "Reset disables verbose logging and clears diagnostic logs; ResetAppUseCaseTest covers it."
+    },
+    {
+      "id": "12-shell-home-settings:02",
+      "module": ":feature:settings",
+      "title": "Settings sheet is a fixed 92% sheet, not draggable between 50% and 95% with an 85% start",
+      "status": "fixed",
+      "resolution": "Settings sheet starts at 85%, resizes from 50% to 95% and exposes TalkBack range actions; settings sheet tests cover it."
+    },
+    {
+      "id": "12-shell-home-settings:03",
+      "module": ":app",
+      "title": "Bottom bar and scan FAB look different from the Flutter shell",
+      "status": "documented_deviation",
+      "resolution": "Native Material 3 Expressive bar and scan button implement the requested native UI. Navigation behavior and all 57 route keys are retained."
+    }
+  ]
+}

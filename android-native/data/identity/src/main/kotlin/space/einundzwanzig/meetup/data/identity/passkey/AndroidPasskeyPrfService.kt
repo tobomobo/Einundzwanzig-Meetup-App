@@ -44,6 +44,9 @@ internal class AndroidPasskeyPrfService @Inject constructor(
     }
 
     override suspend fun register(activity: Activity, userIdHex: String, userName: String): PasskeyPrfResult {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            throw PasskeyPrfException(PasskeyPrfException.UNSUPPORTED)
+        }
         val request = CreatePublicKeyCredentialRequest(
             PasskeyJson.registrationRequest(userIdHex, userName, PasskeyJson.randomChallenge()),
         )
@@ -63,6 +66,10 @@ internal class AndroidPasskeyPrfService @Inject constructor(
     }
 
     override suspend fun unlock(activity: Activity, credentialIds: List<String>): PasskeyPrfResult {
+        // Migrated passkey identities can call unlock without passing through isSupported().
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            throw PasskeyPrfException(PasskeyPrfException.UNSUPPORTED)
+        }
         val request = GetCredentialRequest.Builder()
             .addCredentialOption(GetPublicKeyCredentialOption(PasskeyJson.authenticationRequest(credentialIds, PasskeyJson.randomChallenge())))
             .setPreferImmediatelyAvailableCredentials(false)

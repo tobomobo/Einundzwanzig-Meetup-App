@@ -178,7 +178,7 @@ fun AppRoot(
         },
     )
 
-    // The system splash stays until the first real destination (not Splash) or Splash finished.
+    // Report the first destination; MainActivity also releases the system splash for storage errors.
     LaunchedEffect(Unit) {
         snapshotFlow { stacks.top }.filter { it != null && it != Splash }.first()
         onFirstRoute()

@@ -19,7 +19,7 @@
   - base-config bleibt STRIKT (cleartextTrafficPermitted="false").
     Für mempool.space, das Portal, Nostr-Relays usw. ändert
     sich NICHTS: alles muss weiterhin über TLS laufen.
-  - Nur ".onion" und ".local" dürfen im Klartext sprechen.
+  - Nur ".onion", ".local" und Loopback dürfen im Klartext sprechen.
     ".local" für selbst gehostete Instanzen im Heimnetz
     (Umbrel/Start9/RaspiBlitz melden sich als *.local).
 
@@ -50,20 +50,11 @@
     </domain-config>
 
     <!--
-      Ausnahme 3: das Geraet selbst (Loopback).
-
-      Der PlebRap-Player speichert Lieder beim ersten Abspielen auf dem
-      Geraet. Dafuer startet just_audio einen kleinen Server, der NUR auf
-      diesem Geraet laeuft und unter http://127.0.0.1 erreichbar ist — der
-      Player holt die Datei von dort. Ohne diese Ausnahme blockt Android
-      jede dieser Anfragen, und jedes Lied scheitert mit "konnte nicht
-      geladen werden".
-
-      Unbedenklich: 127.0.0.1 und localhost verlassen das Geraet nie. Kein
-      Datenverkehr ins Netz wird dadurch unverschluesselt.
-
-      Einzelne IP-Adressen sind erlaubt, Bereiche nicht (siehe oben) —
-      deshalb steht hier genau diese eine.
+      Ausnahme 3: benutzerdefinierte Mempool-Instanzen auf Loopback
+      (z.B. ein lokaler Tunnel). MempoolHosts akzeptiert 127.0.0.1 und
+      auch localhost. mit abschliessendem Punkt. Diese Ausnahmen bleiben
+      fuer bestehende Konfigurationen erhalten. Media3 selbst braucht
+      keinen HTTP-Cache-Proxy.
     -->
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="false">127.0.0.1</domain>

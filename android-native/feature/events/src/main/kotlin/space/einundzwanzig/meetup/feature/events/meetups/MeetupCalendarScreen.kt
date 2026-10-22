@@ -58,6 +58,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -82,6 +83,8 @@ import space.einundzwanzig.meetup.core.ui.security.SecretClipboard
 import space.einundzwanzig.meetup.core.ui.share.ShareHelper
 import space.einundzwanzig.meetup.core.ui.theme.EinundzwanzigTheme
 import space.einundzwanzig.meetup.core.ui.theme.extendedColors
+import space.einundzwanzig.meetup.data.calendar.format.displayTitle
+import space.einundzwanzig.meetup.data.calendar.format.displayLocation
 import space.einundzwanzig.meetup.data.calendar.format.CalendarFormat
 import space.einundzwanzig.meetup.data.calendar.model.MeetupDate
 import space.einundzwanzig.meetup.data.calendar.portal.PortalRsvp
@@ -125,9 +128,9 @@ fun MeetupCalendarRoute(
                 }
                 is MeetupCalendarAction.AddToCalendar -> PlatformActions.addToCalendar(
                     context = context,
-                    title = action.date.title,
+                    title = action.date.displayTitle(context.resources),
                     description = action.date.description,
-                    location = action.date.location,
+                    location = action.date.displayLocation(context.resources),
                     begin = action.date.start,
                     end = action.date.start.plus(Duration.ofHours(2)),
                     allDay = false,
@@ -235,7 +238,7 @@ private fun MeetupDateCard(row: MeetupDateRow, onAction: (MeetupCalendarAction) 
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        row.date.title,
+                        row.date.displayTitle(LocalResources.current),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -257,7 +260,7 @@ private fun MeetupDateCard(row: MeetupDateRow, onAction: (MeetupCalendarAction) 
                     }
                     if (row.date.location.isNotEmpty()) {
                         Text(
-                            row.date.location,
+                            row.date.displayLocation(LocalResources.current),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.extendedColors.textTertiary,
                             maxLines = 1,
@@ -412,7 +415,7 @@ private fun MeetupDateSheetContent(details: MeetupDateDetails, onAction: (Meetup
     Row(verticalAlignment = Alignment.CenterVertically) {
         CrestBox(row.crestUrl, size = 42.dp, radius = 9.dp)
         Spacer(Modifier.width(12.dp))
-        Text(date.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(date.displayTitle(LocalResources.current), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
     }
     Spacer(Modifier.height(12.dp))
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -422,7 +425,7 @@ private fun MeetupDateSheetContent(details: MeetupDateDetails, onAction: (Meetup
     }
     if (date.location.isNotEmpty()) {
         Spacer(Modifier.height(8.dp))
-        Text(date.location, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(date.displayLocation(LocalResources.current), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     if (date.description.isNotEmpty()) {
         Spacer(Modifier.height(10.dp))
@@ -457,7 +460,7 @@ private fun MeetupDateSheetContent(details: MeetupDateDetails, onAction: (Meetup
         }
     }
     Spacer(Modifier.height(12.dp))
-    val shareText = CalendarFormat.shareText(date.title, details.whenText, date.location, date.url)
+    val shareText = CalendarFormat.shareText(date.displayTitle(LocalResources.current), details.whenText, date.displayLocation(LocalResources.current), date.url)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         if (date.url.isNotEmpty()) {
             SheetActionButton(Icons.Rounded.Link, L10nR.string.evOpenLink, { onAction(MeetupCalendarAction.OpenUrl(date.url)) })

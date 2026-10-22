@@ -18,6 +18,7 @@ import space.einundzwanzig.meetup.data.calendar.widget.HomeWidgetStore
 import space.einundzwanzig.meetup.data.identity.profile.UserProfileRepository
 import space.einundzwanzig.meetup.data.mempool.widget.BitcoinWidgetSink
 import space.einundzwanzig.meetup.data.mempool.widget.BitcoinWidgetValues
+import space.einundzwanzig.meetup.data.migration.FlutterMigration
 import space.einundzwanzig.meetup.data.migration.MigrationCompletedHook
 import space.einundzwanzig.meetup.data.settings.diagnostics.DiagnosticsInventorySource
 import space.einundzwanzig.meetup.widget.MeetupWidget
@@ -47,11 +48,26 @@ abstract class AppModule {
     @IntoSet
     abstract fun badgeLoadTask(impl: BadgeLoadStartupTask): AppStartupTask
 
+    @Binds
+    @IntoSet
+    abstract fun migrationCleanupTask(impl: MigrationCleanupStartupTask): AppStartupTask
+
     companion object {
         /** The root snackbar queue that outlives screens and activity recreation (core:ui README). */
         @Provides
         @Singleton
         fun appSnackbarController(): AppSnackbarController = AppSnackbarController()
+    }
+}
+
+/** Runs once after migration/startup; release, start-count and secret checks stay in the migrator. */
+class MigrationCleanupStartupTask @Inject constructor(
+    private val migration: FlutterMigration,
+) : AppStartupTask {
+    override val name: String = "MigrationCleanup"
+    override val order: Int = 100
+    override suspend fun run() {
+        migration.cleanupIfEligible()
     }
 }
 

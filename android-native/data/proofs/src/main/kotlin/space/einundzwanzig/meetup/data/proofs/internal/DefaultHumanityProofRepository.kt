@@ -4,9 +4,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -39,7 +40,6 @@ import space.einundzwanzig.meetup.data.proofs.humanity.HumanityProofRepository
 import space.einundzwanzig.meetup.data.proofs.humanity.HumanityStatus
 import space.einundzwanzig.meetup.data.proofs.zap.ZapProviderResolver
 import space.einundzwanzig.meetup.data.proofs.zap.ZapReceiptValidator
-import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -57,6 +57,7 @@ internal class DefaultHumanityProofRepository @Inject constructor(
 ) : HumanityProofRepository {
 
     private val searchMutex = Mutex()
+    private val ownership = ProofOwnership(store, identity)
 
     /** Searches finished under [searchMutex] (written under it, read before locking). */
     @Volatile
@@ -68,14 +69,10 @@ internal class DefaultHumanityProofRepository @Inject constructor(
      */
     private var lastSearch: SearchRun? = null
 
-    /** Bumped by [clearForIdentitySwitch]; a search started under another epoch must not write. */
-    private val identityEpoch = AtomicLong()
+    override val status: Flow<HumanityStatus> = merge(store.observeAll().map { Unit }, identity.signerReady)
+        .map { getStatus() }.distinctUntilChanged().flowOn(dispatcher)
 
-    override val status: Flow<HumanityStatus> = combine(HumanityKeys.ALL.map { store.observe(it) }) { values ->
-        statusOf(HumanityKeys.ALL.zip(values.toList()).toMap())
-    }.distinctUntilChanged().flowOn(dispatcher)
-
-    override suspend fun getStatus(): HumanityStatus = statusOf(HumanityKeys.ALL.associateWith { store.get(it) })
+    override suspend fun getStatus(): HumanityStatus = statusOf(ownership.read(ProofOwnership.HUMANITY_OWNER))
 
     private fun statusOf(values: Map<String, PrefValue?>): HumanityStatus {
         val pending = values[HumanityKeys.NEEDS_REVERIFICATION].asBool == true
@@ -125,7 +122,11 @@ internal class DefaultHumanityProofRepository @Inject constructor(
         }
     }
 
-    private suspend fun humanityValues(): Map<String, PrefValue?> = HumanityKeys.ALL.associateWith { store.get(it) }
+    private suspend fun humanityValues(): Map<String, PrefValue?> {
+        val values = store.getAll()
+        return (HumanityKeys.ALL + ProofOwnership.HUMANITY_OWNER + ProofOwnership.GENERATION + ProofOwnership.IDENTITY)
+            .associateWith { values[it] }
+    }
 
     /**
      * Result of one [search]; [reusable] is `false` if it was discarded (identity or humanity
@@ -144,17 +145,18 @@ internal class DefaultHumanityProofRepository @Inject constructor(
      * identity switch — [HumanityKeys.clearIdentityProofs], whoever calls it — must not be undone
      * by a search that started for the previous key).
      */
-    private class Snapshot(val npub: String, val epoch: Long, val values: Map<String, PrefValue?>)
+    private class Snapshot(val owner: ProofOwnership.Snapshot, val values: Map<String, PrefValue?>)
 
     private suspend fun search(): SearchRun {
-        val npub = identity.npub()
+        val owner = ownership.snapshot()
+        val npub = owner.npub
         if (npub.isNullOrEmpty()) return SearchRun(npub, HumanityCheckResult(found = false, outcome = HumanityOutcome.NO_KEY))
         val pubkeyHex = try {
             Nip19.decodeNpub(npub) // another HRP gives "" without throwing (Dart quirk, kept)
         } catch (_: Exception) {
             return SearchRun(npub, HumanityCheckResult(found = false, outcome = HumanityOutcome.INVALID_NPUB))
         }
-        val snapshot = Snapshot(npub, identityEpoch.get(), humanityValues())
+        val snapshot = Snapshot(owner, humanityValues())
 
         val zapRelays = LinkedHashSet<String>().apply {
             addAll(relayConfig.getActiveRelays())
@@ -211,12 +213,16 @@ internal class DefaultHumanityProofRepository @Inject constructor(
      * cancellation right after a committed write would otherwise hide that it was written).
      */
     private suspend fun writeIfUnchanged(snapshot: Snapshot, block: KeyValueEditor.() -> Unit): Write {
-        if (identity.npub() != snapshot.npub || identityEpoch.get() != snapshot.epoch) return Write.STALE
+        if (identity.npub() != snapshot.owner.npub) return Write.STALE
         var stale = false
         val ok = withContext(NonCancellable) {
-            store.edit {
-                stale = HumanityKeys.ALL.any { get(it) != snapshot.values[it] }
-                if (!stale) block()
+            ownership.edit(snapshot.owner, onInvalidated = { stale = true }) {
+                stale = snapshot.values.any { (key, value) -> get(key) != value }
+                if (!stale) {
+                    if (!snapshot.owner.owns(this, ProofOwnership.HUMANITY_OWNER)) HumanityKeys.ALL.forEach(::remove)
+                    block()
+                    snapshot.owner.stamp(this, ProofOwnership.HUMANITY_OWNER)
+                }
             }
         }
         return when {
@@ -240,25 +246,15 @@ internal class DefaultHumanityProofRepository @Inject constructor(
             log.warn(TAG, "Reverifikation verworfen: Identität hat gewechselt")
             return false
         }
-        // The search's own write already cleared the flag (R6). Only if something set it again
-        // in between is it confirmed here; a flag cleared by an identity switch stays cleared.
-        // (The search logged the success when its write cleared the flag.)
-        var confirmed = false
-        val ok = withContext(NonCancellable) {
-            store.edit {
-                if (getBool(HumanityKeys.NEEDS_REVERIFICATION) == true) {
-                    setBool(HumanityKeys.VERIFIED, true)
-                    remove(HumanityKeys.NEEDS_REVERIFICATION)
-                    confirmed = true
-                }
-            }
-        }
-        if (ok && confirmed) log.debug(TAG, "Reverifikation erfolgreich: Zap-Receipt bestätigt")
-        return ok
+        // The search itself confirmed its snapshot and cleared the flag atomically. Never
+        // confirm a different backup restored after that write or after an identity switch.
+        val status = getStatus()
+        return status.verified && status.receiptEventId == result.receiptEventId
     }
 
     override suspend fun reset() {
-        store.edit {
+        val snapshot = ownership.snapshot()
+        ownership.edit(snapshot) {
             remove(HumanityKeys.VERIFIED)
             remove(HumanityKeys.RECEIPT_ID)
             remove(HumanityKeys.FIRST_ZAP_AT)
@@ -325,20 +321,26 @@ internal class DefaultHumanityProofRepository @Inject constructor(
     }
 
     override suspend fun restoreFromBackup(backupProof: JsonObject?, additive: Boolean): Boolean {
-        val already = additive && store.getBool(HumanityKeys.VERIFIED) == true
-        if (already || backupProof == null) return false
+        val snapshot = ownership.snapshot()
+        if (backupProof == null) return false
         val verified = (backupProof["verified"] as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull ?: false
         if (!verified) return false
         val receiptId = backupProof["receipt_event_id"].dartStringOrNull() ?: ""
         val firstZapAt = backupProof["first_zap_at"].dartIntOrNull() ?: 0L
         val checkedAt = backupProof["checked_at"].dartIntOrNull() ?: 0L
-        val ok = store.edit {
+        var already = false
+        val ok = ownership.edit(snapshot) {
+            already = additive && snapshot.owns(this, ProofOwnership.HUMANITY_OWNER) && getBool(HumanityKeys.VERIFIED) == true
+            if (already) return@edit
+            if (!snapshot.owns(this, ProofOwnership.HUMANITY_OWNER)) HumanityKeys.ALL.forEach(::remove)
             setBool(HumanityKeys.VERIFIED, false)
             setBool(HumanityKeys.NEEDS_REVERIFICATION, true)
             if (receiptId.isNotEmpty()) setString(HumanityKeys.RECEIPT_ID, receiptId)
             if (firstZapAt > 0) setInt(HumanityKeys.FIRST_ZAP_AT, firstZapAt)
             if (checkedAt > 0) setInt(HumanityKeys.CHECKED_AT, checkedAt)
+            snapshot.stamp(this, ProofOwnership.HUMANITY_OWNER)
         }
+        if (!ok || already) return false
         log.debug(
             "Backup",
             "Humanity-Proof als pending_reverification markiert. Receipt: ${if (receiptId.isNotEmpty()) "vorhanden" else "fehlt"}",
@@ -347,8 +349,8 @@ internal class DefaultHumanityProofRepository @Inject constructor(
     }
 
     override suspend fun clearForIdentitySwitch(): Boolean {
-        identityEpoch.incrementAndGet() // before the wipe: a running search can no longer write
-        return store.edit { HumanityKeys.clearIdentityProofs(this) }
+        val snapshot = ownership.snapshot()
+        return ownership.edit(snapshot) { HumanityKeys.clearIdentityProofs(this) }
     }
 
     /**

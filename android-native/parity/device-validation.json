@@ -1,0 +1,58 @@
+{
+  "apiLevel": 36,
+  "avd": "e21test",
+  "optimizedPreview": {
+    "tests": 9,
+    "failures": 0,
+    "apkSha256": "b78a8c2d7049cd1cdda6780e261286b0266ab55a3649ffb8174aefdb7bee4679",
+    "cases": [
+      "Activity creates/recreates with production graph",
+      "First-key and identity-switch proof fencing through actual Hilt/Keystore/repository",
+      "All 57 navigation keys serialize and restore",
+      "Actual osmdroid projection/draw",
+      "Pending identity can open diagnostics through real Activity within ten seconds",
+      "JNI Schnorr signing/verification",
+      "NIP-44 encryption roundtrip",
+      "NIP-49 default-cost roundtrip and wrong password",
+      "Bundled ML Kit decodes QR through production factory"
+    ]
+  },
+  "flutterUpgrade": {
+    "sourceVersion": "1.7.2+31",
+    "targetVariant": "migrationTest",
+    "tests": 1,
+    "failures": 0,
+    "checks": [
+      "same public identity",
+      "same nickname/home/favorites",
+      "one original badge",
+      "widget headline retained",
+      "local signing/verification succeeds",
+      "zero pending secret names"
+    ],
+    "counts": {
+      "preferencesCopied": 45,
+      "secretsImported": 7,
+      "badgeCopiesOpened": 2,
+      "failedSecrets": 0
+    }
+  },
+  "ciMatrix": [
+    26,
+    29,
+    34,
+    36
+  ],
+  "ciMatrixStatus": "Configured; consult the workflow run for runtime results on each API",
+  "legacyStorage": {
+    "tests": 5,
+    "failures": 0,
+    "formats": [
+      "RSA PKCS1 + AES CBC",
+      "RSA OAEP + AES GCM",
+      "Interrupted backup cipher",
+      "Flutter vendored encrypted preferences with actual Keystore master",
+      "Missing ESP master is never regenerated"
+    ]
+  }
+}

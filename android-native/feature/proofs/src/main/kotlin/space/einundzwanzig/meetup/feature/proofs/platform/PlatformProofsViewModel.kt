@@ -9,7 +9,6 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -149,7 +148,7 @@ internal class PlatformProofsViewModel @Inject constructor(
         _state.update { it.copy(sheet = updated) }
     }
 
-    private fun create() {
+    fun create(reportResult: ((ProofCreateResult) -> Unit)? = null) {
         val current = _state.value
         val sheet = current.sheet ?: return
         if (current.isCreating || !sheet.canSubmit) return
@@ -160,20 +159,22 @@ internal class PlatformProofsViewModel @Inject constructor(
         // Sign + store + republish run in the application scope: with Amber or a NIP-46 bunker
         // the user may leave while the signer is open, and a proof they already approved must
         // still be stored and published (Flutter's future keeps running after the pop).
-        val work = appScope.async {
-            repository.createProof(platform, username, customName).also {
-                if (it is ProofCreateResult.Success) republisher.republishForced()
-            }
-        }
-        viewModelScope.launch {
+        appScope.launch {
             val result = try {
-                work.await()
+                repository.createProof(platform, username, customName).also {
+                    if (it is ProofCreateResult.Success) republisher.republishForced()
+                }
             } finally {
                 _state.update { it.copy(isCreating = false) }
             }
+            // The reporter captures only localized resources and the app-lifetime queue.
+            // It runs even if Nav3 has already cleared the ViewModel and route collector.
+            reportResult?.invoke(result)
             when (result) {
-                is ProofCreateResult.Success -> _events.send(PlatformProofsEvent.LinkSaved)
-                is ProofCreateResult.Failure -> _events.send(PlatformProofsEvent.CreateFailed(result.error, result.detail))
+                is ProofCreateResult.Success -> _events.trySend(PlatformProofsEvent.LinkSaved)
+                is ProofCreateResult.Failure -> if (reportResult == null) {
+                    _events.trySend(PlatformProofsEvent.CreateFailed(result.error, result.detail))
+                }
             }
         }
     }

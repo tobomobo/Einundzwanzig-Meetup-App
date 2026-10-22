@@ -35,6 +35,7 @@ import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -54,6 +55,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import space.einundzwanzig.meetup.core.l10n.R as L10nR
 import space.einundzwanzig.meetup.core.navigation.Intro
+import space.einundzwanzig.meetup.core.navigation.DiagnosticLog
 import space.einundzwanzig.meetup.core.navigation.LocalNavigator
 import space.einundzwanzig.meetup.core.navigation.TopLevelDestination
 import space.einundzwanzig.meetup.core.ui.component.AppLoadingIndicator
@@ -73,13 +75,14 @@ fun SplashRoute(viewModel: SplashViewModel = hiltViewModel()) {
             SplashDestination.HOME -> navigator.resetTo(TopLevelDestination.start)
         }
     }
-    SplashScreen(state = state, onRetry = viewModel::retry)
+    SplashScreen(state = state, onRetry = viewModel::retry,
+        onDiagnostics = { navigator.navigate(DiagnosticLog) })
 }
 
 /** Splash hold screen (spec 01 §2.1, spec 12 §2.3): glowing bolt + expressive loading indicator. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun SplashScreen(state: SplashUiState, onRetry: () -> Unit) {
+fun SplashScreen(state: SplashUiState, onRetry: () -> Unit, onDiagnostics: () -> Unit = {}) {
     val reducedMotion = rememberReducedMotion()
     val fade = remember { Animatable(if (reducedMotion) 1f else 0f) }
     LaunchedEffect(Unit) { fade.animateTo(1f, tween(durationMillis = 800, easing = EaseOut)) }
@@ -97,7 +100,7 @@ fun SplashScreen(state: SplashUiState, onRetry: () -> Unit) {
                 transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) },
                 label = "splashState",
             ) { unavailable ->
-                if (unavailable) StorageUnavailable(onRetry) else BoltLoading(reducedMotion)
+                if (unavailable) StorageUnavailable(onRetry, onDiagnostics) else BoltLoading(reducedMotion)
             }
         }
     }
@@ -147,7 +150,7 @@ private fun BoltLoading(reducedMotion: Boolean) {
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun StorageUnavailable(onRetry: () -> Unit) {
+private fun StorageUnavailable(onRetry: () -> Unit, onDiagnostics: () -> Unit) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
@@ -182,6 +185,9 @@ private fun StorageUnavailable(onRetry: () -> Unit) {
         ) {
             Text(stringResource(L10nR.string.actionRetry))
         }
+        TextButton(onClick = onDiagnostics, modifier = Modifier.testTag(SplashTags.DIAGNOSTICS)) {
+            Text(stringResource(R.string.native_onboarding_storage_diagnostics))
+        }
     }
 }
 
@@ -190,6 +196,7 @@ object SplashTags {
     const val LOADING = "splash_loading"
     const val STORAGE_ERROR = "splash_storage_error"
     const val RETRY = "splash_retry"
+    const val DIAGNOSTICS = "splash_diagnostics"
 }
 
 @Preview

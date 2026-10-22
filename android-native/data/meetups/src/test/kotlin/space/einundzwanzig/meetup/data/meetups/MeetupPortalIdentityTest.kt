@@ -78,7 +78,7 @@ class MeetupPortalIdentityTest {
             }
         }
 
-        val groups = MeetupServiceImpl(server.client, testLog()).fetchMeetups()
+        val groups = MeetupServiceImpl(server.client, testLog(), testLogos()).fetchMeetups()
         assertEquals(portalLink, groups.first { it.id == "107" }.portalLink)
         assertEquals("https://portal.einundzwanzig.space/de/meetup/einundzwanzig-sachsen", groups.first { it.id == "32" }.portalLink)
 

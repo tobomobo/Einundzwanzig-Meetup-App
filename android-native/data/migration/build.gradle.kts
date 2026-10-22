@@ -3,6 +3,10 @@ plugins {
     id("einundzwanzig.android.hilt")
 }
 
+android {
+    defaultConfig.testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+}
+
 dependencies {
     // AppLogger/DiagnosticLog, TimeSource, dispatchers, DartJson.
     implementation(project(":core:common"))
@@ -15,6 +19,9 @@ dependencies {
 
     // Cleanup verification signs with secp256k1.
     testImplementation(libs.secp256k1.jvm)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.collection:collection:1.5.0")
 }
 
 // Tests read the shared vectors from spec/fixtures directly; rerun them when those change.

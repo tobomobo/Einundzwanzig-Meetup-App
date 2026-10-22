@@ -104,6 +104,7 @@ internal fun ProfileDialogs(
             onConfirm = { onAction(ProfileEditAction.ConfirmEdit) },
             onDismiss = dismiss,
         )
+        is ProfileDialog.Recovery -> RecoveryConfirmation(dialog, onAction, dismiss)
         ProfileDialog.KeyEducation -> KeyEducationDialog(
             onResult = { onAction(ProfileEditAction.KeyEducationResult(it)) },
         )
@@ -430,10 +431,10 @@ private fun ExportPasswordDialog(onConfirm: (String) -> Unit, onCancel: () -> Un
     val success = MaterialTheme.extendedColors.success
     AlertDialog(
         onDismissRequest = {},
-        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
+        properties = SecureWindows.dialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         icon = { Icon(Icons.Rounded.Lock, contentDescription = null, tint = success) },
-        title = { Text(stringResource(L10nR.string.keyExportTitle), fontWeight = FontWeight.Bold) },
+        title = { SecureScreenEffect(); Text(stringResource(L10nR.string.keyExportTitle), fontWeight = FontWeight.Bold) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 Text(stringResource(L10nR.string.keyExportDesc), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)

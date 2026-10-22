@@ -268,7 +268,7 @@ private fun ResultHeader(result: ProofVerifyResult<ReputationEvent>) {
     val (color, icon, title) = when (result.level) {
         VerifyLevel.FULL -> Triple(greenColor, Icons.Rounded.Verified, stringResource(L10nR.string.rvFullyVerified))
         VerifyLevel.PARTIAL -> Triple(amberColor, Icons.Rounded.Shield, stringResource(L10nR.string.rvPartiallyVerified))
-        VerifyLevel.SIGNATURE_ONLY -> Triple(orangeColor, Icons.Outlined.Lock, stringResource(L10nR.string.rvSignatureOnly))
+        VerifyLevel.SIGNATURE_ONLY -> Triple(orangeColor, Icons.Outlined.Lock, stringResource(R.string.native_rvFormatOnly))
         VerifyLevel.INVALID -> Triple(redColor, Icons.Rounded.Dangerous, stringResource(L10nR.string.rvInvalid))
     }
     val shape = RoundedCornerShape(16.dp)

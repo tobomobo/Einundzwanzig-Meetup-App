@@ -27,4 +27,22 @@
     <string name="native_log_count">%1$d Einträge</string>
     <string name="native_log_clear">Log leeren</string>
     <string name="native_log_copy_failed">Log konnte nicht kopiert werden</string>
+    <string name="native_migration_title">Flutter data import</string>
+    <string name="native_migration_not_started">Import has not finished yet.</string>
+    <string name="native_migration_not_needed">No legacy Flutter data found.</string>
+    <string name="native_migration_imported">Data import complete.</string>
+    <string name="native_migration_pending">Some legacy keys are still unreadable. Replacement keys require your explicit approval.</string>
+    <string name="native_migration_cleaned">Legacy Flutter data has been removed.</string>
+    <string name="native_migration_attempts">Attempts: %1$d</string>
+    <string name="native_migration_failed_keys">Still pending:
+%1$s</string>
+    <string name="native_migration_recovered">Saved copies (restore in Profile):
+%1$s</string>
+    <string name="native_migration_warnings">Diagnostic notices:
+%1$s</string>
+    <string name="native_migration_error">Data import unavailable. Please try again.</string>
+    <string name="native_migration_retry">Retry legacy data import</string>
+    <string name="native_migration_abandon">Give up pending legacy keys</string>
+    <string name="native_migration_abandon_confirm">Unreadable legacy keys will no longer be protected as pending. The app may then create new identities and keys. Old badges or identities may remain inaccessible without the original key. Legacy files are kept for a later manual retry. Continue?</string>
+    <string name="native_migration_cancel">Cancel</string>
 </resources>

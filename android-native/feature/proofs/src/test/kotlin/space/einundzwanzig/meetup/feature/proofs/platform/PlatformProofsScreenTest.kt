@@ -4,6 +4,8 @@ import android.os.Looper
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
+import androidx.lifecycle.viewModelScope
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -23,6 +25,8 @@ import androidx.compose.ui.test.performTextInput
 import androidx.navigation3.runtime.NavKey
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import org.junit.Assert.assertEquals
@@ -33,6 +37,11 @@ import org.junit.runner.RunWith
 import org.robolectric.Shadows.shadowOf
 import space.einundzwanzig.meetup.core.navigation.LocalNavigator
 import space.einundzwanzig.meetup.core.navigation.Navigator
+import space.einundzwanzig.meetup.core.ui.component.AppSnackbarController
+import space.einundzwanzig.meetup.core.ui.component.AppSnackbarVisuals
+import space.einundzwanzig.meetup.core.ui.component.Tone
+import space.einundzwanzig.meetup.core.ui.component.AppSnackbarControllerEffect
+import space.einundzwanzig.meetup.core.ui.component.LocalAppSnackbarController
 import space.einundzwanzig.meetup.core.ui.component.LocalAppSnackbarHostState
 import space.einundzwanzig.meetup.core.ui.theme.EinundzwanzigTheme
 import space.einundzwanzig.meetup.data.proofs.platform.PlatformProof
@@ -191,9 +200,15 @@ class PlatformProofsScreenTest {
 
     private fun showRoute(repo: FakePlatformProofRepository, republisher: FakeRepublisher, navigator: Navigator, host: SnackbarHostState) {
         val vm = PlatformProofsViewModel(repo, republisher, CoroutineScope(SupervisorJob() + Dispatchers.Default)) // like @ApplicationScope
+        val controller = AppSnackbarController()
         rule.setContent {
             EinundzwanzigTheme {
-                CompositionLocalProvider(LocalNavigator provides navigator, LocalAppSnackbarHostState provides host) {
+                CompositionLocalProvider(
+                    LocalNavigator provides navigator,
+                    LocalAppSnackbarHostState provides host,
+                    LocalAppSnackbarController provides controller,
+                ) {
+                    AppSnackbarControllerEffect(controller, host)
                     PlatformProofsRoute(vm)
                 }
             }
@@ -237,6 +252,55 @@ class PlatformProofsScreenTest {
         assertEquals(true, host.currentSnackbarData?.visuals?.withDismissAction)
         assertEquals(0, navigator.backs)
     }
+
+    private fun completeAfterRouteLeaves(failure: Boolean) {
+        val gate = CompletableDeferred<Unit>()
+        val repo = FakePlatformProofRepository().apply {
+            createGate = gate
+            if (failure) createResult = ProofCreateResult.Failure(ProofCreateError.SIGNER_OR_UNKNOWN, "Permission denied")
+        }
+        val publisher = FakeRepublisher()
+        val vm = PlatformProofsViewModel(repo, publisher, CoroutineScope(SupervisorJob() + Dispatchers.Default))
+        val controller = AppSnackbarController()
+        val host = SnackbarHostState()
+        val navigator = RecordingNavigator()
+        val visible = mutableStateOf(true)
+        rule.setContent {
+            EinundzwanzigTheme {
+                CompositionLocalProvider(
+                    LocalNavigator provides navigator,
+                    LocalAppSnackbarHostState provides host,
+                    LocalAppSnackbarController provides controller,
+                ) {
+                    AppSnackbarControllerEffect(controller, host)
+                    if (visible.value) PlatformProofsRoute(vm)
+                }
+            }
+        }
+        openSheetAndType("Telegram", "satoshi")
+        rule.onNodeWithTag(PlatformProofsTags.CREATE_BUTTON).performScrollTo().performClick()
+        waitFor { repo.createCalls.isNotEmpty() }
+        rule.runOnIdle {
+            visible.value = false
+            vm.viewModelScope.cancel()
+        }
+        rule.waitForIdle()
+        gate.complete(Unit)
+        waitFor { host.currentSnackbarData != null }
+        val visuals = host.currentSnackbarData!!.visuals as AppSnackbarVisuals
+        assertEquals(if (failure) "Fehler: Permission denied" else "Verknüpfung gespeichert! Wird automatisch in deinen Reputation-QR eingebettet.", visuals.message)
+        assertEquals(if (failure) Tone.Error else Tone.Success, visuals.tone)
+        assertEquals(if (failure) 10_000L else 3_000L, visuals.durationMillis)
+        assertEquals(failure, visuals.withDismissAction)
+        assertEquals(0, navigator.backs)
+        assertEquals(if (failure) 0 else 1, publisher.calls)
+    }
+
+    @Test
+    fun `root success snackbar arrives after the signer route was removed`() = completeAfterRouteLeaves(false)
+
+    @Test
+    fun `root dismissable signer failure arrives after the route was removed`() = completeAfterRouteLeaves(true)
 
     @Test
     fun `revoke flow removes the card`() {

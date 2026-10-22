@@ -10,4 +10,5 @@
     <string name="native_community_add_to_calendar">Añadir al calendario</string>
     <string name="native_community_open_link">Abrir enlace</string>
     <string name="native_community_seek">Posición en la canción</string>
+    <string name="native_lightning_wallet_chooser">Elegir monedero Lightning</string>
 </resources>

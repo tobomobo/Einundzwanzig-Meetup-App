@@ -24,6 +24,8 @@ import space.einundzwanzig.meetup.core.data.secure.AesGcmSecretCipher
 import space.einundzwanzig.meetup.core.data.secure.AndroidKeystoreKeyProvider
 import space.einundzwanzig.meetup.core.data.secure.DataStoreSecureStore
 import space.einundzwanzig.meetup.core.data.secure.SecureStore
+import space.einundzwanzig.meetup.core.data.migration.*
+import javax.inject.Provider
 import javax.inject.Qualifier
 import javax.inject.Singleton
 
@@ -75,12 +77,14 @@ internal object DataModule {
 
     @Provides
     @Singleton
-    fun keyValueStore(@AppPrefsDataStore dataStore: DataStore<Preferences>): KeyValueStore =
+    @Ungated
+    fun ungatedKeyValueStore(@AppPrefsDataStore dataStore: DataStore<Preferences>): KeyValueStore =
         DataStoreKeyValueStore(dataStore)
 
     @Provides
     @Singleton
-    fun secureStore(
+    @Ungated
+    fun ungatedSecureStore(
         @SecurePrefsDataStore dataStore: DataStore<Preferences>,
         @IoDispatcher ioDispatcher: CoroutineDispatcher,
     ): SecureStore = DataStoreSecureStore(
@@ -88,6 +92,19 @@ internal object DataModule {
         cipher = AesGcmSecretCipher(AndroidKeystoreKeyProvider(AndroidKeystoreKeyProvider.KEY_ALIAS)),
         ioDispatcher = ioDispatcher,
     )
+
+    @Provides
+    @Singleton
+    fun keyValueStore(@Ungated raw: KeyValueStore, gate: Provider<MigrationGate>): KeyValueStore =
+        GatedKeyValueStore(raw, gate::get)
+
+    @Provides
+    @Singleton
+    fun secureStore(
+        @Ungated raw: SecureStore,
+        gate: Provider<MigrationGate>,
+        legacy: Provider<LegacySecretStatus>,
+    ): SecureStore = GatedSecureStore(raw, gate::get, legacy::get)
 
     @Provides
     @Singleton

@@ -32,11 +32,11 @@
     <string name="native_rvMsgBadFormat">Formato no válido. Se espera: 21rep::npub::plataforma::usuario::sig=...</string>
     <string name="native_rvMsgBadSignature">ADVERTENCIA: ¡Firma no válida! Este verify string ha sido manipulado.</string>
     <string name="native_rvMsgUsernameMismatch">ADVERTENCIA: ¡El usuario no coincide! El string dice «%1$s», la cuenta es «%2$s».</string>
-    <string name="native_rvMsgNoReputation">Firma válida ✓ — pero no se encontró reputación en los relays.</string>
+    <string name="native_rvMsgNoReputation">Formato válido — vínculo sin confirmar. No se encontró reputación en los relays.</string>
     <string name="native_rvMsgFull">Identidad y reputación totalmente confirmadas ✓</string>
     <string name="native_rvMsgPartialWithProof">Reputación confirmada parcialmente — %1$d de %2$d insignias vinculadas.</string>
     <string name="native_rvMsgPartialNoProof">Reputación verificada, pero la prueba de plataforma no está en el evento.</string>
-    <string name="native_rvMsgSignatureOnlyNoBindings">Firma válida, pero sin insignias vinculadas.</string>
+    <string name="native_rvMsgSignatureOnlyNoBindings">Vínculo sin confirmar — sin insignias vinculadas.</string>
     <string name="native_rvMsgNpubNoReputation">No se encontró reputación en los relays para este npub.</string>
     <string name="native_rvMsgNpubWithBindings">Reputación encontrada — pero sin prueba de plataforma. Vínculo de identidad no confirmado.</string>
     <string name="native_rvMsgNpubNoBindings">Reputación encontrada, pero sin insignias vinculadas.</string>
@@ -54,4 +54,5 @@
     <string name="native_nip05Community">Verificado por la comunidad</string>
     <string name="native_nip05Custom">Dominio propio</string>
     <string name="native_nip05PublicProvider">Proveedor público</string>
+    <string name="native_rvFormatOnly">FORMATO VÁLIDO · SIN CONFIRMAR</string>
 </resources>

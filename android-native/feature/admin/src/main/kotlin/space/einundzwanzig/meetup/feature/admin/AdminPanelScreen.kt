@@ -53,13 +53,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
@@ -94,16 +95,16 @@ fun AdminPanelRoute(viewModel: AdminPanelViewModel = hiltViewModel()) {
     val appHost = LocalAppSnackbarHostState.current
     val localHost = remember { SnackbarHostState() }
     val host = appHost ?: localHost
-    val context = LocalContext.current
+    val resources by rememberUpdatedState(LocalResources.current)
 
-    LaunchedEffect(viewModel) {
+    LaunchedEffect(viewModel, navigator, host) {
         viewModel.events.collect { event ->
             when (event) {
                 is AdminPanelEvent.Navigate -> navigator.navigate(event.key)
                 AdminPanelEvent.NavigateBack -> navigator.back()
                 // Flutter: SnackBar(wotErrorShort(e), red), default 4 s.
                 is AdminPanelEvent.Error -> host.showAppSnackbar(
-                    message = context.getString(L10nR.string.wotErrorShort, event.message),
+                    message = resources.getString(L10nR.string.wotErrorShort, event.message),
                     tone = Tone.Error,
                     durationMillis = ERROR_SNACKBAR_MILLIS,
                 )

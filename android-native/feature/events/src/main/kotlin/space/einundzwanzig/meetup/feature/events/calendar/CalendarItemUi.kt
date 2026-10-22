@@ -23,6 +23,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,6 +40,8 @@ import space.einundzwanzig.meetup.core.l10n.R as L10nR
 import space.einundzwanzig.meetup.core.ui.component.StatusChip
 import space.einundzwanzig.meetup.core.ui.component.Tile
 import space.einundzwanzig.meetup.core.ui.theme.extendedColors
+import space.einundzwanzig.meetup.data.calendar.format.displayTitle
+import space.einundzwanzig.meetup.data.calendar.format.displayLocation
 import space.einundzwanzig.meetup.data.calendar.format.CalendarFormat
 import space.einundzwanzig.meetup.data.calendar.model.CalendarItem
 import space.einundzwanzig.meetup.data.calendar.model.CalendarItemType
@@ -108,7 +112,7 @@ fun CalendarEventCard(
                     Spacer(Modifier.width(8.dp))
                 }
                 Text(
-                    item.title,
+                    item.displayTitle(LocalResources.current),
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
@@ -137,7 +141,7 @@ fun CalendarEventCard(
                 )
             }
             IconLine(Icons.Rounded.Schedule, fmtWhen(item, showDate, zone))
-            if (item.location.isNotEmpty()) IconLine(Icons.Rounded.Place, item.location)
+            if (item.location.isNotEmpty()) IconLine(Icons.Rounded.Place, item.displayLocation(LocalResources.current))
             if (item.description.isNotEmpty()) {
                 Text(
                     item.description,

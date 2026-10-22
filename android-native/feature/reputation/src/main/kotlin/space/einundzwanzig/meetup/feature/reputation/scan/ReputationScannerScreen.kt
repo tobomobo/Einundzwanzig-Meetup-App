@@ -1,5 +1,6 @@
 package space.einundzwanzig.meetup.feature.reputation.scan
 
+import android.annotation.SuppressLint
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -49,7 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -137,7 +138,7 @@ internal fun ReputationScannerRoute(
     val appHost = LocalAppSnackbarHostState.current
     val localHost = remember { SnackbarHostState() }
     val host = appHost ?: localHost
-    val context = LocalContext.current
+    val resources = LocalResources.current
     val scope = rememberCoroutineScope()
     val scannerState = rememberQrScannerState()
     var state by rememberSaveable(stateSaver = ReputationScannerUiStateSaver) { mutableStateOf(ReputationScannerUiState()) }
@@ -172,13 +173,13 @@ internal fun ReputationScannerRoute(
                 handle(outcome.hit)
             }
             GalleryOutcome.NoCode -> scope.launch {
-                host.showAppSnackbar(context.getString(L10nR.string.qrNoCodeInImage), Tone.Warning)
+                host.showAppSnackbar(resources.getString(L10nR.string.qrNoCodeInImage), Tone.Warning)
             }
             GalleryOutcome.NotEinundzwanzig -> scope.launch {
-                host.showAppSnackbar(context.getString(L10nR.string.qrNotEinundzwanzig), Tone.Warning)
+                host.showAppSnackbar(resources.getString(L10nR.string.qrNotEinundzwanzig), Tone.Warning)
             }
             is GalleryOutcome.Failed -> scope.launch {
-                host.showAppSnackbar(context.getString(L10nR.string.qrProcessError, outcome.error.toString()), Tone.Error)
+                host.showAppSnackbar(resources.getString(L10nR.string.qrProcessError, outcome.error.toString()), Tone.Error)
             }
         }
     }
@@ -208,6 +209,9 @@ internal fun ReputationScannerRoute(
 }
 
 /** Stateless reputation scanner: camera slot, gallery action, hint card and demo dialog. */
+// The camera fills the viewport beneath the translucent top bar. QrScanner reserves the safe
+// top inset for its torch; the bottom controls below apply navigationBarsPadding themselves.
+@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun ReputationScannerScreen(

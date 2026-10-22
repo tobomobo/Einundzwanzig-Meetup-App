@@ -8,6 +8,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import space.einundzwanzig.meetup.core.common.IoDispatcher
 import space.einundzwanzig.meetup.core.common.log.AppLogger
+import space.einundzwanzig.meetup.core.crypto.DartUtf8
 import space.einundzwanzig.meetup.data.backup.BackupFiles
 import java.io.IOException
 import javax.inject.Inject
@@ -34,10 +35,16 @@ internal class ContentResolverBackupDocuments @Inject constructor(
 ) : BackupDocuments {
 
     override suspend fun write(uri: String, content: String) {
-        val output = withContext(io) {
-            context.contentResolver.openOutputStream(Uri.parse(uri), "w")
-        } ?: throw IOException("Kein Ausgabestrom für $uri")
-        BackupFiles.write(output, content, io)
+        withContext(io) {
+            val output = context.contentResolver.openOutputStream(Uri.parse(uri), "w")
+                ?: throw IOException("Kein Ausgabestrom für $uri")
+            // Open, write and close on IO without returning an owned stream across a cancellable
+            // dispatcher switch. Match BackupFiles.write: Dart UTF-8, no BOM or trailing newline.
+            output.use {
+                it.write(DartUtf8.encode(content))
+                it.flush()
+            }
+        }
     }
 
     override suspend fun read(uri: String): String =

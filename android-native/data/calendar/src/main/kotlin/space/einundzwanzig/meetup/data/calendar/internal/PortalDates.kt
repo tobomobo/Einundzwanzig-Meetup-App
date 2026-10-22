@@ -35,6 +35,7 @@ internal object PortalDates {
             val link = e.stringOrEmpty("link")
             out += MeetupDate(
                 title = name,
+                titleIsFallback = mv("name").dartTrim().isEmpty(),
                 description = e.stringOrEmpty("description"),
                 location = e.stringOrEmpty("location"),
                 start = start,

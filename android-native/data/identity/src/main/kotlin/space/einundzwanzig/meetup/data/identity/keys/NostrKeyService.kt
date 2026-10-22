@@ -27,7 +27,8 @@ interface NostrKeyService {
     /**
      * Decrypts an `ncryptsec1…` with [password] (scrypt, seconds) and imports it.
      *
-     * @throws space.einundzwanzig.meetup.core.crypto.Nip49Exception on a wrong password / bad input.
+     * @throws space.einundzwanzig.meetup.data.identity.KeyOperationException for invalid encrypted
+     *   keys, a wrong password or insufficient memory. Map its reason with `identityErrorMessage`.
      */
     suspend fun importNcryptsec(ncryptsec: String, password: String): GeneratedKeys
 }

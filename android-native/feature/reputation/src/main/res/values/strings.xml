@@ -32,11 +32,11 @@
     <string name="native_rvMsgBadFormat">Ungültiges Format. Erwartet: 21rep::npub::plattform::username::sig=...</string>
     <string name="native_rvMsgBadSignature">WARNUNG: Signatur ungültig! Dieser Verify-String wurde manipuliert.</string>
     <string name="native_rvMsgUsernameMismatch">WARNUNG: Username stimmt nicht überein! String sagt „%1$s“, Account ist „%2$s“.</string>
-    <string name="native_rvMsgNoReputation">Signatur gültig ✓ — Aber keine Reputation auf Relays gefunden.</string>
+    <string name="native_rvMsgNoReputation">Format gültig — Verknüpfung unbestätigt. Keine Reputation auf Relays gefunden.</string>
     <string name="native_rvMsgFull">Identität und Reputation vollständig bestätigt ✓</string>
     <string name="native_rvMsgPartialWithProof">Reputation teilweise bestätigt — %1$d von %2$d Badges gebunden.</string>
     <string name="native_rvMsgPartialNoProof">Reputation verifiziert, aber Plattform-Proof nicht im Event gefunden.</string>
-    <string name="native_rvMsgSignatureOnlyNoBindings">Signatur gültig, aber keine gebundenen Badges.</string>
+    <string name="native_rvMsgSignatureOnlyNoBindings">Verknüpfung unbestätigt — keine gebundenen Badges.</string>
     <string name="native_rvMsgNpubNoReputation">Keine Reputation auf Relays gefunden für diesen npub.</string>
     <string name="native_rvMsgNpubWithBindings">Reputation gefunden — aber kein Plattform-Proof. Identitäts-Verknüpfung nicht bestätigt.</string>
     <string name="native_rvMsgNpubNoBindings">Reputation gefunden, aber keine gebundenen Badges.</string>
@@ -54,4 +54,5 @@
     <string name="native_nip05Community">Community-verifiziert</string>
     <string name="native_nip05Custom">Eigene Domain</string>
     <string name="native_nip05PublicProvider">Public Provider</string>
+    <string name="native_rvFormatOnly">FORMAT GÜLTIG · UNBESTÄTIGT</string>
 </resources>

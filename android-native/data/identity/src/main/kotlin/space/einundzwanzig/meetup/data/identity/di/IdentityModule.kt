@@ -78,6 +78,9 @@ internal abstract class IdentityModule {
     /** Bound by `:data:badges`; optional so the identity module works without it. */
     @BindsOptionalOf abstract fun reviewDemoBadgeWriter(): ReviewDemoBadgeWriter
 
+    @dagger.multibindings.Multibinds
+    abstract fun identityChangeHooks(): Set<space.einundzwanzig.meetup.data.identity.IdentityChangeHook>
+
     companion object {
         @Provides
         @ReviewSignInAllowed

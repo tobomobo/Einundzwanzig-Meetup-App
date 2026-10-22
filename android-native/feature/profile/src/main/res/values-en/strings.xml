@@ -29,4 +29,15 @@
         <item quantity="one">%1$d more favourite</item>
         <item quantity="other">%1$d more favourites</item>
     </plurals>
+    <string name="native_recovery_title">Earlier identity found</string>
+    <string name="native_recovery_body">Additional keys were saved when importing Flutter data. You can restore, export or discard them.</string>
+    <string name="native_recovery_restore">Restore identity</string>
+    <string name="native_recovery_export">Export key</string>
+    <string name="native_recovery_discard">Discard saved copy</string>
+    <string name="native_recovery_restore_confirm">This replaces the current local identity and removes its proofs. Back up the current key first if needed. Device authentication is required to continue.</string>
+    <string name="native_recovery_export_confirm">After device authentication, the private key is shown in a protected view. Share it only with trusted apps. The saved copy is kept.</string>
+    <string name="native_recovery_discard_confirm">After device authentication, this saved copy is permanently deleted. Make sure you no longer need the key or have backed it up first.</string>
+    <string name="native_recovery_restored">Earlier identity restored.</string>
+    <string name="native_recovery_discarded">Saved copy discarded.</string>
+    <string name="native_auth_recovery">Manage saved identity</string>
 </resources>

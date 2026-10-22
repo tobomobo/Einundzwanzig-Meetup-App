@@ -40,7 +40,7 @@ class LivePortalTest {
     @Test(timeout = 60_000)
     fun `live portal - Suedniedersachsen events resolve to 107, never Sachsen`() = runBlocking {
         val client = OkHttpClient()
-        val groups = MeetupServiceImpl(client, testLog()).fetchMeetups()
+        val groups = MeetupServiceImpl(client, testLog(), testLogos()).fetchMeetups()
         val group = groups.single { it.id == "107" }
         assertEquals(NAME, group.name)
         assertTrue(group.portalLink, group.portalLink.endsWith("/meetup/einundzwanzig-suedniedersachsen"))

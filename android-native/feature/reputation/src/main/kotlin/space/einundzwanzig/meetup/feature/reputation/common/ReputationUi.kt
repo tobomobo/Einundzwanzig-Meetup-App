@@ -23,6 +23,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.core.net.toUri
 import space.einundzwanzig.meetup.core.common.log.AppLogger
 import space.einundzwanzig.meetup.core.ui.nostr.NpubFormat
+import space.einundzwanzig.meetup.core.ui.util.SafeUrlLauncher
 import space.einundzwanzig.meetup.core.ui.theme.extendedColors
 import space.einundzwanzig.meetup.data.trust.layers.TrustLayersEvaluator
 import space.einundzwanzig.meetup.data.trust.layers.TrustSignalColor
@@ -143,13 +144,10 @@ internal fun openNostr(context: Context, npub: String) {
     try {
         context.startActivity(nostr)
     } catch (_: ActivityNotFoundException) {
-        try {
-            context.startActivity(Intent(Intent.ACTION_VIEW, NpubFormat.profileUrl(npub).toUri()))
-        } catch (e: RuntimeException) {
-            AppLogger.warn("Reputation", "njump.me konnte nicht geöffnet werden", e)
-        }
+        SafeUrlLauncher.open(context, NpubFormat.profileUrl(npub))
     } catch (e: SecurityException) {
         AppLogger.warn("Reputation", "nostr:-Link konnte nicht geöffnet werden", e)
+        SafeUrlLauncher.open(context, NpubFormat.profileUrl(npub))
     }
 }
 

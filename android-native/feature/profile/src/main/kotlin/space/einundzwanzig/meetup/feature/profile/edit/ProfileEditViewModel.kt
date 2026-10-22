@@ -30,6 +30,8 @@ import space.einundzwanzig.meetup.core.navigation.HumanityProof
 import space.einundzwanzig.meetup.core.navigation.PlatformProofs
 import space.einundzwanzig.meetup.core.ui.component.AppSnackbarDurations
 import space.einundzwanzig.meetup.core.ui.component.Tone
+import space.einundzwanzig.meetup.data.identity.identityErrorMessage
+import space.einundzwanzig.meetup.data.identity.keys.IdentityRecovery
 import space.einundzwanzig.meetup.data.identity.AmberConnectResult
 import space.einundzwanzig.meetup.data.identity.Nip46ConnectResult
 import space.einundzwanzig.meetup.data.identity.SigningMode
@@ -86,6 +88,7 @@ class ProfileEditViewModel @Inject constructor(
     private val deviceAuthenticator: DeviceAuthenticator,
     private val pictureImporter: LocalPictureImporter,
     @param:ApplicationScope private val appScope: CoroutineScope,
+    private val recovery: IdentityRecovery,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ProfileEditUiState())
@@ -111,12 +114,15 @@ class ProfileEditViewModel @Inject constructor(
     /** Secrets held only between an action and its device authentication. */
     private var pendingNsec: String? = null
     private var pendingPrivHex: String? = null
+    private var pendingRecovery: ProfileDialog.Recovery? = null
+    private var recoveryPassword: String? = null
 
     /** The profile as loaded (source of the fields the form does not edit). */
     private var loadedUser: UserProfile? = null
 
     init {
         viewModelScope.launch { loadData() }
+        viewModelScope.launch { loadRecovery() }
         // Identity tiles follow the proof stores (Dart refreshed them after returning from the screens).
         viewModelScope.launch {
             platformProofs.proofs
@@ -143,10 +149,21 @@ class ProfileEditViewModel @Inject constructor(
 
     fun onAction(action: ProfileEditAction) {
         when (action) {
+            is ProfileEditAction.RecoveryRequest -> if (!_state.value.recoveryBusy && _state.value.pendingAuth == null) {
+                setDialog(ProfileDialog.Recovery(action.candidate, action.operation))
+            }
+            is ProfileEditAction.RecoveryConfirmed -> {
+                val dialog = _state.value.dialog as? ProfileDialog.Recovery ?: return
+                pendingRecovery = dialog
+                recoveryPassword = action.password
+                setDialog(null)
+                requestAuth(AuthPurpose.RECOVERY)
+            }
             ProfileEditAction.Back -> effectChannel.trySend(ProfileEditEffect.Back)
             ProfileEditAction.Retry -> viewModelScope.launch {
-                _state.update { it.copy(isLoading = true, loadError = null) }
+                _state.update { it.copy(isLoading = true, loadError = null, loadErrorResource = null) }
                 loadData()
+                loadRecovery()
             }
             ProfileEditAction.DismissDialog -> dismissDialog()
             ProfileEditAction.RequestEdit -> setDialog(ProfileDialog.UnlockWarning)
@@ -231,6 +248,7 @@ class ProfileEditViewModel @Inject constructor(
                 it.copy(
                     isLoading = false,
                     loadError = null,
+                    loadErrorResource = null,
                     isEditing = !user.isAdminVerified,
                     nickname = user.nickname,
                     savedNickname = user.nickname,
@@ -250,23 +268,7 @@ class ProfileEditViewModel @Inject constructor(
         } catch (e: Exception) {
             // E.g. SecureStorageUnreadableException: never treat an unreadable key as "no key".
             AppLogger.error(TAG, "Profil nicht ladbar", e)
-            _state.update { it.copy(isLoading = false, loadError = e.message ?: e.toString()) }
-        }
-    }
-
-    /** Re-reads only the identity part (after a signer disconnect); the form input stays. */
-    private suspend fun reloadIdentity() {
-        val hasKey = keyStore.hasKey()
-        val npub = signing.npub()
-        val mode = signing.getMode()
-        val canSign = signing.canSign()
-        _state.update {
-            it.copy(
-                hasLocalKey = hasKey,
-                signingMode = mode,
-                canSign = canSign,
-                npub = npub ?: loadedUser?.nostrNpub.orEmpty(),
-            )
+            _state.update { it.copy(isLoading = false, loadError = null, loadErrorResource = e.identityErrorMessage) }
         }
     }
 
@@ -337,7 +339,7 @@ class ProfileEditViewModel @Inject constructor(
             } catch (e: Exception) {
                 AppLogger.error(TAG, "Profil nicht gespeichert", e)
                 _state.update { it.copy(isSaving = false) }
-                showError(UiText.res(L10nR.string.errorGeneric, e.message ?: e.toString()))
+                showError(UiText.res(e.identityErrorMessage))
             }
         }
     }
@@ -359,8 +361,8 @@ class ProfileEditViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val keys = keyService.generateKeyPair()
-                signing.useLocalMode()
                 vault.clearAll()
+                signing.useLocalMode()
                 // `canSign` is not refreshed here (Dart parity).
                 _state.update {
                     it.copy(isGeneratingKey = false, hasLocalKey = true, signingMode = SigningMode.LOCAL, npub = keys.npub)
@@ -372,7 +374,7 @@ class ProfileEditViewModel @Inject constructor(
             } catch (e: Exception) {
                 AppLogger.error(TAG, "Schlüssel nicht erzeugt", e)
                 _state.update { it.copy(isGeneratingKey = false) }
-                showError(UiText.res(L10nR.string.errorGeneric, e.message ?: e.toString()))
+                showError(UiText.res(e.identityErrorMessage))
             }
         }
     }
@@ -385,7 +387,7 @@ class ProfileEditViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 AppLogger.warn(TAG, "Schlüssel nicht lesbar", e)
-                showError(UiText.res(L10nR.string.errorGeneric, e.message ?: e.toString()))
+                showError(UiText.res(e.identityErrorMessage))
                 null
             } ?: return@launch
             pendingNsec = keys.nsec
@@ -401,8 +403,8 @@ class ProfileEditViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val keys = keyService.importNsec(nsec)
-                signing.useLocalMode()
                 vault.clearAll()
+                signing.useLocalMode()
                 val canSign = runCatching { signing.canSign() }.getOrDefault(true)
                 _state.update {
                     it.copy(dialog = null, hasLocalKey = true, signingMode = SigningMode.LOCAL, npub = keys.npub, canSign = canSign)
@@ -412,7 +414,7 @@ class ProfileEditViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 // Dialog stays open; the message is the Flutter text ("Ungültiger nsec Key: …").
-                showError(UiText.Raw(e.message ?: e.toString()))
+                showError(UiText.res(e.identityErrorMessage))
             } finally {
                 _state.update { it.copy(isImportingNsec = false) }
             }
@@ -427,8 +429,16 @@ class ProfileEditViewModel @Inject constructor(
     }
 
     private fun onAuthResult(purpose: AuthPurpose, ok: Boolean) {
+        if (_state.value.pendingAuth != purpose) return
         _state.update { it.copy(pendingAuth = null) }
         when (purpose) {
+            AuthPurpose.RECOVERY -> {
+                val request = pendingRecovery
+                val password = recoveryPassword
+                pendingRecovery = null
+                recoveryPassword = null
+                if (ok && request != null) performRecovery(request, password)
+            }
             AuthPurpose.SHOW_NEW_KEY, AuthPurpose.SHOW_NSEC -> {
                 val nsec = pendingNsec
                 pendingNsec = null
@@ -467,7 +477,7 @@ class ProfileEditViewModel @Inject constructor(
         } catch (e: Exception) {
             AppLogger.warn(TAG, "Export fehlgeschlagen", e)
             _state.update { it.copy(isExporting = false) }
-            showError(UiText.res(L10nR.string.errorGeneric, e.message ?: e.toString()))
+            showError(UiText.res(e.identityErrorMessage))
         }
     }
 
@@ -487,10 +497,12 @@ class ProfileEditViewModel @Inject constructor(
                 _state.update { it.copy(dialog = ProfileDialog.NcryptsecSheet(ncryptsec, fromVault = false)) }
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: OutOfMemoryError) {
+                showError(UiText.res(e.identityErrorMessage))
             } catch (e: Nip49Exception) {
-                showError(UiText.res(L10nR.string.errorGeneric, e.message ?: e.toString()))
+                showError(UiText.res(e.identityErrorMessage))
             } catch (e: Exception) {
-                showError(UiText.res(L10nR.string.errorGeneric, e.toString()))
+                showError(UiText.res(e.identityErrorMessage))
             } finally {
                 _state.update { it.copy(isExporting = false) }
             }
@@ -527,13 +539,13 @@ class ProfileEditViewModel @Inject constructor(
                     }
                     AmberConnectResult.Missing -> setDialog(ProfileDialog.AmberNotFound)
                     AmberConnectResult.Cancelled -> snack(L10nR.string.profileAmberAborted, Tone.Neutral)
-                    is AmberConnectResult.Error -> showError(UiText.res(L10nR.string.errorAmber, r.message))
+                    is AmberConnectResult.Error -> showError(UiText.res(r.cause?.identityErrorMessage ?: space.einundzwanzig.meetup.data.identity.R.string.native_identity_signer_unreadable))
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 AppLogger.warn(TAG, "Amber-Verbindung fehlgeschlagen", e)
-                showError(UiText.res(L10nR.string.errorGeneric, e.message ?: e.toString()))
+                showError(UiText.res(e.identityErrorMessage))
             } finally {
                 _state.update { it.copy(isGeneratingKey = false) }
             }
@@ -576,13 +588,13 @@ class ProfileEditViewModel @Inject constructor(
                     s.isNip07 -> signing.disconnectNip07()
                     s.isAmber -> signing.disconnectAmber()
                 }
-                reloadIdentity()
+                loadData()
                 snack(L10nR.string.profileDisconnectDone, Tone.Success)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 AppLogger.warn(TAG, "Signer nicht getrennt", e)
-                showError(UiText.res(L10nR.string.errorGeneric, e.message ?: e.toString()))
+                showError(UiText.res(e.identityErrorMessage))
             }
         }
     }
@@ -604,6 +616,50 @@ class ProfileEditViewModel @Inject constructor(
                 snack(L10nR.string.bunkerAlive, Tone.Success)
             } else {
                 showError(UiText.res(L10nR.string.bunkerDead))
+            }
+        }
+    }
+
+    private suspend fun loadRecovery() {
+        try {
+            val candidates = recovery.candidates()
+            _state.update { it.copy(recoveryCandidates = candidates) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            showError(UiText.res(e.identityErrorMessage))
+        }
+    }
+
+    private fun performRecovery(request: ProfileDialog.Recovery, password: String?) {
+        if (_state.value.recoveryBusy) return
+        _state.update { it.copy(recoveryBusy = true) }
+        viewModelScope.launch {
+            try {
+                when (request.operation) {
+                    RecoveryOperation.RESTORE -> {
+                        recovery.adopt(request.candidate, password)
+                        vault.clearAll()
+                        signing.useLocalMode()
+                        loadData()
+                        snack(R.string.native_recovery_restored, Tone.Success)
+                    }
+                    RecoveryOperation.EXPORT -> setDialog(
+                        if (request.candidate.hasPrivateKey) ProfileDialog.NsecBackup(recovery.exportNsec(request.candidate))
+                        else ProfileDialog.NcryptsecSheet(recovery.exportNcryptsec(request.candidate), fromVault = false),
+                    )
+                    RecoveryOperation.DISCARD -> {
+                        recovery.discard(request.candidate)
+                        snack(R.string.native_recovery_discarded, Tone.Neutral)
+                    }
+                }
+                loadRecovery()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                showError(UiText.res(e.identityErrorMessage))
+            } finally {
+                _state.update { it.copy(recoveryBusy = false) }
             }
         }
     }
@@ -672,6 +728,8 @@ class ProfileEditViewModel @Inject constructor(
     override fun onCleared() {
         pendingNsec = null
         pendingPrivHex = null
+        pendingRecovery = null
+        recoveryPassword = null
         bunker.dispose(appScope)
     }
 

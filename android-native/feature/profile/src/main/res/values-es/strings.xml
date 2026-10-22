@@ -31,4 +31,15 @@
         <item quantity="one">%1$d favorito más</item>
         <item quantity="other">%1$d favoritos más</item>
     </plurals>
+    <string name="native_recovery_title">Identidad anterior encontrada</string>
+    <string name="native_recovery_body">Se guardaron claves adicionales al importar los datos de Flutter. Puedes restaurarlas, exportarlas o descartarlas.</string>
+    <string name="native_recovery_restore">Restaurar identidad</string>
+    <string name="native_recovery_export">Exportar clave</string>
+    <string name="native_recovery_discard">Descartar copia guardada</string>
+    <string name="native_recovery_restore_confirm">Se sustituirá la identidad local actual y se eliminarán sus pruebas. Guarda antes la clave actual si la necesitas. Se requiere la autenticación del dispositivo para continuar.</string>
+    <string name="native_recovery_export_confirm">Tras autenticarte en el dispositivo, la clave privada se mostrará en una vista protegida. Compártela solo con aplicaciones de confianza. Se conserva la copia guardada.</string>
+    <string name="native_recovery_discard_confirm">Tras autenticarte en el dispositivo, esta copia se eliminará permanentemente. Asegúrate de que ya no necesitas la clave o de haberla guardado antes.</string>
+    <string name="native_recovery_restored">Identidad anterior restaurada.</string>
+    <string name="native_recovery_discarded">Copia guardada descartada.</string>
+    <string name="native_auth_recovery">Gestionar identidad guardada</string>
 </resources>

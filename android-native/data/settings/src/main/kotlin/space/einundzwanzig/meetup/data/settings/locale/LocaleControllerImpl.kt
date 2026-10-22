@@ -2,7 +2,7 @@ package space.einundzwanzig.meetup.data.settings.locale
 
 import android.content.Context
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.coroutines.cancellation.CancellationException
@@ -25,16 +25,19 @@ internal class LocaleControllerImpl @Inject constructor(
     /** Serializes platform writes from [setLocale], [syncWithSystem] and the startup collector. */
     private val applyLock = Mutex()
 
-    override val appLocale: Flow<String?> get() = settings.appLocale
+    @Volatile private var cachedLocale: String? = null
+
+    override val appLocale: Flow<String?> get() = settings.appLocale.onEach { cachedLocale = it }
 
     override val isManagedByPlatform: Boolean get() = platform.isAvailable
 
-    override suspend fun current(): String? = settings.getAppLocale()
+    override suspend fun current(): String? = settings.getAppLocale().also { cachedLocale = it }
 
     override suspend fun setLocale(code: String?): Boolean {
         val normalized = code?.takeIf { it.isNotEmpty() }
         val ok = settings.setAppLocale(normalized)
         if (ok) {
+            cachedLocale = normalized
             AppLogger.info(TAG, "Sprache: ${normalized ?: "System"}")
             applyToPlatform()
         }
@@ -117,7 +120,10 @@ internal class LocaleControllerImpl @Inject constructor(
         }
     }
 
-    override fun currentBlocking(): String? = runBlocking { settings.getAppLocale() }
+    // attachBaseContext runs on the main thread before the splash exists. A gated DataStore
+    // read here would block Activity creation during migration. The asynchronous observer
+    // warms this cache and MainActivity recreates below API 33 when that first value arrives.
+    override fun currentBlocking(): String? = cachedLocale
 
     override fun wrapContext(base: Context): Context =
         if (platform.isAvailable) base else AppLocales.wrapContext(base, currentBlocking())

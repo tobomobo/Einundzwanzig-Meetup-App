@@ -20,6 +20,27 @@ separate `:data:satoshiduell` as spec 06 §13 proposed. Screens (`PlatformProofS
 Every suspend entry point and flow is main-safe: implementations switch to `@DefaultDispatcher`
 (BIP-340 checks, JSON parsing, Dart case tables); network I/O is suspending (OkHttp/relay helpers).
 Platform-proof read-modify-writes run in one atomic `KeyValueStore.edit` transaction.
+Every proof commit checks `native_proof_identity_generation` and its intended identity
+`native_proof_identity_npub` inside that transaction; the synchronous transition hook advances
+the generation, binds it to the next npub, and clears both proof groups atomically. Native writes
+record a separate owner npub for platform and humanity state. UI flows, backup/QR reads and
+publishing getters read payload and owner from one preferences snapshot and hide foreign
+ownership. The binding rejects departing-key writes started after cleanup, even before the new
+key is persisted or has written any proof, including after repository/process recreation.
+A new identity's writes never merge foreign-owned state.
+Unowned Flutter/migrated values and explicit backup restores keep their previous semantics;
+proof JSON, backup entries, reputation content and verify strings do not gain metadata fields.
+
+Transition contract for identity/passkey integration: `IdentitySwitchBarrier` invokes
+`IdentityChangeHook.beforeIdentityChange(previousNpub, nextNpub)` before persisting the key or
+notifying signer readiness. Empty `previousNpub` is the first key, including after logout:
+the proof hook advances/binds the generation without clearing unowned migrated/backup proofs
+or removing existing ownership. Null `nextNpub` binds to the explicit empty string for logout;
+the following first-key hook rebinds it. A missing binding remains compatible with legacy
+storage. Failed preparation leaves proofs, generation and binding unchanged and blocks key
+persistence. Failure after preparation retains the binding and rejects the departing key's
+proof operations until a transition completes. Later badgesync cleanup advances the generation
+and retains the binding. No passkey implementation changes are required by this contract.
 
 ### `platform`
 
@@ -105,7 +126,27 @@ DE/EN/ES, German defaults = `PlatformInfo.hint`/`name`) and maps `PlatformInfo.i
 
 ## Tests
 
-`tools/gradlew-locked :data:proofs:testDebugUnitTest` — 113 JVM tests.
+`tools/gradlew-locked :data:proofs:testDebugUnitTest` — 136 JVM proof tests.
+
+Transition-fence validation (2026-10-22, JDK 17 at `/home/tg/development/jdk17`):
+`tools/gradlew-locked :data:proofs:testDebugUnitTest :data:identity:testDebugUnitTest --tests 'space.einundzwanzig.meetup.data.identity.ParitySafetyTest'`
+passed. The proof task was up to date with current XML results of 136 tests, zero failures,
+errors or skips; the identity task executed eight `ParitySafetyTest` tests with zero failures,
+errors or skips. No device/emulator validation was performed for this change.
+
+- `ProofIdentityRaceTest`: deterministic pauses after the identity check and before the prefs
+  transaction, platform create/remove/replace/union/clear, humanity search/restore/reset/clear,
+  and work started between cleanup and key persistence. B commits fresh platform and humanity
+  proofs **before** A's paused transaction is released; its entire preferences snapshot and
+  publishing/UI getters must survive unchanged. Also covers rejection before B is active,
+  repository recreation, logout followed by first-key creation, retained binding after badgesync
+  cleanup, active UI refresh, failed cleanup and legacy/backup compatibility.
+- `ProofIdentityChangeHookTest`: synchronous cleanup and next-key binding, atomic failure,
+  first-key adoption of unowned legacy proofs, retained foreign ownership and logout binding.
+- Identity barrier contract tests:
+  `tools/gradlew-locked :data:identity:testDebugUnitTest --tests '*ParitySafetyTest'` checks first-key
+  and post-logout persistence waits for binding, failure/missing-hook rejection, and the existing
+  changed-key/Amber signer-ready barriers.
 
 - `ZapReceiptValidatorTest`: all 7 cases of `zap_receipt_validator_test.dart` + §10.6 reason-order
   and `descriptionHashOf` cases.
@@ -145,12 +186,16 @@ DE/EN/ES, German defaults = `PlatformInfo.hint`/`name`) and maps `PlatformInfo.i
 - **Zap stats:** `analyzeZapActivity`/`getMyStats` never throw (Dart let relay-config and
   cache-write errors escape).
 - **R20 (identity switch during long work):** a humanity search writes (proof or `checked_at`)
-  only if the npub is unchanged, no `clearForIdentitySwitch()` ran and every `humanity_*` key
+  only if the npub is unchanged, the durable identity generation is unchanged and bound to that npub, and every `humanity_*` key
   still has the value it had when the search started (checked inside the write transaction, so
   a `HumanityKeys.clearIdentityProofs` from `:data:badgesync` is caught too); otherwise the result
-  is discarded as `ERROR`. Re-verification confirms only while the flag is still set, and the
-  startup task cancels a running attempt when the flag is cleared. `createProof` drops a
-  signature if the npub changed while the signer was busy (`SIGNER_OR_UNKNOWN`).
+  is discarded as `ERROR`. Re-verification accepts only the search's own atomic confirmation;
+  it cannot confirm a backup restored afterward. The startup task cancels a running attempt
+  when the flag is cleared. Platform create, remove, replace-restore and additive-restore
+  commits check the same generation and intended-identity binding inside their transaction.
+  Clear/reset operations are fenced too. Separate durable ownership hides foreign data on reads.
+  A failed cleanup leaves proofs, owners, generation and binding unchanged, and the synchronous `IdentityChangeHook` blocks
+  key persistence and signer-ready notifications as before.
 - **Single flight:** `checkForZaps` runs one search at a time; a caller that waited for a
   search finished meanwhile gets its result instead of searching again, only if that search was
   not discarded, the npub is the same and no `humanity_*` key changed since it finished (a

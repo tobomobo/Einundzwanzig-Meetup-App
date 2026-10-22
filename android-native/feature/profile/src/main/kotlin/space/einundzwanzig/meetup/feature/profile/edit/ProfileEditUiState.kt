@@ -2,6 +2,7 @@ package space.einundzwanzig.meetup.feature.profile.edit
 
 import androidx.compose.runtime.Immutable
 import space.einundzwanzig.meetup.core.crypto.Nip19
+import space.einundzwanzig.meetup.data.identity.keys.RecoveryCandidate
 import space.einundzwanzig.meetup.data.identity.SigningMode
 import space.einundzwanzig.meetup.feature.profile.bunker.BunkerAction
 import space.einundzwanzig.meetup.data.meetups.model.Meetup
@@ -25,11 +26,16 @@ enum class AuthPurpose {
 
     /** ncryptsec export with a new password ("anderes Passwort"). */
     EXPORT_NEW_PASSWORD,
+
+    RECOVERY,
 }
+
+enum class RecoveryOperation { RESTORE, EXPORT, DISCARD }
 
 /** Dialogs and sheets of the profile screen; at most one is open. */
 @Immutable
 sealed interface ProfileDialog {
+    data class Recovery(val candidate: RecoveryCandidate, val operation: RecoveryOperation) : ProfileDialog
     /** "Achtung!" before leaving the verified read-only mode. */
     data object UnlockWarning : ProfileDialog
 
@@ -81,6 +87,7 @@ data class ProfileEditUiState(
     val isLoading: Boolean = true,
     /** Load failed (e.g. unreadable secure storage); the screen offers a retry. */
     val loadError: String? = null,
+    val loadErrorResource: Int? = null,
     /** `!user.isAdminVerified` at load; "BEARBEITEN (Status verlieren)" switches to true. */
     val isEditing: Boolean = true,
     val nickname: String = "",
@@ -110,6 +117,8 @@ data class ProfileEditUiState(
     val isSaving: Boolean = false,
     val platformProofCount: Int = 0,
     val humanityVerified: Boolean = false,
+    val recoveryCandidates: List<RecoveryCandidate> = emptyList(),
+    val recoveryBusy: Boolean = false,
     val dialog: ProfileDialog? = null,
     val pendingAuth: AuthPurpose? = null,
 ) {
@@ -153,6 +162,10 @@ data class ProfileEditUiState(
 
 /** User actions of [ProfileEditScreen]. */
 sealed interface ProfileEditAction {
+    data class RecoveryRequest(val candidate: RecoveryCandidate, val operation: RecoveryOperation) : ProfileEditAction
+    class RecoveryConfirmed(val password: String?) : ProfileEditAction {
+        override fun toString() = "RecoveryConfirmed(<redacted>)"
+    }
     data object Back : ProfileEditAction
     data object Retry : ProfileEditAction
     data object DismissDialog : ProfileEditAction
@@ -175,9 +188,13 @@ sealed interface ProfileEditAction {
     data object ShowNsec : ProfileEditAction
     data object ShowNsecConfirmed : ProfileEditAction
     data object OpenImportNsec : ProfileEditAction
-    data class ImportNsec(val nsec: String) : ProfileEditAction
+    data class ImportNsec(val nsec: String) : ProfileEditAction {
+        override fun toString() = "ImportNsec(<redacted>)"
+    }
     data object ExportEncrypted : ProfileEditAction
-    data class ExportPassword(val password: String) : ProfileEditAction
+    data class ExportPassword(val password: String) : ProfileEditAction {
+        override fun toString() = "ExportPassword(<redacted>)"
+    }
     data object NcryptsecCopied : ProfileEditAction
     data object ExportOtherPassword : ProfileEditAction
     data class AuthResult(val purpose: AuthPurpose, val ok: Boolean) : ProfileEditAction

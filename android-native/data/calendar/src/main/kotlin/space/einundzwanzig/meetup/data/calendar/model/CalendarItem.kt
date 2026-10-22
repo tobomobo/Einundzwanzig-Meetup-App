@@ -25,6 +25,9 @@ data class CalendarItem(
     val url: String = "",
     val nostr: NostrCalendarEvent? = null,
     val meetup: MeetupDate? = null,
+    /** Display metadata; raw title/location still drive matching and dedup keys. */
+    val titleIsFallback: Boolean = false,
+    val locationIsFallback: Boolean = false,
 ) {
     /** Row type (UI color: course grey, meetup orange, event purple). */
     val type: CalendarItemType
@@ -63,6 +66,8 @@ data class CalendarItem(
             start = m.start,
             isMeetup = true,
             meetup = m,
+            titleIsFallback = m.titleIsFallback,
+            locationIsFallback = m.locationIsFallback,
         )
     }
 }

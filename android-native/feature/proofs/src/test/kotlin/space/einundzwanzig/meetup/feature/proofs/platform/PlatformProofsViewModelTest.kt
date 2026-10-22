@@ -141,6 +141,30 @@ class PlatformProofsViewModelTest {
     }
 
     @Test
+    fun `success and signer failure both reach the app reporter after leaving`() = runTest(dispatcher) {
+        for (failure in listOf(false, true)) {
+            val repo = FakePlatformProofRepository().apply {
+                createGate = CompletableDeferred()
+                if (failure) createResult = ProofCreateResult.Failure(ProofCreateError.SIGNER_OR_UNKNOWN, "Permission denied")
+            }
+            val publisher = FakeRepublisher()
+            val vm = vm(repo, publisher)
+            val reports = mutableListOf<ProofCreateResult>()
+            vm.onAction(PlatformProofsAction.OpenSheet)
+            vm.onAction(PlatformProofsAction.SelectPlatform("telegram"))
+            vm.typeUsername("satoshi")
+            vm.create { reports += it }
+            advanceUntilIdle()
+            vm.viewModelScope.cancel()
+            repo.createGate!!.complete(Unit)
+            advanceUntilIdle()
+            assertEquals(1, reports.size)
+            assertEquals(failure, reports.single() is ProofCreateResult.Failure)
+            assertEquals(if (failure) 0 else 1, publisher.calls)
+        }
+    }
+
+    @Test
     fun `leaving right after confirming a revoke still removes and republishes`() = runTest(dispatcher) {
         val repo = FakePlatformProofRepository(listOf(telegram))
         val republisher = FakeRepublisher()

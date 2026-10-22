@@ -53,7 +53,6 @@ import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.withTimeoutOrNull
 import space.einundzwanzig.meetup.core.common.log.AppLogger
 import space.einundzwanzig.meetup.R
 import space.einundzwanzig.meetup.WidgetRouterActivity
@@ -64,7 +63,6 @@ import space.einundzwanzig.meetup.data.calendar.widget.WidgetFormat
 import space.einundzwanzig.meetup.data.migration.MigrationGate
 import java.time.LocalDate
 import java.time.ZoneId
-import kotlin.time.Duration.Companion.seconds
 
 /**
  * The home-screen widget (spec 14 §3.2): Glance replacement of the Flutter `RemoteViews` layout
@@ -85,7 +83,7 @@ class MeetupWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val entry = EntryPointAccessors.fromApplication(context.applicationContext, WidgetEntryPoint::class.java)
         // A widget update can start the process before any activity: wait for the Flutter import.
-        withTimeoutOrNull(GATE_TIMEOUT) { entry.migrationGate().await() }
+        entry.migrationGate().await()
         val store = entry.homeWidgetStore()
         val initial = runCatching { store.snapshot() }.getOrDefault(HomeWidgetSnapshot())
         provideContent { ObservedWidgetContent(store, initial) }
@@ -95,7 +93,6 @@ class MeetupWidget : GlanceAppWidget() {
         val SMALL = DpSize(250.dp, 110.dp)
         val MEDIUM = DpSize(250.dp, 220.dp)
         val LARGE = DpSize(300.dp, 300.dp)
-        private val GATE_TIMEOUT = 10.seconds
     }
 }
 

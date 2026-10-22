@@ -1,7 +1,7 @@
 name: Native Android prerelease
 
 # Builds the native Kotlin app in android-native/ and publishes a GitHub prerelease.
-# Runs only for the `kotlin` branch (or manually) and never on the upstream repository.
+# Runs on the fork's implementation branches (or manually), never on the upstream repository.
 
 on:
   push:
@@ -19,10 +19,51 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  device-tests:
+    if: github.repository != 'louisthecat86/Einundzwanzig-Meetup-App'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [26, 29, 34, 36]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: "platform-tools platforms;android-37.0 build-tools;37.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Enable emulator acceleration
+        run: sudo chmod 666 /dev/kvm
+      - name: Minified app runtime and actual Flutter Keystore formats
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          avd-name: e21test-api-${{ matrix.api }}
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: cd android-native && bash tools/run_device_tests.sh preview emulator-5554 "$RUNNER_TEMP/device-tests"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-device-tests-api-${{ matrix.api }}
+          path: |
+            ${{ runner.temp }}/device-tests/
+            android-native/**/build/outputs/androidTest-results/
+
   build:
     if: github.repository != 'louisthecat86/Einundzwanzig-Meetup-App'
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    outputs:
+      tag: ${{ steps.collect.outputs.tag }}
+      version: ${{ steps.collect.outputs.version }}
     defaults:
       run:
         working-directory: android-native
@@ -65,24 +106,40 @@ jobs:
           fi
 
       - name: Unit tests
-        run: ./gradlew --no-configuration-cache testDebugUnitTest
+        run: |
+          python3 -m unittest discover -s tools/tests -v
+          tools/gradlew-locked --no-configuration-cache testDebugUnitTest
 
       - name: Lint
-        run: ./gradlew --no-configuration-cache :app:lintPreview
+        run: tools/gradlew-locked --no-configuration-cache :app:lintPreview
 
       - name: Build preview APK
-        run: ./gradlew --no-configuration-cache :app:assemblePreview
+        run: tools/gradlew-locked --no-configuration-cache :app:assemblePreview
+
+      - name: Validate preview APK
+        run: |
+          python3 tools/verify_native_android.py \
+            --variant preview \
+            --apk app/build/outputs/apk/preview/app-preview.apk \
+            --manifest app/build/intermediates/merged_manifests/preview/processPreviewManifest/AndroidManifest.xml \
+            --mapping app/build/outputs/mapping/preview/mapping.txt \
+            --build-tools "$ANDROID_HOME/build-tools/37.0.0" \
+            --output-dir out
 
       - name: Collect artifacts
         id: collect
         run: |
           VERSION=$(grep -E '^\s*versionName\s*=' app/build.gradle.kts | head -1 | sed -E 's/.*"(.*)".*/\1/')
           TAG="native-v${VERSION}-preview.${GITHUB_RUN_NUMBER}"
-          mkdir -p out
-          cp app/build/outputs/apk/preview/app-preview.apk "out/einundzwanzig-native-${VERSION}-preview.${GITHUB_RUN_NUMBER}.apk"
-          (cd out && sha256sum *.apk > SHA256SUMS.txt)
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Upload validated APK and R8 mapping
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-android-preview-${{ github.run_number }}
+          path: android-native/out/
+          if-no-files-found: error
 
       - name: Upload test reports
         if: always()
@@ -94,18 +151,31 @@ jobs:
             android-native/app/build/reports/lint-results-preview.html
           if-no-files-found: ignore
 
-      - name: Publish prerelease
+  publish:
+    needs: [build, device-tests]
+    if: github.repository != 'louisthecat86/Einundzwanzig-Meetup-App'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download validated APK and mapping
+        uses: actions/download-artifact@v4
+        with:
+          name: native-android-preview-${{ github.run_number }}
+          path: out
+
+      - name: Publish prerelease after every validation passes
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.collect.outputs.tag }}
-          name: Native Android ${{ steps.collect.outputs.version }} preview ${{ github.run_number }}
+          tag_name: ${{ needs.build.outputs.tag }}
+          name: Native Android ${{ needs.build.outputs.version }} preview ${{ github.run_number }}
           target_commitish: ${{ github.sha }}
           prerelease: true
+          make_latest: false
           body: |
             Test build of the native Kotlin/Compose app (`android-native/`), commit ${{ github.sha }}.
 
             - Package `space.einundzwanzig.meetup.preview`: installs next to the Flutter app and does not touch its data.
             - Signed with a test-only preview key. Not for production use.
           files: |
-            android-native/out/*.apk
-            android-native/out/SHA256SUMS.txt
+            out/*.apk
+            out/SHA256SUMS.txt
+            out/mapping.txt

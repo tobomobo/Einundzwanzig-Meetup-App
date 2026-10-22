@@ -25,6 +25,7 @@
             Bluetooth, Android Auto/Wear) can bind with a MediaController. The session's onConnect
             rejects every controller except this app, the notification and trusted system
             controllers (PlebrapPlaybackService.ConnectionGate).
+            Explicitly allowed by tools/verify_native_android.py; CI checks the merged manifest.
         -->
         <service
             android:name="space.einundzwanzig.meetup.data.community.plebrap.PlebrapPlaybackService"

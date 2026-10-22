@@ -2,12 +2,20 @@ package space.einundzwanzig.meetup.core.ui.share
 
 import android.app.Application
 import android.content.Intent
+import android.content.ContextWrapper
+import android.content.ActivityNotFoundException
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.test.resetMain
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -55,6 +63,43 @@ class ShareHelperTest {
         assertEquals("Meine verifizierte Meetup-Reputation", send.getStringExtra(Intent.EXTRA_TEXT))
         assertTrue(send.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
         assertEquals(uri, send.clipData!!.getItemAt(0).uri)
+    }
+
+    @Test
+    fun `failed chooser launches cannot authorize backup reset`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            for (failure in listOf(ActivityNotFoundException("No chooser"), SecurityException("Denied"))) {
+                val blocked = object : ContextWrapper(app) {
+                    override fun startActivity(intent: Intent) { throw failure }
+                }
+                val result = ShareHelper.shareTextForResult(blocked, "backup")
+                assertEquals(ShareResult.Dismissed, result)
+                assertFalse(result.isNotDismissed)
+            }
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun `writing a PNG expires old location shares but keeps recent receiver files`() = runBlocking {
+        val directory = ShareHelper.shareDir(app)
+        val now = System.currentTimeMillis()
+        val old = File(directory, "badge_worldmap_old.png").apply {
+            writeText("private locations")
+            assertTrue(setLastModified(now - ShareHelper.SHARE_RETENTION_MS - 60_000))
+        }
+        val recent = File(directory, "badge_worldmap_recent.png").apply { writeText("still being shared") }
+        val backup = File(ShareHelper.backupDir(app), "keep.21bkp").apply {
+            writeText("backup")
+            setLastModified(now - ShareHelper.SHARE_RETENTION_MS - 60_000)
+        }
+        val bitmap = Bitmap.createBitmap(4, 4, Bitmap.Config.ARGB_8888)
+        ShareHelper.writePng(app, bitmap, "badge_worldmap_new.png")
+        assertFalse(old.exists())
+        assertTrue(recent.exists())
+        assertTrue(backup.exists())
     }
 
     @Test

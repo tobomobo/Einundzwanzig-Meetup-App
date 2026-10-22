@@ -69,6 +69,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -116,6 +117,7 @@ internal fun ReputationCardRoute(viewModel: ReputationCardViewModel = hiltViewMo
     val localHost = remember { SnackbarHostState() }
     val host = appHost ?: localHost
     val context = LocalContext.current
+    val resources = LocalResources.current
     val scope = rememberCoroutineScope()
     val capturer = rememberComposableCapturer()
     var cardSize by remember { mutableStateOf(DpSize.Zero) }
@@ -141,7 +143,7 @@ internal fun ReputationCardRoute(viewModel: ReputationCardViewModel = hiltViewMo
                             } catch (e: CancellationException) {
                                 throw e
                             } catch (e: Exception) {
-                                host.showAppSnackbar(context.getString(L10nR.string.rcShareError, e.toString()), Tone.Error)
+                                host.showAppSnackbar(resources.getString(L10nR.string.rcShareError, e.toString()), Tone.Error)
                             } finally {
                                 sharing = false
                             }

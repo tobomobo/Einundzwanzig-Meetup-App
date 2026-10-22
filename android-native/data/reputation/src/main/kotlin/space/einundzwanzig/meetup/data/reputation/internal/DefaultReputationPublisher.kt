@@ -126,6 +126,11 @@ internal class DefaultReputationPublisher @Inject constructor(
             )
         }
         val signed = signing.signEvent(ReputationProtocol.EVENT_KIND, ReputationProtocol.TAGS, content)
+        // A signer may change while stats/proofs load or an external signing request is open.
+        // Never publish the old identity's captured proofs under the newly selected key.
+        if (pubkey.isNotEmpty() && signed.pubkey != pubkey) {
+            return PublishResult.Error(IllegalStateException("Identity changed while preparing reputation."))
+        }
 
         val relays = relayConfig.getActiveRelays()
         val results = if (relays.isEmpty()) {

@@ -13,8 +13,10 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -186,7 +188,8 @@ internal fun NfcReaderModeEffect(
     val context = LocalContext.current
     val currentOnTag = rememberUpdatedState(onTag)
     val currentOnError = rememberUpdatedState(onError)
-    LifecycleResumeEffect(active) {
+    val unavailableMessage by rememberUpdatedState(stringResource(R.string.native_nfc_adapter_unavailable))
+    LifecycleResumeEffect(active, context) {
         val activity = context.findActivity()
         val adapter = if (active) NfcAdapter.getDefaultAdapter(context) else null
         var enabled = false
@@ -206,7 +209,7 @@ internal fun NfcReaderModeEffect(
                 currentOnError.value(e.message ?: e.toString())
             }
         } else if (active) {
-            currentOnError.value(context.getString(R.string.native_nfc_adapter_unavailable))
+            currentOnError.value(unavailableMessage)
         }
         onPauseOrDispose {
             if (enabled && activity != null) runCatching { adapter?.disableReaderMode(activity) }

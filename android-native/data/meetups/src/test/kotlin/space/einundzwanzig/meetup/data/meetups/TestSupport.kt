@@ -113,3 +113,8 @@ class FakeSigner(var keyPair: KeyPair? = KeyPair.generate(), var npubOverride: S
         }
     } as SigningService
 }
+
+/** Real registry without calendar/network loading, used by directory tests. */
+internal fun testLogos() = space.einundzwanzig.meetup.data.meetups.internal.PortalLogoRegistryImpl(
+    java.util.Optional.empty(), testLog(),
+)

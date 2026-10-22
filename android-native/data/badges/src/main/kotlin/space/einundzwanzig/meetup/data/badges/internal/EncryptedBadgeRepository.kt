@@ -460,7 +460,7 @@ internal class EncryptedBadgeRepository @Inject constructor(
                 break
             }
         }
-        base = base.removeSuffix(BACKUP_SUFFIX)
+        base = base.substringBefore('#').removeSuffix(BACKUP_SUFFIX)
         return base in IdentityKeys.IDENTITY_SECRET_NAMES
     }
 

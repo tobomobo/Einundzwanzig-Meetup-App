@@ -24,8 +24,13 @@ class AppSnackbarController {
     private var interrupted: AppSnackbarVisuals? = null
 
     /** Queues one message. Thread-safe and non-suspending. */
-    fun show(message: String, tone: Tone = Tone.Neutral, durationMillis: Long = AppSnackbarDurations.Medium) {
-        queue.trySend(AppSnackbarVisuals(message, tone, durationMillis = durationMillis))
+    fun show(
+        message: String,
+        tone: Tone = Tone.Neutral,
+        durationMillis: Long = AppSnackbarDurations.Medium,
+        withDismissAction: Boolean = false,
+    ) {
+        queue.trySend(AppSnackbarVisuals(message, tone, withDismissAction = withDismissAction, durationMillis = durationMillis))
     }
 
     /** Shows queued messages on [host] one after the other until cancelled. */

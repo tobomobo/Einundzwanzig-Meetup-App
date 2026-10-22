@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -130,9 +131,10 @@ fun IntroScreen(state: IntroUiState, onAction: (IntroAction) -> Unit, snackbarHo
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { snackbarHostState?.let { AppSnackbarHost(it) } },
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0),
-    ) { _ ->
+    ) { padding ->
         OnboardingBackground(subtle = false) {
-            Box(Modifier.fillMaxSize().safeDrawingPadding()) {
+            // Keep the photo edge-to-edge while the foreground owns the content insets.
+            Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).safeDrawingPadding()) {
                 Column(
                     Modifier
                         .align(Alignment.Center)

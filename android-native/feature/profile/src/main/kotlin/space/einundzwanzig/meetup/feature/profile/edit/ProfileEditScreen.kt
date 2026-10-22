@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -38,7 +37,6 @@ import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -77,7 +75,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import java.io.File
 import space.einundzwanzig.meetup.core.l10n.R as L10nR
 import space.einundzwanzig.meetup.core.ui.component.AppLargeTopBar
 import space.einundzwanzig.meetup.core.ui.component.AppLoadingIndicator
@@ -85,7 +82,6 @@ import space.einundzwanzig.meetup.core.ui.component.AppSnackbarHost
 import space.einundzwanzig.meetup.core.ui.component.EmptyState
 import space.einundzwanzig.meetup.core.ui.component.FullScreenLoading
 import space.einundzwanzig.meetup.core.ui.motion.pressScale
-import space.einundzwanzig.meetup.core.ui.nostr.AvatarImage
 import space.einundzwanzig.meetup.core.ui.nostr.NostrAvatar
 import space.einundzwanzig.meetup.core.ui.nostr.NpubFormat
 import space.einundzwanzig.meetup.core.ui.theme.EinundzwanzigTheme
@@ -123,7 +119,7 @@ fun ProfileEditScreen(
     ) { padding ->
         val content = when {
             state.isLoading -> ContentKind.LOADING
-            state.loadError != null -> ContentKind.ERROR
+            state.loadError != null || state.loadErrorResource != null -> ContentKind.ERROR
             state.isEditing -> ContentKind.EDIT
             else -> ContentKind.READ_ONLY
         }
@@ -137,14 +133,14 @@ fun ProfileEditScreen(
         ) { kind ->
             when (kind) {
                 ContentKind.LOADING -> FullScreenLoading(Modifier.testTag(ProfileEditTags.LOADING))
-                ContentKind.ERROR -> EmptyState(
-                    icon = Icons.Rounded.ErrorOutline,
-                    title = stringResource(L10nR.string.errorGeneric, state.loadError.orEmpty()),
-                    subtitle = "",
-                    actionLabel = stringResource(L10nR.string.actionRetry),
-                    onAction = { onAction(ProfileEditAction.Retry) },
-                    accentColor = MaterialTheme.colorScheme.error,
-                )
+                ContentKind.ERROR -> if (state.recoveryCandidates.isEmpty()) {
+                    ProfileLoadError(state, onAction)
+                } else {
+                    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)) {
+                        RecoveryCandidates(state, onAction)
+                        ProfileLoadError(state, onAction, Modifier.heightIn(min = 320.dp, max = 480.dp))
+                    }
+                }
                 ContentKind.READ_ONLY, ContentKind.EDIT -> Column(
                     Modifier
                         .fillMaxSize()
@@ -152,12 +148,31 @@ fun ProfileEditScreen(
                         .testTag(ProfileEditTags.CONTENT)
                         .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 100.dp),
                 ) {
+                    RecoveryCandidates(state, onAction)
                     if (kind == ContentKind.READ_ONLY) ReadOnlyContent(state, onAction) else EditForm(state, onAction)
                 }
             }
         }
     }
     ProfileDialogs(state = state, bunkerState = bunkerState, onAction = onAction)
+}
+
+@Composable
+private fun ProfileLoadError(
+    state: ProfileEditUiState,
+    onAction: (ProfileEditAction) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    EmptyState(
+        modifier = modifier,
+        icon = Icons.Rounded.ErrorOutline,
+        title = state.loadErrorResource?.let { stringResource(it) }
+            ?: stringResource(L10nR.string.errorGeneric, state.loadError.orEmpty()),
+        subtitle = "",
+        actionLabel = stringResource(L10nR.string.actionRetry),
+        onAction = { onAction(ProfileEditAction.Retry) },
+        accentColor = MaterialTheme.colorScheme.error,
+    )
 }
 
 private enum class ContentKind { LOADING, ERROR, READ_ONLY, EDIT }
@@ -169,7 +184,7 @@ private fun ReadOnlyContent(state: ProfileEditUiState, onAction: (ProfileEditAct
     val success = MaterialTheme.extendedColors.success
     Spacer(Modifier.height(20.dp))
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        ProfileAvatar(state, size = 88.dp, background = success, editable = false, onAction = onAction)
+        ProfileAvatar(state, size = 88.dp, background = success)
         Spacer(Modifier.height(12.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.Verified, contentDescription = null, tint = success, modifier = Modifier.size(20.dp))
@@ -241,20 +256,14 @@ private fun InfoTile(icon: androidx.compose.ui.graphics.vector.ImageVector, labe
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun EditForm(state: ProfileEditUiState, onAction: (ProfileEditAction) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        ProfileAvatar(state, size = 64.dp, background = MaterialTheme.colorScheme.primary, editable = true, onAction = onAction)
-        Spacer(Modifier.width(16.dp))
-        Column(Modifier.weight(1f)) {
-            SectionLabel(stringResource(L10nR.string.profileIdentity), MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.height(4.dp))
-            Text(
-                stringResource(L10nR.string.profileIntro),
-                color = MaterialTheme.extendedColors.textTertiary,
-                fontSize = 12.sp,
-                lineHeight = 17.sp,
-            )
-        }
-    }
+    SectionLabel(stringResource(L10nR.string.profileIdentity), MaterialTheme.colorScheme.primary)
+    Spacer(Modifier.height(4.dp))
+    Text(
+        stringResource(L10nR.string.profileIntro),
+        color = MaterialTheme.extendedColors.textTertiary,
+        fontSize = 12.sp,
+        lineHeight = 17.sp,
+    )
     Spacer(Modifier.height(20.dp))
     NicknameField(state, onAction)
     Spacer(Modifier.height(16.dp))
@@ -396,62 +405,14 @@ private fun HomeMeetupField(state: ProfileEditUiState, onAction: (ProfileEditAct
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun ProfileAvatar(
-    state: ProfileEditUiState,
-    size: androidx.compose.ui.unit.Dp,
-    background: Color,
-    editable: Boolean,
-    onAction: (ProfileEditAction) -> Unit,
-) {
-    val shape = MaterialShapes.Cookie9Sided.toShape()
-    val fallback = state.savedNickname.ifEmpty { state.nickname }
-    val description = stringResource(R.string.native_profile_avatar)
-    Box(
-        modifier = Modifier
-            .size(size)
-            .then(
-                if (editable) {
-                    Modifier
-                        .clip(shape)
-                        .clickable(role = Role.Button, onClickLabel = description) { onAction(ProfileEditAction.PickAvatar) }
-                        .semantics { contentDescription = description }
-                        .testTag(ProfileEditTags.AVATAR)
-                } else {
-                    Modifier
-                },
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        val local = state.localPicture
-        if (!local.isNullOrEmpty()) {
-            AvatarImage(model = File(local), fallbackText = fallback, backgroundColor = background, size = size, shape = shape)
-        } else {
-            NostrAvatar(
-                fallbackText = fallback,
-                backgroundColor = background,
-                radius = size / 2,
-                pubkeyHex = state.pubkeyHex,
-                shape = shape,
-            )
-        }
-        if (state.isImportingPicture) {
-            Box(Modifier.matchParentSize().clip(shape).background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.5f)), contentAlignment = Alignment.Center) {
-                AppLoadingIndicator(size = size / 2)
-            }
-        }
-        if (editable) {
-            Box(
-                Modifier
-                    .align(Alignment.BottomEnd)
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Rounded.PhotoCamera, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(14.dp))
-            }
-        }
-    }
+private fun ProfileAvatar(state: ProfileEditUiState, size: androidx.compose.ui.unit.Dp, background: Color) {
+    NostrAvatar(
+        fallbackText = state.savedNickname.ifEmpty { state.nickname },
+        backgroundColor = background,
+        radius = size / 2,
+        pubkeyHex = state.pubkeyHex,
+        shape = MaterialShapes.Cookie9Sided.toShape(),
+    )
 }
 
 // ------------------------------------------------------------------------------------ identity tiles
