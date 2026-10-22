@@ -561,6 +561,7 @@ def validate_configurations(project):
     target_configs = configurations(project, project.target, "target")
     widget_configs = configurations(project, project.widget, "widget")
     project.effective = {}
+    project.widget_effective = {}
     upgrade_required = {"PRODUCT_BUNDLE_IDENTIFIER": "dev.einundzwanzig.einundzwanzigMeetupApp", "MARKETING_VERSION": "2.0.0", "CURRENT_PROJECT_VERSION": "32"}
     flutter_version = re.search(r"^version:\s*(\d+)\.(\d+)\.(\d+)\+(\d+)\s*$", read_text(project.apple.parent / "pubspec.yaml"), re.MULTILINE)
     require(flutter_version is not None, "Flutter baseline must declare a version and build number")
@@ -591,12 +592,14 @@ def validate_configurations(project):
             else:
                 require(effective.get("SWIFT_OPTIMIZATION_LEVEL") in ("-O", "-Osize"), f"{prefix}: Release must use optimized Swift")
             widget = sdk_settings(merge_settings(project_configs[name], widget_configs[name]), sdk, name)
+            widget.setdefault("EXECUTABLE_NAME", "$(PRODUCT_NAME)")
             widget = {key: expand(value, widget) for key, value in widget.items()}
             require(widget.get("PRODUCT_BUNDLE_IDENTIFIER") == effective["PRODUCT_BUNDLE_IDENTIFIER"] + ".widget", f"{prefix}: widget must use the matching app bundle prefix")
             require(widget.get("APPLICATION_EXTENSION_API_ONLY") == "YES" and widget.get("INFOPLIST_FILE") == "Widget/Info.plist", f"{prefix}: widget extension build settings invalid")
             for key in ("MARKETING_VERSION", "CURRENT_PROJECT_VERSION"):
                 require(widget.get(key) == effective[key], f"{prefix}: widget {key} must match the app")
             project.effective[name, sdk] = effective
+            project.widget_effective[name, sdk] = widget
         require("CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" in settings, f"{name}: expected conditional macOS entitlements setting")
     require(len(project.of_type("XCBuildConfiguration")) == 12, "expected project/app/widget/UI-test Debug, Release and Upgrade configurations")
 
@@ -619,8 +622,15 @@ def validate_plists(project):
             if key == "CFBundleShortVersionString": value = settings["MARKETING_VERSION"]
             if key == "CFBundleVersion": value = settings["CURRENT_PROJECT_VERSION"]
             require(isinstance(info.get(key), str) and expand(info[key], settings) == value, f"Info.plist {key} does not resolve to {value!r} for {name}/{sdk}")
-            if key in ("CFBundleShortVersionString", "CFBundleVersion"):
-                require(isinstance(widget_info.get(key), str) and expand(widget_info[key], settings) == value, f"Widget Info.plist {key} must match the app for {name}/{sdk}")
+        widget_settings = project.widget_effective[name, sdk]
+        widget_expected = {"CFBundleIdentifier": widget_settings["PRODUCT_BUNDLE_IDENTIFIER"], "CFBundleName": widget_settings.get("PRODUCT_NAME", ""), "CFBundleExecutable": widget_settings.get("EXECUTABLE_NAME", ""), "CFBundlePackageType": "XPC!", "CFBundleShortVersionString": settings["MARKETING_VERSION"], "CFBundleVersion": settings["CURRENT_PROJECT_VERSION"]}
+        for key in (*widget_expected, "CFBundleDisplayName"):
+            raw = widget_info.get(key)
+            require(isinstance(raw, str) and raw.strip(), f"Widget Info.plist {key} must be a nonempty string for {name}/{sdk}")
+            resolved = expand(raw, widget_settings)
+            require(resolved.strip() and not re.search(r"\$\([^)]+\)|\$\{[^}]+\}", resolved), f"Widget Info.plist {key} must resolve to a nonempty string for {name}/{sdk}")
+            if key in widget_expected:
+                require(resolved == widget_expected[key], f"Widget Info.plist {key} must resolve to {widget_expected[key]!r} for {name}/{sdk}")
     require(isinstance(info.get("NSCameraUsageDescription"), str) and info["NSCameraUsageDescription"].strip(), "Info.plist needs a camera usage description for the iOS scanner")
     calendar_key = "NSCalendarsWriteOnlyAccessUsageDescription"
     require(isinstance(info.get(calendar_key), str) and info[calendar_key].strip(), "Info.plist needs a calendar write-only access usage description")
