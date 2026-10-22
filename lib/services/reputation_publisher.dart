@@ -436,13 +436,12 @@ class ReputationPublisher {
                     .toList() ?? [],
                 eventData['content'] ?? '',
                 eventData['sig'] ?? '',
-                // verify: false — isValid() unten ist die einzige Prüfung;
-                // der Konstruktor würde dieselbe Signatur doppelt prüfen.
+                // Validation uses the background-warmed RelaySocket cache below.
                 verify: false,
               );
 
               // Signatur prüfen
-              if (!event.isValid()) {
+              if (RelaySocket.verifiedEvent(eventData) == null) {
                 // Gezählt statt pro Event geloggt: ein Relay mit gefälschten
                 // Events würde sonst den Log-Ringpuffer füllen (RelayParseTally).
                 tally.failed('Ungültige Signatur');

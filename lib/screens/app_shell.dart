@@ -1,4 +1,3 @@
-import 'dart:ui';
 import '../services/haptic_service.dart';
 import '../widgets/shadows.dart';
 import 'package:flutter/material.dart';
@@ -27,6 +26,7 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _currentIndex = 0;
   final _homeKey = GlobalKey<HomeScreenState>();
+  final _visitedTabs = <int>{0};
 
   @override
   void initState() {
@@ -156,9 +156,12 @@ class _AppShellState extends State<AppShell> {
   }
 
   void _onTabTap(int index) {
-    if (index == 2) return;
+    if (index == 2 || index == _currentIndex) return;
     _doHaptic();
-    setState(() => _currentIndex = index);
+    setState(() {
+      _currentIndex = index;
+      _visitedTabs.add(index > 2 ? index - 1 : index);
+    });
     // Beim Zurückwechseln auf den Home-Tab die Kachel-Daten auffrischen,
     // damit ein neu angelegter/aktualisierter Termin sofort erscheint.
     if (index == 0) {
@@ -218,9 +221,9 @@ class _AppShellState extends State<AppShell> {
       body: IndexedStack(
         index: _currentIndex > 2 ? _currentIndex - 1 : _currentIndex,
         children: [
-          HomeScreen(key: _homeKey),
-          BadgeWalletScreen(),
-          const EventsHubScreen(),
+          _tab(0, HomeScreen(key: _homeKey)),
+          _tab(1, BadgeWalletScreen()),
+          _tab(2, const EventsHubScreen()),
         ],
       ),
       bottomNavigationBar: SizedBox(
@@ -232,33 +235,30 @@ class _AppShellState extends State<AppShell> {
               left: 0, right: 0, bottom: 0,
               height: 56 + bottomPad,
               child: ClipRect(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: cDark.withValues(alpha: 0.92),
-                      border: const Border(top: BorderSide(color: cBorder, width: 0.5)),
-                    ),
-                    padding: EdgeInsets.only(bottom: bottomPad),
-                    // Die Leiste ist fest 56 hoch, die Beschriftung waechst
-                    // mit der Systemschrift. Wie Flutters NavigationBar bei
-                    // 130 % deckeln — bei 200 % lief sie sonst aus der Leiste.
-                    child: MediaQuery.withClampedTextScaling(
-                      maxScaleFactor: 1.3,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _navItem(0, Icons.home_rounded, Icons.home_outlined, AppLocalizations.of(context).navHome,
-                              navKey: HomeTour.homeTabKey),
-                          _navItem(1, Icons.style_rounded, Icons.style_outlined, AppLocalizations.of(context).navWalletTab,
-                              navKey: HomeTour.badgeTabKey),
-                          const SizedBox(width: 60),
-                          _navItem(3, Icons.event_rounded, Icons.event_outlined, AppLocalizations.of(context).navEvents,
-                              navKey: HomeTour.eventsTabKey),
-                          _navAction(Icons.near_me_rounded, Icons.near_me_outlined, AppLocalizations.of(context).navNearby, _openNearby,
-                              navKey: HomeTour.nearbyTabKey),
-                        ],
-                      ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: cDark,
+                    border: const Border(top: BorderSide(color: cBorder, width: 0.5)),
+                  ),
+                  padding: EdgeInsets.only(bottom: bottomPad),
+                  // Die Leiste ist fest 56 hoch, die Beschriftung waechst
+                  // mit der Systemschrift. Wie Flutters NavigationBar bei
+                  // 130 % deckeln — bei 200 % lief sie sonst aus der Leiste.
+                  child: MediaQuery.withClampedTextScaling(
+                    maxScaleFactor: 1.3,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _navItem(0, Icons.home_rounded, Icons.home_outlined, AppLocalizations.of(context).navHome,
+                            navKey: HomeTour.homeTabKey),
+                        _navItem(1, Icons.style_rounded, Icons.style_outlined, AppLocalizations.of(context).navWalletTab,
+                            navKey: HomeTour.badgeTabKey),
+                        const SizedBox(width: 60),
+                        _navItem(3, Icons.event_rounded, Icons.event_outlined, AppLocalizations.of(context).navEvents,
+                            navKey: HomeTour.eventsTabKey),
+                        _navAction(Icons.near_me_rounded, Icons.near_me_outlined, AppLocalizations.of(context).navNearby, _openNearby,
+                            navKey: HomeTour.nearbyTabKey),
+                      ],
                     ),
                   ),
                 ),
@@ -287,6 +287,17 @@ class _AppShellState extends State<AppShell> {
           ],
         ),
       ),
+    );
+  }
+
+  /// Initialize tabs on first visit and pause animations while they are hidden.
+  /// Keep their state so switching tabs preserves searches and scroll position.
+  Widget _tab(int index, Widget child) {
+    if (!_visitedTabs.contains(index)) return const SizedBox.shrink();
+    final active = (_currentIndex > 2 ? _currentIndex - 1 : _currentIndex) == index;
+    return TickerMode(
+      enabled: active,
+      child: RepaintBoundary(child: child),
     );
   }
 

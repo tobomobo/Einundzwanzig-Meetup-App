@@ -13,6 +13,10 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+// Opt-in, release-mode test distribution that can coexist with the installed app.
+// Set ORG_GRADLE_PROJECT_performancePreview=true when building a prerelease.
+val isPerformancePreview = providers.gradleProperty("performancePreview").orNull == "true"
+
 android {
     namespace = "space.einundzwanzig.meetup"
     compileSdk = 36
@@ -29,7 +33,11 @@ android {
 
     defaultConfig {
         applicationId = "space.einundzwanzig.meetup"
-        minSdk = 23
+        if (isPerformancePreview) {
+            applicationIdSuffix = ".preview"
+        }
+        resValue("string", "app_name", if (isPerformancePreview) "21Meetup Preview" else "21Meetup")
+        minSdk = if (isPerformancePreview) flutter.minSdkVersion else 23
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -49,7 +57,7 @@ android {
 
     buildTypes {
         release {
-            signingConfig = if (keystoreProperties["storeFile"] != null) {
+            signingConfig = if (!isPerformancePreview && keystoreProperties["storeFile"] != null) {
                 signingConfigs.getByName("release")
             } else {
                 signingConfigs.getByName("debug")

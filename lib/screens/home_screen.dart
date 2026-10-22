@@ -195,7 +195,7 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, W
     // Waehrung umgestellt → Kacheln neu zeichnen (Issue #66).
     CurrencyService.current.addListener(_onCurrencyChanged);
     _loadTileCounters();
-    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 2000))..repeat(reverse: true);
+    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 2000));
     _initTileDefs();
     _loadTileOrder();
     _loadAll();
@@ -751,8 +751,38 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, W
     } catch (_) {}
   }
 
-  void _checkActiveSession() async { final s = await RollingQRService.loadSession(); if (s != null && !s.isExpired) { if (!mounted) return; setState(() => _activeSession = s); _startSessionTimer(); } else { _sessionTimer?.cancel(); if (mounted) setState(() => _activeSession = null); } }
-  void _startSessionTimer() { _sessionTimer?.cancel(); _sessionTimer = Timer.periodic(const Duration(seconds: 1), (_) { if (_activeSession == null || _activeSession!.isExpired) { _sessionTimer?.cancel(); if (mounted) setState(() => _activeSession = null); return; } if (mounted) setState(() { final r = _activeSession!.remainingTime; _sessionTimeLeft = '${r.inHours}h ${(r.inMinutes % 60).toString().padLeft(2, '0')}m'; }); }); }
+  void _checkActiveSession() async {
+    final session = await RollingQRService.loadSession();
+    if (!mounted) return;
+    _sessionTimer?.cancel();
+    if (session != null && !session.isExpired) {
+      setState(() => _activeSession = session);
+      _pulseController.repeat(reverse: true);
+      _updateSessionTime();
+      _sessionTimer = Timer.periodic(
+          const Duration(seconds: 1), (_) => _updateSessionTime());
+    } else {
+      _pulseController.stop();
+      if (_activeSession != null) setState(() => _activeSession = null);
+    }
+  }
+
+  void _updateSessionTime() {
+    if (!mounted) return;
+    final session = _activeSession;
+    if (session == null || session.isExpired) {
+      _sessionTimer?.cancel();
+      _pulseController.stop();
+      setState(() => _activeSession = null);
+      return;
+    }
+    final remaining = session.remainingTime;
+    final label = '${remaining.inHours}h '
+        "${(remaining.inMinutes % 60).toString().padLeft(2, '0')}m";
+    // The label has minute precision. Rebuild only when it changes; still
+    // check expiry every second so an expired session disappears promptly.
+    if (label != _sessionTimeLeft) setState(() => _sessionTimeLeft = label);
+  }
   void _syncOrganicAdminsInBackground() async { try { await PromotionClaimService.syncOrganicAdmins(); } catch (_) {} }
   void _checkDeviceIntegrity() async { try { final r = await DeviceIntegrityService.check(); if (r.isCompromised && mounted) setState(() => _deviceCompromised = true); } catch (_) {} }
   Future<void> _loadBadges() async {
@@ -1151,8 +1181,8 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, W
         // fuer den Sektionskopf, damit man sieht, dass da noch etwas ist.
         Expanded(
           child: LayoutBuilder(builder: (context, c) {
-            final hasAvailable =
-                _buildTileRows(excludeHomeMeetup: true, pinned: false).isNotEmpty;
+            final availableRows = _tileRows(excludeHomeMeetup: true, pinned: false);
+            final hasAvailable = availableRows.isNotEmpty;
             // Untergrenze nie ueber der verfuegbaren Hoehe: clamp(120, x)
             // mit x < 120 wirft einen ArgumentError — passiert im Feld,
             // wenn eine Snackbar oder die Tastatur den Platz kurz verkleinert
@@ -1179,7 +1209,7 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, W
                 physics: const AlwaysScrollableScrollPhysics(),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   _buildScaledTileBlock(pinnedHeight),
-                  _buildAvailableSection(),
+                  _buildAvailableSection(availableRows),
                   const SizedBox(height: 8),
                 ]),
               ),
@@ -1365,9 +1395,11 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, W
   /// Die graue Reserve: alles, was nicht angeheftet ist. Gedaempft
   /// dargestellt, aber voll bedienbar — ein Tipp oeffnet die Funktion wie
   /// gewohnt. Angeheftet wird spaeter im Bearbeiten-Modus.
-  Widget _buildAvailableSection() {
-    final rows = _buildTileRows(excludeHomeMeetup: true, pinned: false);
-    if (rows.isEmpty) return const SizedBox.shrink();
+  Widget _buildAvailableSection(List<List<_TileDef>> definitions) {
+    if (definitions.isEmpty) return const SizedBox.shrink();
+    final rows = !_availableCollapsed || _editTileId != null
+        ? _buildTileRows(pinned: false, definitions: definitions)
+        : <Widget>[];
     // Die Nostr-Kachel hat ein eigenes Icon-Layout und benoetigt etwas mehr
     // Hoehe als die standardisierten Wert-Kacheln.
     const double availableTileHeight = 124;
@@ -1378,7 +1410,7 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, W
         key: HomeTour.customizeKey,
         child: _sectionHeader(
           AppLocalizations.of(context).tilesAvailable,
-          count: rows.length,
+          count: definitions.length,
           collapsed: _availableCollapsed,
           onTap: () => setState(() => _availableCollapsed = !_availableCollapsed),
         ),
@@ -1441,45 +1473,45 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, W
 
   /// Baut die sichtbaren Kacheln als REIHEN (jede Reihe ein Row-Widget mit
   /// stretch), damit sie sich vertikal dehnen lassen.
-  List<Widget> _buildTileRows({bool excludeHomeMeetup = false, bool pinned = true}) {
-    _buildingPinnedTile = pinned;
-    // pinned=true  -> angeheftete Kacheln (bisher "sichtbar")
-    // pinned=false -> verfuegbare Kacheln (bisher "ausgeblendet"), grau
-    final visibleTiles = _tileOrder
-      .map((id) => _tileDefs.where((t) => t.id == id).firstOrNull)
-      .where((t) => t != null && t.visible() && (_hiddenTiles.contains(t.id) != pinned))
-      .cast<_TileDef>()
-      .where((t) => !excludeHomeMeetup || t.id != 'home_meetup')
-      .toList();
-
-    final rows = <Widget>[];
-    int i = 0;
-    while (i < visibleTiles.length) {
-      final tile = visibleTiles[i];
-      if (tile.span == 3) {
-        rows.add(Row(crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [Expanded(child: _wrapEditable(tile, tile.builder()))]));
-        i++;
-      } else {
-        final row = <_TileDef>[tile];
-        int rowSpan = tile.span;
-        while (i + row.length < visibleTiles.length && rowSpan < 3) {
-          final next = visibleTiles[i + row.length];
-          if (next.span == 3) break;
-          if (rowSpan + next.span > 3) break;
-          row.add(next);
-          rowSpan += next.span;
-        }
-        rows.add(Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          for (int j = 0; j < row.length; j++) ...[
-            if (j > 0) const SizedBox(width: kTileGap),
-            Expanded(flex: row[j].span, child: _wrapEditable(row[j], row[j].builder())),
-          ],
-        ]));
-        i += row.length;
+  /// Group definitions without constructing widgets. Collapsed tiles need
+  /// only this metadata for their count and layout, not their full UI trees.
+  List<List<_TileDef>> _tileRows({bool excludeHomeMeetup = false, bool pinned = true}) {
+    final tiles = _tileOrder
+        .map((id) => _tileDefs.where((t) => t.id == id).firstOrNull)
+        .whereType<_TileDef>()
+        .where((t) => t.visible() && (_hiddenTiles.contains(t.id) != pinned))
+        .where((t) => !excludeHomeMeetup || t.id != 'home_meetup');
+    final rows = <List<_TileDef>>[];
+    var span = 0;
+    for (final tile in tiles) {
+      if (rows.isEmpty || span + tile.span > 3) {
+        rows.add(<_TileDef>[]);
+        span = 0;
       }
+      rows.last.add(tile);
+      span += tile.span;
     }
     return rows;
+  }
+
+  List<Widget> _buildTileRows({
+    bool excludeHomeMeetup = false,
+    bool pinned = true,
+    List<List<_TileDef>>? definitions,
+  }) {
+    _buildingPinnedTile = pinned;
+    final rows = definitions ?? _tileRows(
+        excludeHomeMeetup: excludeHomeMeetup, pinned: pinned);
+    return [
+      for (final row in rows)
+        Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          for (var i = 0; i < row.length; i++) ...[
+            if (i > 0) const SizedBox(width: kTileGap),
+            Expanded(flex: row[i].span,
+                child: _wrapEditable(row[i], row[i].builder())),
+          ],
+        ]),
+    ];
   }
 
   // ============================================================
@@ -2906,10 +2938,10 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, W
   /// den Code zeigen, nicht erst durch den Kalender navigieren. Event- und
   /// Meetup-Sessions unterscheiden sich nur im Symbol; alles andere ist
   /// gleich, weil auch die Handlung dieselbe ist.
-  Widget _buildActiveSessionTile() => AnimatedBuilder(animation: _pulseController, builder: (_, _) => GestureDetector(
+  Widget _buildActiveSessionTile() => RepaintBoundary(child: GestureDetector(
     onTap: () async { await Navigator.push(context, MaterialPageRoute(builder: (_) => const RollingQRScreen())); _checkActiveSession(); },
     child: Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: cCard, borderRadius: BorderRadius.circular(kTileRadius), border: Border.all(color: cGreen.withValues(alpha: 0.25), width: 0.5)),
-    child: Row(children: [Container(width: 10, height: 10, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.green.withValues(alpha: 0.5 + _pulseController.value * 0.5), boxShadow: [BoxShadow(color: Colors.green.withValues(alpha: 0.3 * _pulseController.value), blurRadius: 8)])),
+    child: Row(children: [AnimatedBuilder(animation: _pulseController, builder: (_, _) => Container(width: 10, height: 10, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.green.withValues(alpha: 0.5 + _pulseController.value * 0.5), boxShadow: [BoxShadow(color: Colors.green.withValues(alpha: 0.3 * _pulseController.value), blurRadius: 8)]))),
       const SizedBox(width: 14), Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3), decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)), child: Text(AppLocalizations.of(context).statusLive, style: TextStyle(color: Colors.green.shade300, fontSize: 9, fontWeight: FontWeight.w800))),
       const SizedBox(width: 10),
       // Ordenssymbol bei Event-Sessions: Auf dem Dashboard soll erkennbar

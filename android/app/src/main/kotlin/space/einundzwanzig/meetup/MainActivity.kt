@@ -13,6 +13,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.Executors
 
 // ============================================
 // NIP-55 Amber Signer Bridge
@@ -32,6 +33,25 @@ import org.json.JSONObject
 // liefert auf Android no_fragment_activity, und die Schlüsselanzeige
 // bricht dann still ab (ScreenSecure.authenticate gibt false zurück).
 class MainActivity : FlutterFragmentActivity() {
+
+    // ContentResolver calls into another process and can wait for its crypto,
+    // database or startup. Never make these Binder calls on Android's UI thread.
+    private val signerExecutor = Executors.newSingleThreadExecutor()
+
+    override fun onDestroy() {
+        signerExecutor.shutdownNow()
+        super.onDestroy()
+    }
+
+    private fun signerIntentWhenAlive(result: MethodChannel.Result, launch: () -> Unit) {
+        runOnUiThread {
+            if (isDestroyed || isFinishing) {
+                result.error("activity_destroyed", "Signer-Anfrage abgebrochen", null)
+            } else {
+                launch()
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         applyPhoneOrientation(resources.configuration)
@@ -236,38 +256,44 @@ class MainActivity : FlutterFragmentActivity() {
             return
         }
 
-        // 1) HINTERGRUND-PFAD: ContentResolver
-        //    Liefert nur dann ein Ergebnis, wenn der User die
-        //    sign_event-Berechtigung dauerhaft erteilt hat.
-        try {
-            val uri = Uri.parse("content://$amberPackage.SIGN_EVENT")
-            val cursor = contentResolver.query(
-                uri,
-                arrayOf(eventJson, "", npub),
-                null, null, null
-            )
-            cursor?.use {
-                if (it.moveToFirst()) {
-                    val rejectedIdx = it.getColumnIndex("rejected")
-                    if (rejectedIdx >= 0 && !it.isNull(rejectedIdx)) {
-                        result.error("rejected", "User hat dauerhaft abgelehnt", null)
-                        return
-                    }
-                    val eventIdx = it.getColumnIndex("event")
-                    val resultIdx = it.getColumnIndex("result")
-                    val signedEvent = if (eventIdx >= 0) it.getString(eventIdx) else null
-                    val sig = if (resultIdx >= 0) it.getString(resultIdx) else null
-                    if (signedEvent != null) {
-                        result.success(mapOf("event" to signedEvent, "result" to sig))
-                        return
+        signerExecutor.execute {
+            // 1) HINTERGRUND-PFAD: ContentResolver
+            //    Liefert nur dann ein Ergebnis, wenn der User die
+            //    sign_event-Berechtigung dauerhaft erteilt hat.
+            try {
+                val uri = Uri.parse("content://$amberPackage.SIGN_EVENT")
+                val cursor = contentResolver.query(
+                    uri,
+                    arrayOf(eventJson, "", npub),
+                    null, null, null
+                )
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        val rejectedIdx = it.getColumnIndex("rejected")
+                        if (rejectedIdx >= 0 && !it.isNull(rejectedIdx)) {
+                            result.error("rejected", "User hat dauerhaft abgelehnt", null)
+                            return@execute
+                        }
+                        val eventIdx = it.getColumnIndex("event")
+                        val resultIdx = it.getColumnIndex("result")
+                        val signedEvent = if (eventIdx >= 0) it.getString(eventIdx) else null
+                        val sig = if (resultIdx >= 0) it.getString(resultIdx) else null
+                        if (signedEvent != null) {
+                            result.success(mapOf("event" to signedEvent, "result" to sig))
+                            return@execute
+                        }
                     }
                 }
+                // cursor == null → keine gemerkte Berechtigung → Fallback
+            } catch (e: Exception) {
+                // ContentResolver nicht verfügbar → Fallback auf Intent
             }
-            // cursor == null → keine gemerkte Berechtigung → Fallback
-        } catch (e: Exception) {
-            // ContentResolver nicht verfügbar → Fallback auf Intent
-        }
 
+            signerIntentWhenAlive(result) { signEventWithIntent(eventJson, npub, result) }
+        }
+    }
+
+    private fun signEventWithIntent(eventJson: String, npub: String, result: MethodChannel.Result) {
         // 2) VORDERGRUND-PFAD: Intent (zeigt Amber-Popup, einmalig)
         if (pendingResult != null) {
             result.error("busy", "Eine Signer-Anfrage läuft bereits", null)
@@ -297,36 +323,42 @@ class MainActivity : FlutterFragmentActivity() {
             return
         }
 
-        // 1) HINTERGRUND-PFAD: ContentResolver, wenn die Berechtigung gemerkt ist.
-        val resolverType = if (type == "nip44_encrypt") "NIP44_ENCRYPT" else "NIP44_DECRYPT"
-        try {
-            val uri = Uri.parse("content://$amberPackage.$resolverType")
-            val cursor = contentResolver.query(
-                uri,
-                arrayOf(value, pubkey, npub),
-                null, null, null
-            )
-            cursor?.use {
-                if (it.moveToFirst()) {
-                    val rejectedIdx = it.getColumnIndex("rejected")
-                    if (rejectedIdx >= 0 && !it.isNull(rejectedIdx)) {
-                        result.error("rejected", "User hat dauerhaft abgelehnt", null)
-                        return
-                    }
-                    val resultIdx = it.getColumnIndex("result")
-                    if (resultIdx >= 0) {
-                        val out = it.getString(resultIdx)
-                        if (out != null) {
-                            result.success(out)
-                            return
+        signerExecutor.execute {
+            // 1) HINTERGRUND-PFAD: ContentResolver, wenn die Berechtigung gemerkt ist.
+            val resolverType = if (type == "nip44_encrypt") "NIP44_ENCRYPT" else "NIP44_DECRYPT"
+            try {
+                val uri = Uri.parse("content://$amberPackage.$resolverType")
+                val cursor = contentResolver.query(
+                    uri,
+                    arrayOf(value, pubkey, npub),
+                    null, null, null
+                )
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        val rejectedIdx = it.getColumnIndex("rejected")
+                        if (rejectedIdx >= 0 && !it.isNull(rejectedIdx)) {
+                            result.error("rejected", "User hat dauerhaft abgelehnt", null)
+                            return@execute
+                        }
+                        val resultIdx = it.getColumnIndex("result")
+                        if (resultIdx >= 0) {
+                            val out = it.getString(resultIdx)
+                            if (out != null) {
+                                result.success(out)
+                                return@execute
+                            }
                         }
                     }
                 }
+            } catch (e: Exception) {
+                // kein Resolver-Weg → Intent
             }
-        } catch (e: Exception) {
-            // kein Resolver-Weg → Intent
-        }
 
+            signerIntentWhenAlive(result) { nip44WithIntent(type, pubkey, value, npub, result) }
+        }
+    }
+
+    private fun nip44WithIntent(type: String, pubkey: String, value: String, npub: String, result: MethodChannel.Result) {
         // 2) VORDERGRUND-PFAD: Intent
         if (pendingResult != null) {
             result.error("busy", "Eine Signer-Anfrage läuft bereits", null)

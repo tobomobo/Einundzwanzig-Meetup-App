@@ -16,11 +16,15 @@
 // ============================================
 
 import 'dart:async';
+import 'dart:convert';
 
-import 'package:nostr/nostr.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'app_logger.dart';
+import 'relay_event_verifier.dart';
+import 'relay_verification_worker_web.dart'
+    if (dart.library.io) 'relay_verification_worker_io.dart'
+    as worker;
 
 class RelaySocket {
   final WebSocketChannel _channel;
@@ -32,7 +36,8 @@ class RelaySocket {
   RelaySocket._(this._channel);
 
   static bool _withinLimit(dynamic data) {
-    final tooBig = (data is String && data.length > maxMessageChars) ||
+    final tooBig =
+        (data is String && data.length > maxMessageChars) ||
         (data is List<int> && data.length > maxMessageChars);
     if (!tooBig) return true;
     AppLogger.debug('RelaySocket', 'Frame über $maxMessageChars verworfen');
@@ -72,16 +77,63 @@ class RelaySocket {
     Function? onError,
     void Function()? onDone,
     bool? cancelOnError,
-  }) =>
-      _channel.stream.listen(
-          (data) {
-            if (_withinLimit(data)) onData(data);
-          },
-          onError: onError, onDone: onDone, cancelOnError: cancelOnError);
+  }) => stream.listen(
+    (data) {
+      onData(data);
+    },
+    onError: onError,
+    onDone: onDone,
+    cancelOnError: cancelOnError,
+  );
 
   /// Für Aufrufstellen, die den Socket direkt als Stream verwenden
   /// (`await for (final data in ws.stream.timeout(...))`).
-  Stream get stream => _channel.stream.where(_withinLimit);
+  Stream get stream => _channel.stream.where(_withinLimit).asyncMap(_prepare);
+
+  /// Warm the exact-payload validation cache outside Android's UI isolate.
+  /// asyncMap preserves ordering: EOSE cannot overtake an unverified EVENT.
+  /// Callers still apply their own subscription filters and rejection logging.
+  static Future<dynamic> _prepare(dynamic data) async {
+    if (data is String) {
+      dynamic message;
+      try {
+        message = jsonDecode(data);
+      } catch (_) {
+        return data; // Preserve malformed-message handling at the call site.
+      }
+      if (message is List &&
+          message.length >= 3 &&
+          message[0] == 'EVENT' &&
+          message[2] is Map<String, dynamic>) {
+        await verifyEventInBackground(message[2] as Map<String, dynamic>);
+      }
+    }
+    return data;
+  }
+
+  static final _verifier = RelayEventVerifier();
+  static final _verifying = <String, Future<bool>>{};
+
+  static Future<bool> verifyEventInBackground(Map<String, dynamic> raw) {
+    // Snapshot before awaiting worker startup: callers may mutate their map.
+    final encoded = _verifier.encodeEvent(raw);
+    final key = _verifier.fingerprintEncoded(encoded);
+    final known = _verifier.cached(key);
+    if (known != null) return Future.value(known);
+    // The same event often arrives from several relays at once. Share the
+    // verification job, but still deliver every subscription's own message.
+    return _verifying[key] ??= _verifyAndRemember(key, encoded);
+  }
+
+  static Future<bool> _verifyAndRemember(String key, String encoded) async {
+    try {
+      final valid = await worker.verifyInBackground(encoded);
+      _verifier.remember(key, valid);
+      return valid;
+    } finally {
+      _verifying.remove(key);
+    }
+  }
 
   /// Nachricht senden. Entspricht `ws.add(...)`.
   void add(String data) => _channel.sink.add(data);
@@ -109,28 +161,14 @@ class RelaySocket {
 
   /// Liefert das Event-Objekt zurück, wenn ID und Signatur stimmen —
   /// sonst null. [raw] ist typischerweise `msg[2]` einer EVENT-Nachricht.
-  static Map<String, dynamic>? verifiedEvent(dynamic raw, {String tag = 'RelaySocket'}) {
+  static Map<String, dynamic>? verifiedEvent(
+    dynamic raw, {
+    String tag = 'RelaySocket',
+  }) {
     if (raw is! Map<String, dynamic>) return null;
     bool ok = false;
     try {
-      // verify: false — der Konstruktor würde sonst schon werfen und
-      // isValid() unten prüfte dieselbe Signatur ein zweites Mal (bip340
-      // auf pointycastle ist teuer; bei hunderten Chat-Events pro Fetch
-      // fällt die doppelte Prüfung merklich ins Gewicht).
-      final event = Event(
-        raw['id'] ?? '',
-        raw['pubkey'] ?? '',
-        raw['created_at'] ?? 0,
-        raw['kind'] ?? 0,
-        (raw['tags'] as List<dynamic>?)
-                ?.map((t) => (t as List<dynamic>).map((e) => e.toString()).toList())
-                .toList() ??
-            [],
-        raw['content'] ?? '',
-        raw['sig'] ?? '',
-        verify: false,
-      );
-      ok = event.isValid();
+      ok = _verifier.verify(raw);
     } catch (_) {
       ok = false;
     }
@@ -138,8 +176,10 @@ class RelaySocket {
     _rejectedCount++;
     // Nur jedes 1., 10., 100., … verworfene Event loggen — kein Log-Sturm.
     if (_rejectedCount == 1 || _rejectedCount % 10 == 0) {
-      AppLogger.debug(tag,
-          'Event mit ungültiger Signatur verworfen (kind ${raw['kind']}, gesamt: $_rejectedCount)');
+      AppLogger.debug(
+        tag,
+        'Event mit ungültiger Signatur verworfen (kind ${raw['kind']}, gesamt: $_rejectedCount)',
+      );
     }
     return null;
   }

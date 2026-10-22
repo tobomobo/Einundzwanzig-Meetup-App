@@ -33,7 +33,7 @@
     </queries>
 
     <application
-        android:label="21Meetup"
+        android:label="@string/app_name"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
