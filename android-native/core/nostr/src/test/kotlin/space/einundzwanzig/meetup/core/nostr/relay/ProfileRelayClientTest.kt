@@ -10,6 +10,7 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -44,7 +45,11 @@ class ProfileRelayClientTest {
                     override fun onMessage(webSocket: WebSocket, text: String) =
                         respond(webSocket, DartJson.decode(text) as JsonArray)
 
-                    override fun onClosing(webSocket: WebSocket, code: Int, reason: String) = closed.countDown()
+                    override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                        // Receiving a close frame ends the reader, but the server socket stays
+                        // open until we reply. Only terminal callbacks count as closed.
+                        webSocket.close(code, reason)
+                    }
 
                     override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) = closed.countDown()
 
@@ -56,9 +61,13 @@ class ProfileRelayClientTest {
 
     @After
     fun tearDown() {
-        server.close()
-        okHttp.dispatcher.executorService.shutdown()
-        okHttp.connectionPool.evictAll()
+        okHttp.dispatcher.cancelAll()
+        try {
+            server.close()
+        } finally {
+            okHttp.dispatcher.executorService.shutdown()
+            okHttp.connectionPool.evictAll()
+        }
     }
 
     private fun query(timeout: Duration = 2.seconds) = runBlocking {
@@ -129,7 +138,7 @@ class ProfileRelayClientTest {
     fun deadlineIncludesAStalledWebSocketHandshake() = runBlocking {
         val stalled = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))
         val disconnected = CountDownLatch(1)
-        thread {
+        val reader = thread {
             runCatching {
                 stalled.accept().use { s ->
                     val buf = ByteArray(1024)
@@ -144,6 +153,8 @@ class ProfileRelayClientTest {
             assertTrue(disconnected.await(2, TimeUnit.SECONDS))
         } finally {
             stalled.close()
+            reader.join(2_000)
+            assertFalse("stalled handshake reader stopped", reader.isAlive)
         }
     }
 

@@ -42,16 +42,24 @@ class RelaySocketTest {
 
     private val server = MockWebServer()
     private val client = OkHttpClient()
-    private val connector = OkHttpRelayConnector(client)
+    private val sockets = mutableListOf<RelaySocket>()
+    private val connector = RelayConnector { url ->
+        OkHttpRelayConnector(client).connect(url).also { sockets += it }
+    }
 
     @Before
     fun setUp() = server.start(InetAddress.getByName("127.0.0.1"), 0)
 
     @After
     fun tearDown() {
-        server.close()
-        client.dispatcher.executorService.shutdown()
-        client.connectionPool.evictAll()
+        sockets.forEach { it.cancel() }
+        client.dispatcher.cancelAll()
+        try {
+            server.close()
+        } finally {
+            client.dispatcher.executorService.shutdown()
+            client.connectionPool.evictAll()
+        }
     }
 
     private val url get() = "ws://127.0.0.1:${server.port}/"
@@ -77,10 +85,13 @@ class RelaySocketTest {
 
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
             webSocket.close(1000, null)
-            closed.countDown()
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            closed.countDown()
+        }
+
+        override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
             closed.countDown()
         }
     }
@@ -127,7 +138,7 @@ class RelaySocketTest {
     fun stalledHandshakeIsAbortedByTheCallersTimeout() = runBlocking {
         val stalled = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))
         val disconnected = CountDownLatch(1)
-        thread {
+        val reader = thread {
             runCatching {
                 stalled.accept().use { s ->
                     // read the upgrade request but never answer it
@@ -138,12 +149,17 @@ class RelaySocketTest {
             disconnected.countDown()
         }
         try {
-            withTimeout(300) { connector.connect("ws://127.0.0.1:${stalled.localPort}") }
-            fail("handshake never completes")
-        } catch (_: TimeoutCancellationException) {
+            try {
+                withTimeout(300) { connector.connect("ws://127.0.0.1:${stalled.localPort}") }
+                fail("handshake never completes")
+            } catch (_: TimeoutCancellationException) {
+            }
+            assertTrue("server sees the aborted handshake", disconnected.await(2, TimeUnit.SECONDS))
+        } finally {
+            stalled.close()
+            reader.join(2_000)
+            assertFalse("stalled handshake reader stopped", reader.isAlive)
         }
-        assertTrue("server sees the aborted handshake", disconnected.await(2, TimeUnit.SECONDS))
-        stalled.close()
     }
 
     @Test
