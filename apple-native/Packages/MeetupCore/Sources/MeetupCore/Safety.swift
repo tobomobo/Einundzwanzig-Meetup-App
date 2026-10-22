@@ -82,9 +82,10 @@ public enum SafeURL {
 }
 
 public enum SecurityCapabilities {
-    public static let signingAvailable = false
-    public static let verificationAvailable = false
-    public static let reason = "App signing, badge verification, claims and trusted reputation remain unavailable. The separate MeetupNostr foundation has tested Schnorr/NIP-01 primitives, but no app key lifecycle, organizer registry or collector binding is connected. Imported data is unverified."
+    public static let signingAvailable = true
+    public static let verificationAvailable = true
+    public static let passkeysAvailable = false
+    public static let reason = "Local and NIP-46 signing, encrypted recovery, source and collector verification, and issuer authority are connected to the app. Signing requires an unlocked identity. Imported proof flags never confer authority. Passkeys require verified relying-party and production provisioning."
 }
 
 public enum BitcoinConversionError: Error, Equatable, Sendable {

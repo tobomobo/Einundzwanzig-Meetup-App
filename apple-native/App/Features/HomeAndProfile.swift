@@ -19,7 +19,7 @@ struct OnboardingView: View {
                 ReadableCard {
                     VStack(alignment: .leading, spacing: 16) {
                         Text("profile.local").font(.headline)
-                        TextField("profile.nickname", text: $nickname).textContentType(.nickname)
+                        TextField("profile.nickname", text: $nickname).textContentType(.nickname).accessibilityIdentifier("profile.nickname")
                             .textFieldStyle(.roundedBorder)
                         TextField("profile.npub.optional", text: $npub)
                             .textFieldStyle(.roundedBorder).autocorrectionDisabled()
@@ -27,13 +27,12 @@ struct OnboardingView: View {
                         Button("onboarding.continue") {
                             _ = store.saveProfile(nickname: nickname, npub: npub)
                         }
-                        .buttonStyle(.borderedProminent).controlSize(.large)
+                        .buttonStyle(.borderedProminent).controlSize(.large).accessibilityIdentifier("onboarding.continue")
                         .disabled(nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
                 }
                 VStack(alignment: .leading, spacing: 12) {
-                    Label("security.readOnly", systemImage: "lock.shield")
-                    Text("onboarding.preview.body").font(.subheadline).foregroundStyle(.secondary)
+                    NavigationLink("Create or import a signing identity") { IdentitySetupView() }
                     Button("onboarding.preview") {
                         if store.saveProfile(nickname: nickname.isEmpty ? "Preview" : nickname, npub: "") { store.setDemo(true) }
                     }.buttonStyle(.bordered)
@@ -111,6 +110,11 @@ struct HomeView: View {
         }
         .background(Color.accentColor.opacity(0.025))
         .navigationTitle("nav.home")
+        .toolbar {
+            #if DEBUG
+            if UITestFixtureMode.enabled { NavigationLink { FixtureToolsView() } label: { Image(systemName: "hammer") }.accessibilityLabel("Fixture tools").accessibilityIdentifier("fixture.open") }
+            #endif
+        }
         .refreshable { await store.refresh() }
         .overlay { if store.loading && store.meetups.isEmpty { ProgressView().controlSize(.large) } }
     }
@@ -186,25 +190,36 @@ struct ProfileEditView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var nickname = ""
     @State private var npub = ""
+    @State private var fullName = ""
+    @State private var homeMeetupID = ""
+    @State private var telegramHandle = ""
+    @State private var twitterHandle = ""
     var body: some View {
         Form {
             Section("profile.local") {
                 TextField("profile.nickname", text: $nickname).textContentType(.nickname)
+                TextField("Full name", text: $fullName).textContentType(.name)
                 TextField("profile.npub.optional", text: $npub).autocorrectionDisabled()
+                TextField("Telegram handle", text: $telegramHandle).autocorrectionDisabled()
+                TextField("Twitter handle", text: $twitterHandle).autocorrectionDisabled()
+                TextField("Home meetup", text: $homeMeetupID)
+                NavigationLink("Choose favorite meetups") { MeetupDirectoryView() }
                 Text("profile.public.body").font(.caption).foregroundStyle(.secondary)
             }
             Section("security.boundary") {
-                Label("security.readOnly", systemImage: "lock.shield")
-                Text("security.noSigning").font(.subheadline).foregroundStyle(.secondary)
-                NavigationLink("integration.signing") { IntegrationView(integration: .signing) }
-                NavigationLink("integration.proofs") { IntegrationView(integration: .proofs) }
-                NavigationLink("integration.humanity") { IntegrationView(integration: .humanity) }
+                NavigationLink("Signing identity and recovery") { IdentitySetupView() }
+                NavigationLink("integration.signing") { IdentitySetupView() }
+                NavigationLink("integration.proofs") { TrustProofsView() }
+                NavigationLink("integration.humanity") { TrustProofsView() }
             }
-            Button("action.save") { if store.saveProfile(nickname: nickname, npub: npub) { dismiss() } }
+            Button("action.save") { if store.saveProfile(nickname: nickname, npub: npub, fullName: fullName, homeMeetupID: homeMeetupID, telegramHandle: telegramHandle, twitterHandle: twitterHandle) { dismiss() } }
                 .disabled(nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .formStyle(.grouped)
         .navigationTitle("profile.title")
-        .onAppear { nickname = store.profile.nickname; npub = store.profile.npub }
+        .onAppear {
+            nickname = store.profile.nickname; npub = store.profile.npub; fullName = store.profile.fullName
+            homeMeetupID = store.profile.homeMeetupID; telegramHandle = store.profile.telegramHandle; twitterHandle = store.profile.twitterHandle
+        }
     }
 }

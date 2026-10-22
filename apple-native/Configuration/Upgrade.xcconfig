@@ -1,0 +1,5 @@
+// Explicit same-app upgrade identity. Signing team/certificate and access to
+// existing device Keychain items must be supplied and validated by the owner.
+#include "Release.xcconfig"
+E21_APP_BUNDLE_IDENTIFIER = dev.einundzwanzig.einundzwanzigMeetupApp
+PRODUCT_BUNDLE_IDENTIFIER = $(E21_APP_BUNDLE_IDENTIFIER)

@@ -1,6 +1,7 @@
 // Gemeinsame Einstellungen fuer die native iOS- und macOS-App.
 PRODUCT_NAME = Einundzwanzig
-PRODUCT_BUNDLE_IDENTIFIER = space.einundzwanzig.meetup.apple
+E21_APP_BUNDLE_IDENTIFIER = space.einundzwanzig.meetup.apple
+PRODUCT_BUNDLE_IDENTIFIER = $(E21_APP_BUNDLE_IDENTIFIER)
 MARKETING_VERSION = 0.1.0
 CURRENT_PROJECT_VERSION = 1
 

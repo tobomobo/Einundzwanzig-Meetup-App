@@ -36,6 +36,19 @@ struct BitcoinView: View {
             } else {
                 EmptyState(title: "bitcoin.noData", symbol: "bitcoinsign.circle", message: "bitcoin.noData.body")
             }
+            if let dashboard = store.bitcoinDashboard {
+                Section("Network metrics") {
+                    ForEach(dashboard.values.keys.sorted(), id: \.self) { key in
+                        LabeledContent { Text(dashboard.values[key]!, format: .number.precision(.fractionLength(0...2))) } label: { Text(LocalizedStringKey(metricName(key))) }
+                    }
+                    ForEach(dashboard.failedSources, id: \.self) { source in Text("Unavailable source: \(source)").font(.caption).foregroundStyle(.secondary) }
+                }
+                Section("Currencies") {
+                    ForEach(dashboard.prices.keys.sorted(), id: \.self) { currency in
+                        LabeledContent(currency) { Text(dashboard.prices[currency]!, format: .currency(code: currency)) }
+                    }
+                }
+            }
             Section {
                 Button("action.refresh") { Task { await store.refreshBitcoin() } }.disabled(store.bitcoinLoading)
                 NavigationLink("nav.converter", value: AppRoute.converter)
@@ -52,24 +65,33 @@ struct BitcoinView: View {
             }
         }
     }
+    private func metricName(_ key: String) -> String {
+        ["count": "Pending transactions", "vsize": "Mempool vbytes", "total_fee": "Pending fees (sats)",
+         "currentHashrate": "Hashrate (H/s)", "currentDifficulty": "Difficulty", "progressPercent": "Difficulty period (%)",
+         "difficultyChange": "Expected adjustment (%)", "remainingBlocks": "Blocks until adjustment",
+         "estimatedRetargetDate": "Retarget (Unix milliseconds)", "timeAvg": "Average block time (ms)"][key] ?? key
+    }
+
 }
 
 struct ConverterView: View {
     @Environment(AppStore.self) private var store
     @State private var amount = "100000"
     @State private var unit = "sats"
-    private var sats: Int64? {
-        if unit == "sats" {
-            guard amount.allSatisfy({ $0.isASCII && $0.isNumber }) else { return nil }
-            return Int64(amount)
-        }
-        guard let value = try? BitcoinConverter.sats(fromBTC: amount.replacingOccurrences(of: ",", with: ".")), value >= 0 else { return nil }
-        return value
+    private var price: Double? {
+        store.bitcoinDashboard?.prices[store.preferences.currency] ?? store.bitcoin.map { store.preferences.currency == "EUR" ? $0.eur : $0.usd }
     }
+    private var sats: Int64? { try? (BitcoinAmountUnit(rawValue: unit) ?? .sats).sats(amount, price: price) }
     var body: some View {
         Form {
             Section("converter.input") {
-                Picker("converter.unit", selection: $unit) { Text("Satoshis").tag("sats"); Text("BTC").tag("btc") }
+                Picker("settings.currency", selection: Binding(get: { store.preferences.currency }, set: { currency in store.updatePreferences { $0.currency = currency } })) {
+                    ForEach(["EUR", "USD", "GBP", "CHF", "CAD", "AUD", "JPY"], id: \.self) { currency in Text(currency).tag(currency) }
+                }
+                Picker("converter.unit", selection: $unit) {
+                    Text("Satoshis").tag("sats"); Text("BTC").tag("btc"); Text("mBTC").tag("mBTC")
+                    Text("µBTC").tag("microBTC"); Text(store.preferences.currency).tag("fiat")
+                }
                     .pickerStyle(.segmented)
                 TextField("converter.amount", text: $amount).font(.title2.monospacedDigit()).autocorrectionDisabled()
                 Text("converter.precision").font(.caption).foregroundStyle(.secondary)
@@ -78,12 +100,12 @@ struct ConverterView: View {
                 if let sats {
                     LabeledContent("Satoshis", value: sats.formatted())
                     LabeledContent("BTC", value: BitcoinConverter.btc(fromSats: sats))
-                    if let snapshot = store.bitcoin {
+                    if let price {
                         let currency = store.preferences.currency
                         LabeledContent(currency) {
-                            Text(BitcoinConverter.fiat(sats: sats, price: currency == "EUR" ? snapshot.eur : snapshot.usd), format: .currency(code: currency))
+                            Text(BitcoinConverter.fiat(sats: sats, price: price), format: .currency(code: currency))
                         }
-                        Text(snapshot.fetchedAt, format: .dateTime.day().month().hour().minute()).font(.caption).foregroundStyle(.secondary)
+                        Text(store.bitcoinDashboard?.fetchedAt ?? store.bitcoin?.fetchedAt ?? .now, format: .dateTime.day().month().hour().minute()).font(.caption).foregroundStyle(.secondary)
                         Text("converter.estimate").font(.caption).foregroundStyle(.secondary)
                     } else {
                         Text("converter.noPrice").font(.subheadline).foregroundStyle(.secondary)
@@ -94,5 +116,6 @@ struct ConverterView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("nav.converter")
+        .task { if !store.preferences.demo { await store.refreshBitcoin() } }
     }
 }

@@ -61,8 +61,5 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(MeetupEvent.self, from: JSONEncoder().encode(event)), event)
         let article = NewsArticle(id: "n1", url: try XCTUnwrap(URL(string: "https://example.org")))
         XCTAssertEqual(try JSONDecoder().decode(NewsArticle.self, from: JSONEncoder().encode(article)), article)
-        XCTAssertFalse(SecurityCapabilities.signingAvailable)
-        XCTAssertFalse(SecurityCapabilities.verificationAvailable)
-        XCTAssertTrue(SecurityCapabilities.reason.contains("unverified"))
     }
 }

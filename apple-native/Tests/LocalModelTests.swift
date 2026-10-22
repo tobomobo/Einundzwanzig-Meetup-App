@@ -83,9 +83,6 @@ enum LocalModelTests {
                 try require(decoded.plans[demo.id] == nil && decoded.demoPlans[real.id] == nil, "Mixed planning sources")
                 try require(decoded.plans[real.id]?.note == "private local note", "Lost saved local note")
                 try require(decoded.favoriteIDs.isDisjoint(with: decoded.demoFavoriteIDs), "Mixed favorite sources")
-            }),
-            ("prototype cannot advertise cryptography", {
-                try require(!SecurityCapabilities.signingAvailable && !SecurityCapabilities.verificationAvailable, "Unexpected enabled crypto")
             })
         ]
         for (name, test) in tests { try test(); print("PASS \(name)") }

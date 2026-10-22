@@ -209,9 +209,8 @@ final class PublicIdentityTests: XCTestCase {
         }
     }
 
-    func testEncodingDoesNotEnableSigningOrSignatureVerification() {
-        XCTAssertNotNil(PublicIdentity.normalize(officialNpub))
-        XCTAssertFalse(SecurityCapabilities.signingAvailable)
-        XCTAssertFalse(SecurityCapabilities.verificationAvailable)
+    func testPublicEncodingRetainsTheSameReferenceWithoutAnOwnershipClaim() {
+        XCTAssertEqual(PublicIdentity.normalize(officialNpub)?.npub, officialNpub)
+        XCTAssertEqual(PublicIdentity.normalize(officialNpub)?.hex, officialHex)
     }
 }

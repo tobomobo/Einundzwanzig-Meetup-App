@@ -1,5 +1,6 @@
 import SwiftUI
 import MeetupCore
+import MeetupNostr
 
 struct CommunityView: View {
     var body: some View {
@@ -12,7 +13,7 @@ struct CommunityView: View {
                 NavigationLink(value: AppRoute.resources) { Label("nav.resources", systemImage: "square.grid.2x2") }
             }
             Section("community.portal") {
-                Link("resource.portal", destination: URL(string: "https://portal.einundzwanzig.space")!)
+                NavigationLink("Portal account and meetups") { PortalManagementView() }
                 NavigationLink("learning.title", value: AppRoute.courses)
                 NavigationLink("home.organizer", value: AppRoute.unavailable(.organizer))
             }
@@ -70,6 +71,11 @@ struct NewsView: View {
 
 struct ArticleDetailView: View {
     @Environment(AppStore.self) private var store
+    @Environment(WorkflowStore.self) private var workflow
+    @State private var fullContent: String?
+    @State private var likes: Set<String> = []
+    @State private var issue: String?
+    @State private var reacting = false
     let article: NewsArticle
     var body: some View {
         ScrollView {
@@ -83,14 +89,37 @@ struct ArticleDetailView: View {
                     if let author = article.author { Text(author) }
                     if let date = article.published { Text(date, format: .dateTime.day().month().year()) }
                 }.font(.caption).foregroundStyle(.secondary)
-                Text(article.summary).font(.body).textSelection(.enabled)
-                Text("news.summaryOnly").font(.caption).foregroundStyle(.secondary)
+                Text(.init(fullContent ?? article.summary)).font(.body).textSelection(.enabled)
+                if fullContent == nil { Text("news.summaryOnly").font(.caption).foregroundStyle(.secondary) }
+                if (try? NostrArticleAddress(article.id)) != nil {
+                    HStack {
+                        Button {
+                            guard let signer = workflow.signer else { return }
+                            reacting = true
+                            Task {
+                                defer { reacting = false }
+                                do { try await workflow.news.like(article.id, signer: signer, relays: workflow.relays); likes = try await workflow.news.likes(article.id, relays: workflow.relays) }
+                                catch { issue = error.localizedDescription }
+                            }
+                        } label: { Label(likes.count.formatted(), systemImage: "heart") }
+                            .disabled(workflow.signer == nil || reacting)
+                        NavigationLink("Zap author") { ValueForValueView(article: article.id) }
+                    }
+                }
+                if let issue { Text(LocalizedStringKey(issue)).font(.caption).foregroundStyle(.secondary) }
                 Link(destination: article.url) { Label("news.readOriginal", systemImage: "safari") }.buttonStyle(.borderedProminent)
                 ShareLink(item: article.url)
             }.padding(24).frame(maxWidth: 760).frame(maxWidth: .infinity)
         }
         .navigationTitle("news.article")
         .onAppear { store.markRead(article) }
+        .task(id: article.id) {
+            guard (try? NostrArticleAddress(article.id)) != nil else { return }
+            do {
+                fullContent = try await workflow.news.fullArticle(article.id, relays: workflow.relays)?.content
+                likes = try await workflow.news.likes(article.id, relays: workflow.relays)
+            } catch { issue = error.localizedDescription }
+        }
     }
 }
 
@@ -124,10 +153,10 @@ struct ResourcesView: View {
 struct GlossaryView: View {
     @Environment(AppStore.self) private var store
     @State private var query = ""
-    private let entries = ["glWhatIsApp", "glHomeMeetup", "glNickname", "glFindMeetup", "glOffline", "glBadgeProof", "glRollingQr", "glOnSite", "glBlockHeight", "glTrustScore", "glHumanity", "glKeys", "glSigner", "glNcryptsec"]
+    private let entries = ["glWhatIsApp", "glCollect", "glHomeMeetup", "glNickname", "glFindMeetup", "glOffline", "glBadgeProof", "glRollingQr", "glOnSite", "glBlockHeight", "glChecksum", "glDuplicate", "glBadgeShare", "glWorldMap", "glTrustScore", "glLevels", "glHumanity", "glPlatforms", "glPublish", "glVerifyPerson", "glRepCard", "glEncounter", "glDegrees", "glVouch", "glTrustPath", "glEventNet", "glDistrust", "glOrganizer", "glKeys", "glFindKeys", "glPassword", "glSigner", "glNcryptsec", "glPasskey", "glNip05", "glImport", "glBackup", "glRestore", "glCalendarSources", "glCreateEvent", "glPortal", "glSpecialEvent", "glEventHelper", "glEventWindow", "glNostrBasics", "glRelays", "glPublic", "glZap", "glNews", "glCommunity", "glConverter", "glTiles", "glLanguage", "glLog", "glReset"]
     var body: some View {
         List {
-            Section { Text("glossary.prototype").font(.caption).foregroundStyle(.secondary) }
+            Section { NavigationLink("Guided introduction") { HelpTourView() } }
             ForEach(entries.filter { query.isEmpty || AppLocalization.text($0 + "Title", language: store.preferences.language).localizedStandardContains(query) || AppLocalization.text($0 + "Body", language: store.preferences.language).localizedStandardContains(query) }, id: \.self) { key in
                 DisclosureGroup {
                     Text(LocalizedStringKey(key + "Body")).textSelection(.enabled).padding(.vertical, 8)

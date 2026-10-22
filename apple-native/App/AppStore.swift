@@ -1,7 +1,10 @@
 import Foundation
 import Observation
+#if !APP_STORE_LIFECYCLE_TESTS
 import SwiftUI
+#endif
 import MeetupCore
+import MeetupNostr
 
 @MainActor @Observable
 final class AppStore {
@@ -9,31 +12,46 @@ final class AppStore {
     private(set) var preferences = LocalPreferences()
     private(set) var cache = DataCache()
     private(set) var bitcoin: BitcoinSnapshot?
+    private(set) var bitcoinDashboard: BitcoinDashboard?
     private(set) var loading = false
     private(set) var bitcoinLoading = false
     private(set) var associatedEvents: [MeetupEvent] = []
     private(set) var calendarRefreshedThisSession = false
     private(set) var calendarLastAttempt: Date?
-    let learning = LearningStore()
+    let learning: LearningStore
+    let media = NativeMediaPlayer()
+    let relay: NostrRelayClient
+    let identity: IdentityStore
+    let badgeWallet: BadgeStore
+    let workflow: WorkflowStore
+    let leadership = PortalLeadership()
     private(set) var networkIssues: [String] = []
     private(set) var diagnostics: [String] = []
     var persistenceIssue: String?
     var selectedSection: AppSection = .home
     var scanPresented = false
     var settingsPresented = false
+    var bitcoinPresented = false
     private var stateReadable = true
     private var profileReadable = true
     private var refreshGeneration = UUID()
     private var bitcoinGeneration = UUID()
+    @ObservationIgnored private var identityConfiguration: (generation: UUID, task: Task<Void, Never>)?
     private let portal = PortalClient()
     private let newsClient = NewsClient()
     private let mempool = MempoolClient()
     private let calendarClient = CalendarClient()
     private let directory: URL
 
-    init() {
-        directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("EinundzwanzigApple", isDirectory: true)
+    init(legacyDefaults: UserDefaults = .standard) {
+        learning = LearningStore(cacheFile: UITestFixtureMode.directory.appendingPathComponent("public-learning-cache.json"))
+        let fixturePreparationError: String?
+        do { try UITestFixtureMode.prepare(); fixturePreparationError = nil } catch { fixturePreparationError = error.localizedDescription }
+        relay = UITestFixtureMode.relay()
+        identity = IdentityStore(transport: relay, legacySource: FlutterUpgradeSource(defaults: legacyDefaults, allowAccess: !UITestFixtureMode.enabled))
+        badgeWallet = BadgeStore(relay: relay, persistence: KeychainBadgeWalletPersistence())
+        workflow = WorkflowStore(relay: relay, transport: UITestFixtureMode.http)
+        directory = UITestFixtureMode.directory
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
                                                     attributes: [.posixPermissions: 0o700])
@@ -65,6 +83,93 @@ final class AppStore {
             cache = cached
         }
         associatedEvents = MeetupEventMatcher.associated(cache.events, with: cache.meetups)
+        if let fixturePreparationError { persistenceIssue = fixturePreparationError }
+        if UITestFixtureMode.enabled { preferences.language = "en" }
+        badgeWallet.meetupReference = { [weak self] signedID in
+            guard let self, let meetup = MeetupIdentifier.resolve(signedID, among: meetups),
+                  let latitude = meetup.latitude, let longitude = meetup.longitude else { return nil }
+            return try? BadgeCoordinate(latitude: latitude, longitude: longitude)
+        }
+        badgeWallet.ownMeetupAuthority = { [weak self] key, signedID in
+            guard let self, let meetup = MeetupIdentifier.resolve(signedID, among: meetups) else { return false }
+            return try await leadership.isLeader(publicKey: key, meetupID: meetup.id)
+        }
+        badgeWallet.portalAuthority = { [weak self] source in
+            guard let self, let meetup = MeetupIdentifier.resolve(source.meetupID, among: meetups) else { return false }
+            return try await leadership.isLeader(publicKey: source.event.pubkey, meetupID: meetup.id)
+        }
+        #if DEBUG
+        if UITestFixtureMode.enabled {
+            badgeWallet.portalAuthority = { source in
+                source.meetupID == "fixture-city-at" && source.event.pubkey == "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+            }
+        }
+        #endif
+        identity.beforeIdentityChange = { [weak self] in
+            guard let self else { throw IdentityError.identityChanged }
+            // Revoke network credentials before deleting identity-scoped proof data.
+            try await workflow.clearIdentity()
+            try await badgeWallet.prepareIdentityChange()
+            try KeychainStore.delete(account: "pending-imported-proofs-v1")
+            await relay.setSigner(nil)
+        }
+        identity.backupSnapshot = { [weak self] in
+            guard let self else { throw IdentityError.identityChanged }
+            var fields: [String: BackupValue] = [
+                "version": .number(5), "exported_at": .string(ISO8601DateFormatter().string(from: .now)),
+                "user": .object(try UserContinuity.fields(for: profile, favoriteIDs: preferences.favoriteIDs, activeNpub: identity.npub)),
+                "badges": .array(try badgeWallet.backupBadges())
+            ]
+            if let pending = try KeychainStore.read(account: "pending-imported-proofs-v1"),
+               let saved = try? BackupDocument.decode(pending) {
+                for key in ["humanity_proof", "platform_proofs", "reputation", "social_graph"] {
+                    if let value = saved.fields[key] { fields[key] = value }
+                }
+            }
+            return try BackupDocument(fields: fields)
+        }
+        identity.restoreBackupData = { [weak self] document, decision in
+            guard let self else { throw IdentityError.identityChanged }
+            let epoch = identity.generation
+            await synchronizeIdentity()
+            guard epoch == identity.generation else { throw IdentityError.identityChanged }
+            try await badgeWallet.restoreBackup(document, decision: decision)
+            guard epoch == identity.generation else { throw IdentityError.identityChanged }
+            var safe = document.pendingRevalidation()
+            safe.fields.removeValue(forKey: "nostr")
+            safe.fields["user"] = .object(UserContinuity.sanitize(safe.fields["user"]?.object ?? [:]))
+            // Pending proof records survive recovery, but never confer authority.
+            try KeychainStore.write(safe.encoded(), account: "pending-imported-proofs-v1")
+            let restored = try UserContinuity.restore(safe.fields["user"]?.object ?? [:], current: profile,
+                favoriteIDs: preferences.favoriteIDs, decision: decision, activeNpub: identity.npub)
+            guard saveProfile(nickname: restored.nickname, npub: restored.npub, fullName: restored.fullName,
+                homeMeetupID: restored.homeMeetupID, favoriteMeetupIDs: restored.favoriteMeetupIDs,
+                telegramHandle: restored.telegramHandle, twitterHandle: restored.twitterHandle, publicUserFields: restored.publicUserFields)
+            else { throw IdentityError.invalidBackup }
+        }
+    }
+
+    func synchronizeIdentity() async {
+        let epoch = identity.generation
+        if let existing = identityConfiguration, existing.generation == epoch { await existing.task.value; return }
+        identityConfiguration?.task.cancel()
+        let signer = preferences.demo ? nil : identity.signer
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await relay.setSigner(signer)
+            guard epoch == identity.generation, !Task.isCancelled else { return }
+            await workflow.configure(signer: signer)
+            guard epoch == identity.generation, !Task.isCancelled else { return }
+            await badgeWallet.configure(signer: signer)
+        }
+        identityConfiguration = (epoch, task)
+        await task.value
+    }
+
+    func synchronizeRelays() {
+        let relays = preferences.relays.compactMap(URL.init(string:))
+        workflow.relays = relays
+        badgeWallet.relays = relays
     }
 
     var meetups: [Meetup] { preferences.demo ? PreviewFixtures.meetups : cache.meetups }
@@ -108,7 +213,9 @@ final class AppStore {
         }
     }
     @discardableResult
-    func saveProfile(nickname: String, npub: String) -> Bool {
+    func saveProfile(nickname: String, npub: String, fullName: String? = nil, homeMeetupID: String? = nil,
+                     favoriteMeetupIDs: [String]? = nil, telegramHandle: String? = nil, twitterHandle: String? = nil,
+                     publicUserFields: Data? = nil) -> Bool {
         guard profileReadable else { persistenceIssue = text("error.profileRead"); return false }
         let name = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
         let input = npub.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -116,14 +223,24 @@ final class AppStore {
         guard !name.isEmpty, name.count <= 40,
               input.isEmpty || identity != nil
         else { persistenceIssue = text("error.profile"); return false }
-        let next = LocalProfile(nickname: name, npub: identity?.npub ?? "", onboarded: true)
+        var next = profile
+        next.nickname = name; next.npub = identity?.npub ?? ""; next.onboarded = true
+        if let fullName { next.fullName = fullName }
+        if let homeMeetupID { next.homeMeetupID = homeMeetupID }
+        if let favoriteMeetupIDs { next.favoriteMeetupIDs = UserContinuity.ordered(favoriteMeetupIDs) }
+        if let telegramHandle { next.telegramHandle = telegramHandle }
+        if let twitterHandle { next.twitterHandle = twitterHandle }
         do {
+            if let publicUserFields {
+                next.publicUserFields = try JSONEncoder().encode(UserContinuity.sanitize(JSONDecoder().decode([String: BackupValue].self, from: publicUserFields)))
+            }
             #if os(macOS)
             try persist(next, name: "public-profile.json")
             #else
             try KeychainStore.write(JSONEncoder().encode(next), account: "local-public-profile-v1")
             #endif
             profile = next
+            if favoriteMeetupIDs != nil, !updatePreferences({ $0.favoriteIDs = Set(next.favoriteMeetupIDs) }) { return false }
             persistenceIssue = nil
             return true
         } catch {
@@ -146,6 +263,7 @@ final class AppStore {
                 networkIssues.removeAll { $0 == "source.bitcoin.failed" }
             }
             preferences = next
+            UserDefaults.standard.set(next.mempoolServer, forKey: "public-mempool-server")
             persistenceIssue = nil
             return true
         } catch {
@@ -156,6 +274,13 @@ final class AppStore {
 
     func setDemo(_ enabled: Bool) {
         if updatePreferences({ $0.demo = enabled }) {
+            identityConfiguration?.task.cancel()
+            identityConfiguration = nil
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if enabled { await identity.lock() }
+                await synchronizeIdentity()
+            }
             // An in-flight live refresh cannot replace the demo badge/source label.
             refreshGeneration = UUID()
             learning.invalidateRequests()
@@ -190,7 +315,7 @@ final class AppStore {
     func markRead(_ article: NewsArticle) { updatePreferences { $0.lastReadArticleIDs.insert(article.id) } }
 
     func refresh() async {
-        guard !loading, !preferences.demo else { return }
+        guard !loading, !preferences.demo, !UITestFixtureMode.enabled else { return }
         loading = true
         let generation = UUID()
         refreshGeneration = generation
@@ -233,6 +358,7 @@ final class AppStore {
     }
 
     func refreshBitcoin() async {
+        guard !UITestFixtureMode.enabled else { return }
         guard !bitcoinLoading, let url = SafeURL.web(preferences.mempoolServer) else { return }
         let generation = UUID()
         bitcoinGeneration = generation
@@ -240,12 +366,19 @@ final class AppStore {
         bitcoinLoading = true
         defer { if generation == bitcoinGeneration { bitcoinLoading = false } }
         do {
+            async let dashboard = mempool.dashboard(baseURL: url)
             let snapshot = try await mempool.snapshot(baseURL: url)
+            let detail = try await dashboard
             guard generation == bitcoinGeneration, preferences.mempoolServer == server else { return }
             bitcoin = snapshot
+            bitcoinDashboard = detail
+            await NativeBackgroundRefresh.saveWidget(snapshot: snapshot)
             networkIssues.removeAll { $0 == "source.bitcoin.failed" }
         } catch {
             guard generation == bitcoinGeneration, preferences.mempoolServer == server else { return }
+            let detail = try? await mempool.dashboard(baseURL: url)
+            guard generation == bitcoinGeneration, preferences.mempoolServer == server else { return }
+            bitcoinDashboard = detail
             if !networkIssues.contains("source.bitcoin.failed") { networkIssues.append("source.bitcoin.failed") }
         }
     }
@@ -266,9 +399,10 @@ final class AppStore {
         try mutableURL.setResourceValues(values)
     }
 
-    /// Clear Apple prototype data only; never reads or migrates the Flutter containers.
-    func resetLocalData() {
+    /// Deletion errors abort reset and preserve recovery state.
+    func resetLocalData() async {
         do {
+            try await identity.reset()
             try learning.reset()
             #if os(iOS)
             try KeychainStore.delete(account: "local-public-profile-v1")

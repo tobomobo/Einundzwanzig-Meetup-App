@@ -14,7 +14,8 @@ struct SettingsView: View {
                         else { Text(store.profile.nickname) }
                     } icon: { Image(systemName: "person.crop.circle") }
                 }
-                Text("profile.public.body").font(.caption).foregroundStyle(.secondary)
+                NavigationLink("Signing identity and recovery") { IdentitySetupView() }
+                NavigationLink("Portal account and meetups") { PortalManagementView() }
             }
             Section("settings.appearance") {
                 Picker("settings.language", selection: preference(\.language)) {
@@ -23,14 +24,15 @@ struct SettingsView: View {
                 Picker("settings.theme", selection: preference(\.appearance)) {
                     Text("appearance.system").tag("system"); Text("appearance.light").tag("light"); Text("appearance.dark").tag("dark")
                 }
-                Picker("settings.currency", selection: preference(\.currency)) { Text("EUR").tag("EUR"); Text("USD").tag("USD") }
+                Picker("settings.currency", selection: preference(\.currency)) { ForEach(["EUR", "USD", "GBP", "CHF", "CAD", "AUD", "JPY"], id: \.self) { currency in Text(currency).tag(currency) } }
                 NavigationLink("settings.dashboard") { DashboardSettingsView() }
+                NavigationLink("Guided introduction") { HelpTourView() }
             }
             Section("settings.network") {
                 NavigationLink("settings.relays") { RelaySettingsView() }
                 NavigationLink("settings.mempool") { MempoolSettingsView() }
                 NavigationLink("settings.diagnostics") { DiagnosticsView() }
-                NavigationLink("integration.signing") { IntegrationView(integration: .signing) }
+                NavigationLink("integration.signing") { IdentitySetupView() }
             }
             Section {
                 Toggle("settings.demo", isOn: Binding(get: { store.preferences.demo }, set: { store.setDemo($0) }))
@@ -38,7 +40,7 @@ struct SettingsView: View {
             } header: { Text("settings.preview") }
             Section("settings.data") {
                 Text("settings.storage.body").font(.caption).foregroundStyle(.secondary)
-                NavigationLink("integration.backup") { IntegrationView(integration: .backup) }
+                NavigationLink("integration.backup") { IdentitySetupView() }
                 Button("settings.reset", role: .destructive) { resetPresented = true }
             }
             Section {
@@ -51,7 +53,7 @@ struct SettingsView: View {
         .navigationTitle("settings.title")
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("action.done") { dismiss() } } }
         .confirmationDialog("settings.reset.confirm", isPresented: $resetPresented, titleVisibility: .visible) {
-            Button("settings.reset", role: .destructive) { store.resetLocalData(); if !store.profile.onboarded { dismiss() } }
+            Button("settings.reset", role: .destructive) { Task { await store.resetLocalData(); if !store.profile.onboarded { dismiss() } } }
             Button("action.cancel", role: .cancel) { }
         } message: { Text("settings.reset.body") }
     }
@@ -162,6 +164,10 @@ struct DiagnosticsView: View {
                 LabeledContent("diagnostics.articles", value: store.cache.articles.count.formatted())
             }
             ForEach(Array(store.diagnostics.enumerated()), id: \.offset) { _, entry in Text(entry).font(.caption.monospaced()).textSelection(.enabled) }
+            Section("Export") {
+                ShareLink(item: (["Einundzwanzig Apple diagnostics", Date().formatted(), "No keys, tokens, QR payloads, messages or profiles are included."] + store.diagnostics).joined(separator: "\n")) { Label("Export diagnostics", systemImage: "square.and.arrow.up") }
+                Text(UserDefaults.standard.string(forKey: "background-refresh-status") ?? "No background refresh recorded.").font(.caption)
+            }
         }.navigationTitle("settings.diagnostics")
     }
 }

@@ -29,14 +29,21 @@ struct EventRow: View {
 
 struct EventsView: View {
     @Environment(AppStore.self) private var store
+    @Environment(WorkflowStore.self) private var workflow
     var meetupID: String? = nil
     @State private var query = ""
     @State private var favoritesOnly = false
     @State private var showDayPicker = false
     @State private var selectedDay = Date()
 
+    private var combined: [MeetupEvent] {
+        guard !store.preferences.demo else { return store.events }
+        let courses = store.learning.cache.courses.flatMap { course in course.events.map { $0.calendarEvent(course: course) } }
+        let all = store.events + workflow.entries.map(\.meetupEvent) + courses
+        return Array(Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }).values)
+    }
     private var filtered: [MeetupEvent] {
-        store.events.filter { event in
+        combined.filter { event in
             (meetupID == nil || event.meetupID == meetupID) &&
             (!favoritesOnly || event.meetupID.map { store.isFavorite($0) } == true) &&
             (!showDayPicker || Calendar.current.isDate(CalendarDisplayWindow.filterDate(for: event), inSameDayAs: selectedDay)) &&
@@ -70,13 +77,20 @@ struct EventsView: View {
             }
             Section {
                 Text("event.sources.body").font(.caption).foregroundStyle(.secondary)
-                NavigationLink("integration.eventPublishing", value: AppRoute.unavailable(.eventPublishing))
+                NavigationLink("Nostr calendar and publishing") { NostrEventsView() }
+                NavigationLink("Portal dates and management") { PortalManagementView() }
             }
         }
         .searchable(text: $query, prompt: "event.search")
         .navigationTitle("nav.events")
-        .refreshable { await store.refresh() }
-        .overlay { if store.loading && store.events.isEmpty { ProgressView() } }
+        .refreshable { await store.refresh(); await refreshAdditionalSources() }
+        .task { await refreshAdditionalSources() }
+        .overlay { if store.loading && combined.isEmpty { ProgressView() } }
+    }
+    private func refreshAdditionalSources() async {
+        guard !store.preferences.demo, !UITestFixtureMode.enabled else { return }
+        await store.learning.refresh()
+        await workflow.loadCalendar()
     }
 }
 
@@ -127,8 +141,14 @@ struct EventDetailView: View {
             Section("event.actions") {
                 NativeCalendarButton(event: event)
                 if let url = event.url { Link("event.openPortal", destination: url); ShareLink(item: url) }
-                NavigationLink("nav.chat", value: AppRoute.unavailable(.chat))
-                NavigationLink("event.rsvpUnavailable", value: AppRoute.unavailable(.signing))
+                NavigationLink("nav.chat") { NativeChatDirectoryView() }
+                if let id = Int(event.id.replacingOccurrences(of: "portal-", with: "")) {
+                    PortalRSVPView(eventID: id)
+                } else if let address = event.nostrAddress {
+                    NavigationLink("Event participation and chat") {
+                        NostrEventLookupView(address: address)
+                    }
+                }
             }
             if let latitude = event.latitude, let longitude = event.longitude,
                (-90...90).contains(latitude), (-180...180).contains(longitude) {

@@ -47,17 +47,104 @@ enum KeychainStore {
         }
     }
 
+    /// Read only the app's accessible Flutter keychain group. No fallback to
+    /// plaintext preferences, filesystem secrets, or another app's access group.
+    static func readFlutter(account: String) throws -> Data? {
+        guard !UITestFixtureMode.enabled else { return nil }
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "flutter_secure_storage_service",
+            kSecAttrAccount as String: account,
+            kSecAttrSynchronizable as String: false,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        #if os(macOS)
+        query[kSecUseDataProtectionKeychain as String] = true
+        #endif
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess, let data = result as? Data else {
+            throw KeychainStoreError(operation: .read, status: status == errSecSuccess ? errSecDecode : status)
+        }
+        return data
+    }
+
+    static func deleteFlutter(account: String) throws {
+        guard !UITestFixtureMode.enabled else {
+            throw KeychainStoreError(operation: .delete, status: errSecInteractionNotAllowed)
+        }
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "flutter_secure_storage_service",
+            kSecAttrAccount as String: account,
+            kSecAttrSynchronizable as String: false
+        ]
+        #if os(macOS)
+        query[kSecUseDataProtectionKeychain as String] = true
+        #endif
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw KeychainStoreError(operation: .delete, status: status)
+        }
+    }
+
+    /// Exact bytes preserve Flutter companion wrapped-key and backup entries.
+    /// Migration never unwraps or rewrites an unknown platform key format.
+    static func readAllFlutter() throws -> [String: Data] {
+        guard !UITestFixtureMode.enabled else { return [:] }
+        var query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "flutter_secure_storage_service", kSecAttrSynchronizable as String: false,
+            kSecReturnData as String: true, kSecReturnAttributes as String: true, kSecMatchLimit as String: kSecMatchLimitAll]
+        #if os(macOS)
+        query[kSecUseDataProtectionKeychain as String] = true
+        #endif
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound { return [:] }
+        guard status == errSecSuccess, let items = result as? [[String: Any]] else {
+            throw KeychainStoreError(operation: .read, status: status == errSecSuccess ? errSecDecode : status)
+        }
+        var values: [String: Data] = [:]
+        for item in items {
+            guard let name = item[kSecAttrAccount as String] as? String, let data = item[kSecValueData as String] as? Data,
+                  values[name] == nil else { throw KeychainStoreError(operation: .read, status: errSecDecode) }
+            values[name] = data
+        }
+        return values
+    }
+
     private static func itemQuery(account: String) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String:
-                (Bundle.main.bundleIdentifier ?? "org.einundzwanzig.meetup.native") + ".local-profile",
+                (Bundle.main.bundleIdentifier ?? "org.einundzwanzig.meetup.native") + ".local-profile" +
+                (UITestFixtureMode.enabled ? ".ui-test" : ""),
             kSecAttrAccount as String: account,
             kSecAttrSynchronizable as String: false,
             // Use the data protection keychain on macOS too; do not enable iCloud sync.
             kSecUseDataProtectionKeychain as String: true
         ]
     }
+
+    #if DEBUG
+    /// Reset only the dedicated fixture service, never ordinary app/Flutter data.
+    static func resetUITestScope() throws {
+        guard UITestFixtureMode.enabled else {
+            throw KeychainStoreError(operation: .delete, status: errSecInteractionNotAllowed)
+        }
+        var query = itemQuery(account: "")
+        guard let service = query[kSecAttrService as String] as? String, service.hasSuffix(".local-profile.ui-test") else {
+            throw KeychainStoreError(operation: .delete, status: errSecParam)
+        }
+        query.removeValue(forKey: kSecAttrAccount as String)
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw KeychainStoreError(operation: .delete, status: status)
+        }
+    }
+    #endif
 }
 
 struct KeychainStoreError: LocalizedError {

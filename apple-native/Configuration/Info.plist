@@ -23,11 +23,11 @@
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.social-networking</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Scanne einen Meetup-QR-Code als ungepruefte Vorschau. Die App verifiziert keinen Anwesenheitsnachweis.</string>
+	<string>Scanne einen Meetup-QR-Code, um einen signierten Anwesenheitsnachweis zu prüfen und zu sammeln.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Zeige nach deiner Auswahl Meetup-Gruppen in deiner Naehe. Der Standort wird weder gespeichert noch als Anwesenheitsnachweis verwendet.</string>
+	<string>Finde auf Wunsch Meetups in deiner Nähe und prüfe bei Badge-Ausstellung oder Sammlung die Anwesenheit. Optional erfasste Badge-Koordinaten bleiben im verschlüsselten lokalen Wallet.</string>
 	<key>NSLocationUsageDescription</key>
-	<string>Finde nach deiner Auswahl Meetup-Gruppen in deiner Naehe. Alternativ kannst du ohne Standortzugriff einen Ort suchen.</string>
+	<string>Finde auf Wunsch Meetups in deiner Nähe und prüfe die Anwesenheit bei Badges. Optional erfasste Badge-Koordinaten bleiben im verschlüsselten lokalen Wallet. Die Ortssuche ist ohne Standortzugriff möglich.</string>
 	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
 	<string>Speichere ausgewaehlte Meetup-Termine in deinem Kalender.</string>
 	<key>UIApplicationSceneManifest</key>
@@ -49,6 +49,26 @@
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+		<string>fetch</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>space.einundzwanzig.meetup.apple.refresh</string>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>space.einundzwanzig.meetup.apple</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>einundzwanzig</string>
+			</array>
+		</dict>
 	</array>
 </dict>
 </plist>

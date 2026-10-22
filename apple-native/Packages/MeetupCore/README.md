@@ -9,17 +9,11 @@ conservative meetup ownership matching, nearby filters, NIP-19 public identity
 validation and exact sats/BTC conversion. Linux uses FoundationNetworking and
 FoundationXML. No platform UI, private keys or trusted badge state are stored here.
 
-`MeetupNostr` is a separate product using source dependency
-`21-DOT-DEV/swift-secp256k1` **0.23.2**, commit
-`e70a10e036a55fffea31568f0af92d69b6d449cd`. It supplies an actor adapter for BIP-340
-public-key derivation/signing/verification, canonical NIP-01 event IDs and immutable
-event models, and separate exact-UTF-8 filter/time policies. Use
-`NostrEvent.decodeJSON(_:)` / `UnsignedNostrEvent.decodeJSON(_:)` for untrusted wire
-bytes. Generic Codable cannot inspect original numeric tokens. This module does
-not enable app signing, establish key ownership, or confer registry/badge authority.
-`SecurityCapabilities` remains false. See [provider and plugin trust](Docs/CRYPTO_PROVIDER.md)
-before building; the pinned dependency executes a source-preparation build plugin.
-No wrapper audit or perfect memory erasure is claimed.
+`MeetupNostr` connects BIP-340/NIP-01 event verification and signing, NIP-44/49 encryption, NIP-46 remote signing, Flutter enc_v2 backup/migration models, verified badge/source/collector authority, trust/reputation/proofs, bounded observed social graphs, WSS relay authentication, portal operations and signed calendar/chat/news/value-for-value contracts. App stores own platform Keychain, lifecycle and production UI integration; the package stays Foundation based and fixture-testable.
+
+Dependencies are exact source pins: **swift-secp256k1 0.23.2** (`e70a10e036a55fffea31568f0af92d69b6d449cd`) and **CryptoSwift 1.8.4** (`729e01bc9b9dab466ac85f21fb9ee2bc1c61b258`). Both package and Xcode workspace locks are validated. See [provider/plugin trust](Docs/CRYPTO_PROVIDER.md) before building and the [CryptoSwift acknowledgment](../../README.md#pinned-dependencies-and-acknowledgments). No wrapper audit or perfect memory erasure is claimed.
+
+Use `NostrEvent.decodeJSON(_:)` / `UnsignedNostrEvent.decodeJSON(_:)` for untrusted wire bytes. Generic Codable cannot inspect original numeric tokens. Cryptographic validity alone never establishes filter membership, issuer authority, collector ownership or current trust. Full app fixture harnesses additionally test actual persistence, migration and identity-change fencing.
 
 ## Public data APIs
 
@@ -54,7 +48,7 @@ No wrapper audit or perfect memory erasure is claimed.
 - `NewsClient().articles()` parses bounded RSS, disables external entities, rejects
   DTDs/excessive nesting, sanitizes text, and leaves invalid publication dates nil.
 - `MempoolClient().snapshot(baseURL:)` requires all three height/price/fee responses
-  to succeed. `BitcoinConverter` uses exact signed decimal text for sats/BTC.
+  to succeed. `.dashboard` preserves independently successful prices/mempool/mining/difficulty sources. `BitcoinAmountUnit` also supports mBTC/µBTC and reverse fiat using exact decimal validation.
 - `SafeURL.web/relay` reject unsafe schemes, credentials and missing hosts.
 
 HTTP uses GET with ephemeral URLSession, no cookie/credential/cache storage,

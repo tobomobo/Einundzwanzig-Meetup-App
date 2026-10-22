@@ -6,6 +6,37 @@ struct LocalProfile: Codable, Equatable {
     /// A user-entered public reference. Never treated as proof of key ownership.
     var npub = ""
     var onboarded = false
+    var fullName = ""
+    var homeMeetupID = ""
+    var favoriteMeetupIDs: [String] = []
+    var telegramHandle = ""
+    var twitterHandle = ""
+    /// Sanitized public user JSON, including fields introduced by other clients.
+    /// Stored as Data so this model retains its MeetupCore-only dependency.
+    var publicUserFields: Data?
+
+    init(nickname: String = "", npub: String = "", onboarded: Bool = false,
+         fullName: String = "", homeMeetupID: String = "", favoriteMeetupIDs: [String] = [],
+         telegramHandle: String = "", twitterHandle: String = "", publicUserFields: Data? = nil) {
+        self.nickname = nickname; self.npub = npub; self.onboarded = onboarded
+        self.fullName = fullName; self.homeMeetupID = homeMeetupID; self.favoriteMeetupIDs = favoriteMeetupIDs
+        self.telegramHandle = telegramHandle; self.twitterHandle = twitterHandle; self.publicUserFields = publicUserFields
+    }
+    private enum CodingKeys: String, CodingKey {
+        case nickname, npub, onboarded, fullName, homeMeetupID, favoriteMeetupIDs, telegramHandle, twitterHandle, publicUserFields
+    }
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        nickname = try c.decodeIfPresent(String.self, forKey: .nickname) ?? ""
+        npub = try c.decodeIfPresent(String.self, forKey: .npub) ?? ""
+        onboarded = try c.decodeIfPresent(Bool.self, forKey: .onboarded) ?? false
+        fullName = try c.decodeIfPresent(String.self, forKey: .fullName) ?? ""
+        homeMeetupID = try c.decodeIfPresent(String.self, forKey: .homeMeetupID) ?? ""
+        favoriteMeetupIDs = try c.decodeIfPresent([String].self, forKey: .favoriteMeetupIDs) ?? []
+        telegramHandle = try c.decodeIfPresent(String.self, forKey: .telegramHandle) ?? ""
+        twitterHandle = try c.decodeIfPresent(String.self, forKey: .twitterHandle) ?? ""
+        publicUserFields = try c.decodeIfPresent(Data.self, forKey: .publicUserFields)
+    }
 }
 
 enum PlanStatus: String, Codable, CaseIterable, Identifiable {

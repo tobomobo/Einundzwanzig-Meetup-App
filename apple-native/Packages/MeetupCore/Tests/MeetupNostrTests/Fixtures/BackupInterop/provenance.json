@@ -1,0 +1,8 @@
+{
+  "producer": "BackupService.createBackup via Flutter widget test; production source unchanged",
+  "password": "synthetic-interop-Grüße-😀",
+  "privateKey": "PUBLIC synthetic scalar 1; never fund or reuse",
+  "backupServiceSha256": "09d4710ec0f02af1f55906894b73f1d4d719d2622c7c42f4c47dab040fa35e6a",
+  "flutterFileSha256": "b3377a39ec2c30485bdc194e9a089eb82e45fbe252370282cfc75f8dd77c7161",
+  "dartVersion": "3.13.5 (stable) (Tue Sep 29 01:00:52 2026 -0700) on \"linux_x64\""
+}

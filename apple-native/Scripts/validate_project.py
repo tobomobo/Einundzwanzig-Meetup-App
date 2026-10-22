@@ -189,7 +189,7 @@ class OpenStepParser:
         return result
 
 
-PHASES = ("PBXSourcesBuildPhase", "PBXFrameworksBuildPhase", "PBXResourcesBuildPhase")
+PHASES = ("PBXSourcesBuildPhase", "PBXFrameworksBuildPhase", "PBXResourcesBuildPhase", "PBXCopyFilesBuildPhase")
 GROUPS = ("PBXGroup", "PBXVariantGroup", "PBXFileSystemSynchronizedRootGroup")
 FILES = ("PBXFileReference", *GROUPS)
 # Only schema-defined relationships are edges. UUID-shaped setting values and
@@ -268,19 +268,29 @@ class Project:
                 pending.extend(edges[oid])
         require(reached == set(self.objects), f"orphan project objects: {', '.join(sorted(set(self.objects) - reached))}")
         require(self.root.get("mainGroup") not in self.parents, "mainGroup may not be a child of another group (group cycle)")
-        self.target_id, self.target = self.only("PBXNativeTarget")
-        require(self.root.get("targets") == [self.target_id], "project.targets must contain only the app target")
+        targets = dict(self.of_type("PBXNativeTarget"))
+        apps = [(oid, target) for oid, target in targets.items() if target.get("productType") == "com.apple.product-type.application"]
+        widgets = [(oid, target) for oid, target in targets.items() if target.get("productType") == "com.apple.product-type.app-extension"]
+        tests = [(oid, target) for oid, target in targets.items() if target.get("productType") == "com.apple.product-type.bundle.ui-testing"]
+        require(len(apps) == len(widgets) == len(tests) == 1 and len(targets) == 3, "expected one app, WidgetKit extension and UI test target")
+        self.ui_id, self.ui_target = tests[0]
+        self.target_id, self.target = apps[0]
+        self.widget_id, self.widget = widgets[0]
+        self.product_ids = {target.get("productReference") for target in targets.values()}
+        require(set(self.root.get("targets", [])) == set(targets), "project targets must contain the app and widget")
         attrs = dictionary(self.root.get("attributes", {}), "project.attributes")
         target_attrs = dictionary(attrs.get("TargetAttributes", {}), "TargetAttributes")
-        require(set(target_attrs) <= {self.target_id}, "TargetAttributes contains a stale target ID")
+        require(set(target_attrs) <= {self.target_id, self.widget_id, self.ui_id}, "TargetAttributes contains a stale target ID")
         require(self.target.get("name") == "Einundzwanzig" and self.target.get("productName") == "Einundzwanzig", "app target name/productName must be Einundzwanzig")
         require(self.target.get("productType") == "com.apple.product-type.application", "target must be an application")
         self.product_id = self.target.get("productReference")
         product = self.obj(self.product_id, ("PBXFileReference",))
         require(product.get("path") == "Einundzwanzig.app" and product.get("sourceTree") == "BUILT_PRODUCTS_DIR" and product.get("explicitFileType") == "wrapper.application", "product must be Einundzwanzig.app in BUILT_PRODUCTS_DIR")
         products = self.obj(self.root.get("productRefGroup"), ("PBXGroup",))
-        require(products.get("children") == [self.product_id], "Products group must contain only Einundzwanzig.app")
-        require(not self.target.get("dependencies") and not self.target.get("buildRules"), "unexpected target dependencies or custom build rules")
+        require(set(products.get("children", [])) == self.product_ids, "Products must contain app and widget only")
+        dependencies = [self.obj(oid, ("PBXTargetDependency",)).get("target") for oid in self.target.get("dependencies", [])]
+        require(dependencies == [self.widget_id] and not self.target.get("buildRules"), "app must depend on the widget only")
+        require(not self.widget.get("dependencies") and not self.widget.get("buildRules"), "widget must have no custom dependencies or rules")
         require(not self.root.get("projectReferences"), "external project references are not allowed")
 
     def resolve(self, oid, trail=()):
@@ -290,7 +300,7 @@ class Project:
         obj = self.obj(oid)
         tree = obj.get("sourceTree", "<group>")
         if tree == "BUILT_PRODUCTS_DIR":
-            require(oid == self.product_id, f"{oid}: unexpected generated product reference")
+            require(oid in self.product_ids, f"{oid}: unexpected generated product reference")
             return None
         require(tree in ("<group>", "SOURCE_ROOT"), f"{oid}: unsupported sourceTree {tree!r}; cannot resolve without Xcode")
         if tree == "SOURCE_ROOT" or oid == self.root.get("mainGroup"):
@@ -334,7 +344,7 @@ class Project:
     def validate_membership(self):
         phase_ids = sequence(self.target.get("buildPhases"), "target.buildPhases")
         phase_map = {self.obj(oid)["isa"]: self.obj(oid) for oid in phase_ids}
-        require(len(phase_ids) == 3 and set(phase_map) == set(PHASES), "app must have exactly one Sources, Frameworks and Resources build phase")
+        require(len(phase_ids) == 4 and set(phase_map) == set(PHASES), "app must have Sources, Frameworks, Resources and Embed Extensions phases")
         all_build_files = []
         members = {}
         for kind, phase in phase_map.items():
@@ -350,7 +360,30 @@ class Project:
             require(len(refs) == len(set(refs)), f"{kind}: duplicate build membership")
             members[kind] = refs
         require(len(all_build_files) == len(set(all_build_files)), "a build file belongs to multiple phases")
-        require(set(all_build_files) == {oid for oid, _ in self.of_type("PBXBuildFile")}, "unattached PBXBuildFile objects")
+        widget_phases = {self.obj(oid)["isa"]: self.obj(oid) for oid in self.widget.get("buildPhases", [])}
+        require(set(widget_phases) == set(PHASES) - {"PBXCopyFilesBuildPhase"}, "widget must have Sources, Frameworks and Resources phases")
+        widget_files = [oid for phase in widget_phases.values() for oid in phase.get("files", [])]
+        require(not set(all_build_files) & set(widget_files), "app and widget cannot reuse build files")
+        ui_phases = {self.obj(oid)["isa"]: self.obj(oid) for oid in self.ui_target.get("buildPhases", [])}
+        require(set(ui_phases) == set(PHASES) - {"PBXCopyFilesBuildPhase"}, "UI tests must have standard build phases")
+        ui_files = [oid for phase in ui_phases.values() for oid in phase.get("files", [])]
+        ui_sources = [self.resolve(self.obj(oid)["fileRef"]) for oid in ui_phases["PBXSourcesBuildPhase"]["files"]]
+        require(ui_sources == [self.apple / "UITests/AppSmokeTests.swift"], "UI target must compile the actual app smoke tests")
+        require(not ui_phases["PBXFrameworksBuildPhase"]["files"] and not ui_phases["PBXResourcesBuildPhase"]["files"], "unexpected UI test resources/frameworks")
+        require([self.obj(oid).get("target") for oid in self.ui_target.get("dependencies", [])] == [self.target_id], "UI tests must depend on the app")
+        require(set(all_build_files + widget_files + ui_files) == {oid for oid, _ in self.of_type("PBXBuildFile")}, "unattached PBXBuildFile objects")
+        sources = [self.resolve(self.obj(oid)["fileRef"]) for oid in widget_phases["PBXSourcesBuildPhase"]["files"]]
+        require(sources == [self.apple / "Widget/BitcoinWidget.swift"], "widget must compile its real source")
+        require(not widget_phases["PBXResourcesBuildPhase"]["files"], "unexpected widget resource membership")
+        require(members["PBXCopyFilesBuildPhase"] == [self.widget.get("productReference")], "app must embed exactly its widget")
+        require(phase_map["PBXCopyFilesBuildPhase"].get("dstSubfolderSpec") == "13", "widget must be embedded in PlugIns")
+        widget_info = plistlib.loads((self.apple / "Widget/Info.plist").read_bytes())
+        require(widget_info.get("NSExtension", {}).get("NSExtensionPointIdentifier") == "com.apple.widgetkit-extension", "widget Info.plist must declare WidgetKit")
+        widget_configs = self.obj(self.widget["buildConfigurationList"])["buildConfigurations"]
+        for oid in widget_configs:
+            settings = self.obj(oid)["buildSettings"]
+            require(settings.get("INFOPLIST_FILE") == "Widget/Info.plist" and settings.get("APPLICATION_EXTENSION_API_ONLY") == "YES" and settings.get("SKIP_INSTALL") == "YES", "widget settings must use extension-only APIs and explicit Info.plist")
+            require(settings.get("PRODUCT_BUNDLE_IDENTIFIER") == "$(E21_APP_BUNDLE_IDENTIFIER).widget", "widget bundle ID must be nested under app bundle ID")
         require(not members["PBXSourcesBuildPhase"], "Sources must use synchronized App membership, without explicit duplicate sources")
         variant_id, variant = self.only("PBXVariantGroup")
         require(variant.get("name", variant.get("path")) == "Localizable.strings", "variant group must be Localizable.strings")
@@ -385,9 +418,13 @@ class Project:
         require(all(item.get("package") == package_id for item in dependencies.values()), "both products must reference the local package")
         require(set(self.target.get("packageProductDependencies", [])) == set(dependencies), "target must depend on both local products")
         require(set(members["PBXFrameworksBuildPhase"]) == set(dependencies), "Frameworks phase must link both local products")
+        widget_frameworks = [self.obj(oid).get("productRef") for oid in widget_phases["PBXFrameworksBuildPhase"]["files"]]
+        core_id = next(oid for oid, item in dependencies.items() if item.get("productName") == "MeetupCore")
+        require(widget_frameworks == [core_id] and self.widget.get("packageProductDependencies") == [core_id], "widget must link MeetupCore only")
         expected = {"identity": "swift-secp256k1", "kind": "remoteSourceControl", "location": "https://github.com/21-DOT-DEV/swift-secp256k1", "state": {"revision": "e70a10e036a55fffea31568f0af92d69b6d449cd", "version": "0.23.2"}}
         for path in (self.apple / "Packages/MeetupCore/Package.resolved", self.apple / "Einundzwanzig.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"):
-            require(load_json(path).get("pins") == [expected], f"{path}: expected exact reviewed source-provider pin only")
+            crypto = {"identity": "cryptoswift", "kind": "remoteSourceControl", "location": "https://github.com/krzyzanowskim/CryptoSwift", "state": {"revision": "729e01bc9b9dab466ac85f21fb9ee2bc1c61b258", "version": "1.8.4"}}
+            require(load_json(path).get("pins") == [crypto, expected], f"{path}: expected exact reviewed secp256k1 and CryptoSwift pins")
 
 
 def strip_config_comments(text):
@@ -503,7 +540,7 @@ def configurations(project, owner, label):
     for oid in ids:
         config = project.obj(oid, ("XCBuildConfiguration",))
         name = config.get("name")
-        require(name in ("Debug", "Release") and name not in configs, f"{label}: invalid/duplicate configuration {name!r}")
+        require(name in ("Debug", "Release", "Upgrade") and name not in configs, f"{label}: invalid/duplicate configuration {name!r}")
         settings = {}
         if "baseConfigurationReference" in config:
             path = project.resolve(config["baseConfigurationReference"])
@@ -513,7 +550,7 @@ def configurations(project, owner, label):
         elif label == "target":
             raise Invalid(f"target/{name}: missing baseConfigurationReference")
         configs[name] = merge_settings(settings, dictionary(config.get("buildSettings"), f"{label}/{name}.buildSettings"))
-    require(set(configs) == {"Debug", "Release"}, f"{label}: must define Debug and Release")
+    require(set(configs) == {"Debug", "Release", "Upgrade"}, f"{label}: must define Debug, Release and Upgrade")
     return configs
 
 
@@ -522,9 +559,10 @@ def validate_configurations(project):
     require(common.is_file(), f"missing {common}")
     project_configs = configurations(project, project.root, "project")
     target_configs = configurations(project, project.target, "target")
+    widget_configs = configurations(project, project.widget, "widget")
     project.effective = {}
     required = {"PRODUCT_NAME": "Einundzwanzig", "PRODUCT_BUNDLE_IDENTIFIER": "space.einundzwanzig.meetup.apple", "MARKETING_VERSION": "0.1.0", "CURRENT_PROJECT_VERSION": "1", "SDKROOT": "auto", "SUPPORTS_MACCATALYST": "NO", "GENERATE_INFOPLIST_FILE": "NO", "INFOPLIST_FILE": "Configuration/Info.plist", "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon"}
-    for name in ("Debug", "Release"):
+    for name in ("Debug", "Release", "Upgrade"):
         settings = merge_settings(project_configs[name], target_configs[name])
         for sdk in ("iphoneos", "iphonesimulator", "macosx"):
             effective = sdk_settings(settings, sdk, name)
@@ -532,6 +570,7 @@ def validate_configurations(project):
             effective = {key: expand(value, effective) for key, value in effective.items()}
             prefix = f"{name}/{sdk}"
             for key, expected in required.items():
+                if key == "PRODUCT_BUNDLE_IDENTIFIER" and name == "Upgrade": expected = "dev.einundzwanzig.einundzwanzigMeetupApp"
                 require(effective.get(key) == expected, f"{prefix}: {key} must be {expected!r}, got {effective.get(key)!r}")
             require(effective.get("SWIFT_VERSION") in ("6", "6.0"), f"{prefix}: SWIFT_VERSION must be 6.0")
             for key in ("IPHONEOS_DEPLOYMENT_TARGET", "MACOSX_DEPLOYMENT_TARGET"):
@@ -546,9 +585,13 @@ def validate_configurations(project):
                 require(effective.get("SWIFT_OPTIMIZATION_LEVEL") == "-Onone", f"{prefix}: Debug must use -Onone")
             else:
                 require(effective.get("SWIFT_OPTIMIZATION_LEVEL") in ("-O", "-Osize"), f"{prefix}: Release must use optimized Swift")
+            widget = sdk_settings(merge_settings(project_configs[name], widget_configs[name]), sdk, name)
+            widget = {key: expand(value, widget) for key, value in widget.items()}
+            require(widget.get("PRODUCT_BUNDLE_IDENTIFIER") == effective["PRODUCT_BUNDLE_IDENTIFIER"] + ".widget", f"{prefix}: widget must use the matching app bundle prefix")
+            require(widget.get("APPLICATION_EXTENSION_API_ONLY") == "YES" and widget.get("INFOPLIST_FILE") == "Widget/Info.plist", f"{prefix}: widget extension build settings invalid")
             project.effective[name, sdk] = effective
         require("CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" in settings, f"{name}: expected conditional macOS entitlements setting")
-    require(len(project.of_type("XCBuildConfiguration")) == 4, "expected exactly four project/target build configurations")
+    require(len(project.of_type("XCBuildConfiguration")) == 12, "expected project/app/widget/UI-test Debug, Release and Upgrade configurations")
 
 
 def load_plist(path):
@@ -564,6 +607,7 @@ def validate_plists(project):
     expected = {"CFBundleIdentifier": "space.einundzwanzig.meetup.apple", "CFBundleName": "Einundzwanzig", "CFBundleExecutable": "Einundzwanzig", "CFBundlePackageType": "APPL", "CFBundleShortVersionString": "0.1.0", "CFBundleVersion": "1"}
     for (name, sdk), settings in project.effective.items():
         for key, value in expected.items():
+            if key == "CFBundleIdentifier" and name == "Upgrade": value = "dev.einundzwanzig.einundzwanzigMeetupApp"
             require(isinstance(info.get(key), str) and expand(info[key], settings) == value, f"Info.plist {key} does not resolve to {value!r} for {name}/{sdk}")
     require(isinstance(info.get("NSCameraUsageDescription"), str) and info["NSCameraUsageDescription"].strip(), "Info.plist needs a camera usage description for the iOS scanner")
     calendar_key = "NSCalendarsWriteOnlyAccessUsageDescription"
@@ -587,10 +631,16 @@ def validate_scheme(project):
     references = root.findall(".//BuildableReference")
     require(bool(references), "scheme has no buildable references")
     for reference in references:
-        expected = {"BlueprintIdentifier": project.target_id, "BlueprintName": "Einundzwanzig", "BuildableName": "Einundzwanzig.app", "ReferencedContainer": "container:Einundzwanzig.xcodeproj", "BuildableIdentifier": "primary"}
+        is_test = reference.get("BlueprintIdentifier") == project.ui_id
+        expected = {"BlueprintIdentifier": project.ui_id if is_test else project.target_id,
+                    "BlueprintName": "EinundzwanzigUITests" if is_test else "Einundzwanzig",
+                    "BuildableName": "EinundzwanzigUITests.xctest" if is_test else "Einundzwanzig.app",
+                    "ReferencedContainer": "container:Einundzwanzig.xcodeproj", "BuildableIdentifier": "primary"}
         for key, value in expected.items():
             require(reference.get(key) == value, f"scheme {key}: expected {value!r}, got {reference.get(key)!r}")
         project.obj(reference.get("BlueprintIdentifier"), ("PBXNativeTarget",))
+    testables = root.findall("./TestAction/Testables/TestableReference")
+    require(len(testables) == 1 and testables[0].get("skipped") == "NO" and testables[0].find("BuildableReference").get("BlueprintIdentifier") == project.ui_id, "scheme must run real app UI smoke tests")
     entries = root.findall("./BuildAction/BuildActionEntries/BuildActionEntry")
     require(len(entries) == 1 and entries[0].find("BuildableReference") is not None, "scheme must build exactly the app target")
     for flag in ("buildForTesting", "buildForRunning", "buildForProfiling", "buildForArchiving", "buildForAnalyzing"):
@@ -828,7 +878,7 @@ def main(argv=None):
     if run("OpenStep project and object graph", parse_project):
         run("project paths and synchronized App membership", project.validate_paths)
         membership_ok = run("build phases, localization membership and local package", project.validate_membership)
-        config_ok = run("Debug/Release effective settings for all three SDKs", lambda: validate_configurations(project))
+        config_ok = run("Debug/Release/Upgrade app + widget effective settings for all three SDKs", lambda: validate_configurations(project))
         if config_ok:
             run("manual Info.plist and macOS entitlements", lambda: validate_plists(project))
         if membership_ok:

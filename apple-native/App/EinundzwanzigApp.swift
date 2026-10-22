@@ -3,11 +3,15 @@ import SwiftUI
 @main
 struct EinundzwanzigApp: App {
     @State private var store = AppStore()
+    init() { if !UITestFixtureMode.enabled { NativeBackgroundRefresh.register() } }
 
     var body: some Scene {
         WindowGroup {
             AppRootView()
                 .environment(store)
+                .environment(store.identity)
+                .environment(store.badgeWallet)
+                .environment(store.workflow)
                 .environment(\.locale, store.locale)
                 .preferredColorScheme(store.colorScheme)
                 .tint(Color.accentColor)
@@ -32,6 +36,9 @@ struct EinundzwanzigApp: App {
         Settings {
             NavigationStack { SettingsView() }
                 .environment(store)
+                .environment(store.identity)
+                .environment(store.badgeWallet)
+                .environment(store.workflow)
                 .environment(\.locale, store.locale)
                 .preferredColorScheme(store.colorScheme)
                 .frame(width: 620, height: 720)
@@ -57,6 +64,7 @@ struct EinundzwanzigApp: App {
 
 struct AppRootView: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         @Bindable var store = store
@@ -67,6 +75,8 @@ struct AppRootView: View {
                 NavigationStack { OnboardingView() }
             }
         }
+        .sheet(isPresented: $store.bitcoinPresented) { NavigationStack { BitcoinView() } }
+        .onOpenURL { url in if url.scheme == "einundzwanzig", url.host == "bitcoin" { store.bitcoinPresented = true } }
         .sheet(isPresented: $store.scanPresented) {
             NavigationStack { BadgeImportView() }
                 .presentationDetents([.large])
@@ -78,7 +88,12 @@ struct AppRootView: View {
         .alert("error.title", isPresented: Binding(get: { store.persistenceIssue != nil }, set: { if !$0 { store.persistenceIssue = nil } })) {
             Button("action.ok") { store.persistenceIssue = nil }
         } message: { Text(store.persistenceIssue ?? "") }
-        .task { await store.refresh() }
+        .task { store.synchronizeRelays(); await store.refresh() }
+        .task(id: store.identity.generation) { await store.synchronizeIdentity() }
+        .onChange(of: store.preferences.relays) { store.synchronizeRelays() }
+        .onChange(of: scenePhase) {
+            if scenePhase == .background { Task { await store.identity.lock(); NativeBackgroundRefresh.schedule() } }
+        }
     }
 
     @ViewBuilder private var shell: some View {
@@ -154,7 +169,11 @@ struct RouteDestination: View {
             else { MissingContentView() }
         case .events(let id): EventsView(meetupID: id)
         case .event(let id):
-            if let event = store.events.first(where: { $0.id == id }) ?? store.plans.first(where: { $0.id == id })?.event {
+            if let entry = store.workflow.entries.first(where: { $0.id == id }) { NostrEventDetailView(entry: entry) }
+            else if let courseDate = store.learning.cache.courses.flatMap({ course in course.events.map { $0.calendarEvent(course: course) } }).first(where: { $0.id == id }) {
+                EventDetailView(event: courseDate)
+            }
+            else if let event = store.events.first(where: { $0.id == id }) ?? store.plans.first(where: { $0.id == id })?.event {
                 EventDetailView(event: event)
             } else { MissingContentView() }
         case .plans: PlansView()
@@ -177,7 +196,19 @@ struct RouteDestination: View {
         case .courses: CoursesView()
         case .course(let id): CourseDetailView(id: id)
         case .lecturer(let id): LecturerDetailView(id: id)
-        case .unavailable(let integration): IntegrationView(integration: integration)
+        case .unavailable(let integration):
+            switch integration {
+            case .signing, .backup: IdentitySetupView()
+            case .chat: NativeChatDirectoryView()
+            case .eventPublishing: NostrEventsView()
+            case .courses: CoursesView()
+            case .organizer: OrganizerHubView()
+            case .verification: ReputationVerifyView()
+            case .proofs, .humanity: TrustProofsView()
+            case .socialGraph: TrustNetworkView()
+            case .plebrap: PlebRapView()
+            case .donations: ValueForValueView()
+            }
         }
     }
 }

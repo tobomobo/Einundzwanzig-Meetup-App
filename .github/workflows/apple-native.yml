@@ -22,7 +22,7 @@ jobs:
   build:
     name: Validate, test, and build iOS + macOS
     runs-on: macos-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +34,12 @@ jobs:
 
       - name: Test MeetupCore and MeetupNostr with the checked-in dependency pin
         run: swift test --package-path apple-native/Packages/MeetupCore --force-resolved-versions -Xswiftc -warnings-as-errors
+
+      - name: Test real signing and badge app-store state machines with local fixtures
+        run: |
+          python3 apple-native/Packages/MeetupCore/Tests/MeetupNostrTests/Fixtures/IdentityLifecycleHarness.py
+          python3 apple-native/Packages/MeetupCore/Tests/MeetupNostrTests/Fixtures/BadgeLifecycleHarness.py
+          python3 apple-native/Packages/MeetupCore/Tests/MeetupNostrTests/Fixtures/IdentityAppStoreHarness.py
 
       - name: Parse all Apple platform branches
         run: python3 apple-native/Scripts/parse_swift.py
@@ -87,3 +93,39 @@ jobs:
           -derivedDataPath /tmp/einundzwanzig-macos-derived-data
           CODE_SIGNING_ALLOWED=NO
           build
+
+      - name: Build original Flutter app identity for production upgrade without signing
+        run: >-
+          xcodebuild
+          -project apple-native/Einundzwanzig.xcodeproj
+          -scheme Einundzwanzig
+          -configuration Upgrade
+          -onlyUsePackageVersionsFromResolvedFile
+          -skipPackagePluginValidation
+          -sdk iphoneos
+          -destination 'generic/platform=iOS'
+          -derivedDataPath /tmp/einundzwanzig-upgrade-derived-data
+          CODE_SIGNING_ALLOWED=NO
+          build
+
+      - name: Run isolated iOS app identity, wallet and offline smoke tests
+        run: |
+          simulator_id=$(python3 apple-native/Scripts/select_simulator.py)
+          xcodebuild test \
+            -project apple-native/Einundzwanzig.xcodeproj \
+            -scheme Einundzwanzig -configuration Debug \
+            -onlyUsePackageVersionsFromResolvedFile -skipPackagePluginValidation \
+            -sdk iphonesimulator -destination "platform=iOS Simulator,id=$simulator_id" \
+            -derivedDataPath /tmp/einundzwanzig-ui-derived-data \
+            -resultBundlePath /tmp/einundzwanzig-ui-tests.xcresult \
+            -parallel-testing-enabled NO -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 180 -maximum-test-execution-time-allowance 240 \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Preserve simulator smoke test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apple-ui-smoke-results
+          path: /tmp/einundzwanzig-ui-tests.xcresult
+          if-no-files-found: ignore
