@@ -42,7 +42,9 @@ private struct IdentitySafariView: UIViewControllerRepresentable {
     @MainActor final class Coordinator: NSObject, SFSafariViewControllerDelegate {
         let finished: @MainActor () -> Void
         init(finished: @escaping @MainActor () -> Void) { self.finished = finished }
-        func safariViewControllerDidFinish(_ controller: SFSafariViewController) { finished() }
+        nonisolated func safariViewControllerDidFinish(_ controller: SFSafariViewController) {
+            Task { @MainActor [weak self] in self?.finished() }
+        }
     }
 }
 #elseif os(macOS)
