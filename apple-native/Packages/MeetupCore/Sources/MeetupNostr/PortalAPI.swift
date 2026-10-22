@@ -151,13 +151,69 @@ public struct PortalEventDraft: Codable, Sendable {
         case recurrenceDayOfWeek = "recurrence_day_of_week", recurrenceDayPosition = "recurrence_day_position"
         case recurrenceInterval = "recurrence_interval", recurrenceEndDate = "recurrence_end_date"
     }
+    private static func date(_ text: String) -> Date? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: text) { return date }
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: text)
+    }
     func validate() throws {
-        guard meetupID > 0, ISO8601DateFormatter().date(from: start) != nil,
+        guard meetupID > 0, Self.date(start) != nil,
               location?.utf8.count ?? 0 <= 4096, description?.utf8.count ?? 0 <= 65536,
               recurrenceType == nil || ["daily", "weekly", "monthly", "yearly", "custom"].contains(recurrenceType!),
+              recurrenceDayOfWeek?.utf8.count ?? 0 <= 100, recurrenceDayPosition?.utf8.count ?? 0 <= 100,
               recurrenceInterval == nil || (1...100).contains(recurrenceInterval!) else { throw PortalAPIError.invalidInput }
         if let link, !link.isEmpty { guard let url = URL(string: link), ["https", "http"].contains(url.scheme), url.host != nil, url.user == nil else { throw PortalAPIError.invalidInput } }
-        if let recurrenceEndDate { guard let end = ISO8601DateFormatter().date(from: recurrenceEndDate), let start = ISO8601DateFormatter().date(from: start), end >= start else { throw PortalAPIError.invalidInput } }
+        if let recurrenceEndDate { guard let end = Self.date(recurrenceEndDate), let start = Self.date(start), end >= start else { throw PortalAPIError.invalidInput } }
+    }
+}
+
+public struct PortalAttendee: Sendable, Equatable {
+    public let name: String
+    public let publicKey: String
+}
+public struct PortalRSVPSummary: Sendable, Equatable {
+    public let status: String?
+    public let count: Int?
+    public let maybeCount: Int?
+    public let attendees: [PortalAttendee]
+    public var isGoing: Bool { status == "attending" || status == "maybe" }
+    public init(response: JSONValue, attendees: [PortalAttendee]? = nil) throws {
+        let value = response.unwrapped
+        guard value.object != nil else { throw PortalAPIError.invalidResponse }
+        let rawStatus = value["status"].string
+        if let rawStatus, ["attending", "maybe", "none"].contains(rawStatus) { status = rawStatus }
+        else if let going = value["going"].boolean ?? value["is_going"].boolean ?? value["rsvped"].boolean { status = going ? "attending" : "none" }
+        else { status = nil }
+        let rawCount = value["attendees"].integer ?? value["count"].integer ?? value["attending_count"].integer ?? value["total"].integer ?? value["rsvps"].integer
+        count = rawCount.flatMap { $0 >= 0 ? $0 : nil }
+        let rawMaybe = value["might_attendees"].integer ?? value["might"].integer ?? value["maybe_count"].integer
+        maybeCount = rawMaybe.flatMap { $0 >= 0 ? $0 : nil }
+        self.attendees = Self.namesHidden(in: response) ? [] : (attendees ?? Self.attendees(in: value))
+    }
+    static func namesHidden(in response: JSONValue) -> Bool {
+        response["attendees_public"].boolean == false || response.unwrapped["attendees_public"].boolean == false
+    }
+    static func attendees(in response: JSONValue) -> [PortalAttendee] {
+        let value = response.unwrapped
+        guard !namesHidden(in: response) else { return [] }
+        let lists = [value] + ["attendee_names", "attendees_list", "names", "attendees", "rsvps", "participants", "going_users", "going", "members", "guests"].map { value[$0] }
+        for list in lists {
+            guard let rows = list.array else { continue }
+            var result: [PortalAttendee] = []
+            for row in rows {
+                let inner = [row["user"], row["member"], row["profile"]].first { $0.object != nil } ?? row
+                let key = [inner["npub"], inner["pubkey"], inner["public_key"], row["npub"], row["pubkey"]].compactMap(\.string).first(where: { !$0.isEmpty }) ?? ""
+                let rawName = row.string ?? [inner["name"], inner["nickname"], inner["display_name"], inner["username"], inner["nick"], row["name"], row["nickname"]].compactMap(\.string).first(where: { !$0.isEmpty }) ?? ""
+                let name = rawName.replacingOccurrences(of: "^id_[0-9]+\\|", with: "", options: .regularExpression)
+                guard !name.isEmpty || !key.isEmpty else { continue }
+                let attendee = PortalAttendee(name: name, publicKey: key)
+                if !result.contains(attendee) { result.append(attendee) }
+            }
+            if !result.isEmpty { return result }
+        }
+        return []
     }
 }
 
@@ -183,17 +239,26 @@ public actor PortalAPIClient {
     }
     public func profile(_ session: PortalSession) async throws -> JSONValue { try await request("GET", "user", session: session) }
     public func managedMeetups(_ session: PortalSession) async throws -> [ManagedMeetup] {
-        try await request("GET", "my-meetups", session: session).unwrapped.array?.compactMap(ManagedMeetup.init) ?? []
+        guard let rows = try await request("GET", "my-meetups", session: session).unwrapped.array else { throw PortalAPIError.invalidResponse }
+        return rows.compactMap(ManagedMeetup.init)
     }
-    public func managedEvents(_ session: PortalSession) async throws -> [JSONValue] { try await request("GET", "my-meetup-events", session: session).unwrapped.array ?? [] }
+    public func managedEvents(_ session: PortalSession) async throws -> [JSONValue] {
+        guard let rows = try await request("GET", "my-meetup-events", session: session).unwrapped.array, rows.allSatisfy({ $0.object != nil }) else { throw PortalAPIError.invalidResponse }
+        return rows
+    }
     public func saveEvent(_ draft: PortalEventDraft, eventID: Int? = nil, session: PortalSession) async throws -> JSONValue {
         try draft.validate()
         if let eventID, eventID <= 0 { throw PortalAPIError.invalidInput }
         let body = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(draft))
         return try await request(eventID == nil ? "POST" : "PATCH", eventID.map { "meetup-events/\($0)" } ?? "meetup-events", session: session, body: body)
     }
-    public func leaders(meetupID: Int, session: PortalSession) async throws -> [JSONValue] { try await request("GET", "meetup/\(meetupID)/leaders", session: session).unwrapped.array ?? [] }
+    public func leaders(meetupID: Int, session: PortalSession) async throws -> [JSONValue] {
+        guard meetupID > 0 else { throw PortalAPIError.invalidInput }
+        guard let rows = try await request("GET", "meetup/\(meetupID)/leaders", session: session).unwrapped.array, rows.allSatisfy({ $0.object != nil }) else { throw PortalAPIError.invalidResponse }
+        return rows
+    }
     public func addLeader(meetupID: Int, npub: String, session: PortalSession) async throws {
+        guard meetupID > 0 else { throw PortalAPIError.invalidInput }
         _ = try NIP19.decodePublicKey(npub)
         _ = try await request("POST", "meetup/\(meetupID)/leaders", session: session, body: .object(["npub": .string(npub)]))
     }
@@ -203,8 +268,29 @@ public actor PortalAPIClient {
     }
     public func rsvp(eventID: Int, status: String? = nil, session: PortalSession?) async throws -> JSONValue {
         guard eventID > 0, status == nil || ["attending", "maybe", "none"].contains(status!) else { throw PortalAPIError.invalidInput }
+        if status != nil, session == nil { throw PortalAPIError.identityMismatch }
         return try await request(status == nil ? "GET" : "POST", "meetup-events/\(eventID)/rsvp", session: session,
                                  body: status.map { .object(["status": .string($0)]) })
+    }
+    public func rsvpSummary(eventID: Int, session: PortalSession?) async throws -> PortalRSVPSummary {
+        let response = try await rsvp(eventID: eventID, session: session)
+        let summary = try PortalRSVPSummary(response: response)
+        if !summary.attendees.isEmpty || PortalRSVPSummary.namesHidden(in: response) { return summary }
+        // Different portal versions expose the names at different endpoints.
+        // A failed optional list never discards the successfully read count/status.
+        var paths = ["meetup-events/\(eventID)/attendees", "meetup-events/\(eventID)/rsvps", "meetup-events/\(eventID)/participants"]
+        if session != nil { paths.insert("my-meetup-events/\(eventID)", at: 0) }
+        for path in paths {
+            do {
+                let details = try await request("GET", path, session: session)
+                if PortalRSVPSummary.namesHidden(in: details) { return summary }
+                let names = PortalRSVPSummary.attendees(in: details)
+                if !names.isEmpty { return try PortalRSVPSummary(response: response, attendees: names) }
+            } catch is CancellationError { throw CancellationError() }
+            catch PortalAPIError.http(401, let message) { throw PortalAPIError.http(401, message) }
+            catch { continue }
+        }
+        return summary
     }
     public func logout(_ session: PortalSession) async throws { _ = try await request("DELETE", "mobile/token", session: session) }
     private func request(_ method: String, _ path: String, session: PortalSession? = nil, body: JSONValue? = nil) async throws -> JSONValue {
