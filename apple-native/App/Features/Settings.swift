@@ -1,0 +1,183 @@
+import SwiftUI
+import MeetupCore
+
+struct SettingsView: View {
+    @Environment(AppStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @State private var resetPresented = false
+    var body: some View {
+        Form {
+            Section("settings.account") {
+                NavigationLink { ProfileEditView() } label: {
+                    Label {
+                        if store.profile.nickname.isEmpty { Text("profile.title") }
+                        else { Text(store.profile.nickname) }
+                    } icon: { Image(systemName: "person.crop.circle") }
+                }.accessibilityIdentifier("settings.profile")
+                NavigationLink("Signing identity and recovery") { IdentitySetupView() }.accessibilityIdentifier("settings.identity")
+                NavigationLink("Portal account and meetups") { PortalManagementView() }
+            }
+            Section("settings.appearance") {
+                Picker("settings.language", selection: preference(\.language)) {
+                    Text("language.system").tag("system"); Text("Deutsch").tag("de"); Text("English").tag("en"); Text("Español").tag("es")
+                }
+                Picker("settings.theme", selection: preference(\.appearance)) {
+                    Text("appearance.system").tag("system"); Text("appearance.light").tag("light"); Text("appearance.dark").tag("dark")
+                }
+                Picker("settings.currency", selection: preference(\.currency)) { ForEach(["EUR", "USD", "GBP", "CHF", "CAD", "AUD", "JPY"], id: \.self) { currency in Text(currency).tag(currency) } }
+                NavigationLink("settings.dashboard") { DashboardSettingsView() }
+                NavigationLink("Guided introduction") { HelpTourView() }
+            }
+            Section("settings.network") {
+                NavigationLink("settings.relays") { RelaySettingsView() }
+                NavigationLink("settings.mempool") { MempoolSettingsView() }
+                NavigationLink("settings.diagnostics") { DiagnosticsView() }
+                NavigationLink("integration.signing") { IdentitySetupView() }
+            }
+            Section {
+                Toggle("settings.demo", isOn: Binding(get: { store.preferences.demo }, set: { store.setDemo($0) }))
+                Text("settings.demo.body").font(.caption).foregroundStyle(.secondary)
+            } header: { Text("settings.preview") }
+            Section("settings.data") {
+                Text("settings.storage.body").font(.caption).foregroundStyle(.secondary)
+                NavigationLink("integration.backup") { IdentitySetupView() }
+                Button("settings.reset", role: .destructive) { resetPresented = true }
+            }
+            Section {
+                Link("resource.repository", destination: URL(string: "https://github.com/louisthecat86/Einundzwanzig-Meetup-App")!)
+                Text("settings.version").font(.caption).foregroundStyle(.secondary)
+                Text("settings.accessibility").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .navigationTitle("settings.title")
+        .toolbar { ToolbarItem(placement: .cancellationAction) { Button("action.done") { dismiss() } } }
+        .confirmationDialog("settings.reset.confirm", isPresented: $resetPresented, titleVisibility: .visible) {
+            Button("settings.reset", role: .destructive) { Task { await store.resetLocalData(); if !store.profile.onboarded { dismiss() } } }
+            Button("action.cancel", role: .cancel) { }
+        } message: { Text("settings.reset.body") }
+    }
+
+    private func preference<Value>(_ path: WritableKeyPath<LocalPreferences, Value>) -> Binding<Value> {
+        Binding(get: { store.preferences[keyPath: path] }, set: { value in store.updatePreferences { $0[keyPath: path] = value } })
+    }
+}
+
+struct DashboardSettingsView: View {
+    @Environment(AppStore.self) private var store
+    var body: some View {
+        List {
+            Section { Text("settings.dashboard.body").font(.subheadline).foregroundStyle(.secondary) }
+            ForEach(store.preferences.dashboardOrder) { tile in
+                HStack {
+                    Label(LocalizedStringKey(tile.title), systemImage: tile.symbol)
+                    Spacer()
+                    Toggle("settings.visible", isOn: Binding(get: { !store.preferences.hiddenTiles.contains(tile) }, set: { visible in
+                        store.updatePreferences {
+                            if visible { $0.hiddenTiles.remove(tile) } else { $0.hiddenTiles.insert(tile) }
+                        }
+                    })).labelsHidden().accessibilityLabel(LocalizedStringKey(tile.title))
+                    Button { move(tile, by: -1) } label: { Image(systemName: "arrow.up") }
+                        .buttonStyle(.borderless).accessibilityLabel("settings.moveUp")
+                        .disabled(store.preferences.dashboardOrder.first == tile)
+                    Button { move(tile, by: 1) } label: { Image(systemName: "arrow.down") }
+                        .buttonStyle(.borderless).accessibilityLabel("settings.moveDown")
+                        .disabled(store.preferences.dashboardOrder.last == tile)
+                }
+            }
+        }.navigationTitle("settings.dashboard")
+    }
+    private func move(_ tile: DashboardTile, by offset: Int) {
+        store.updatePreferences {
+            guard let index = $0.dashboardOrder.firstIndex(of: tile), $0.dashboardOrder.indices.contains(index + offset) else { return }
+            $0.dashboardOrder.swapAt(index, index + offset)
+        }
+    }
+}
+
+struct RelaySettingsView: View {
+    @Environment(AppStore.self) private var store
+    @State private var relay = "wss://"
+    @State private var invalid = false
+    var body: some View {
+        Form {
+            Section { Text("relay.localOnly").font(.subheadline).foregroundStyle(.secondary) }
+            Section("relay.configured") {
+                ForEach(store.preferences.relays, id: \.self) { item in
+                    HStack {
+                        Text(item).font(.callout.monospaced()).textSelection(.enabled)
+                        Spacer()
+                        Button(role: .destructive) { store.updatePreferences { $0.relays.removeAll { $0 == item } } } label: { Image(systemName: "minus.circle") }
+                            .accessibilityLabel("relay.remove")
+                    }
+                }
+            }
+            Section("relay.add") {
+                TextField("relay.address", text: $relay).autocorrectionDisabled()
+                if invalid { Text("relay.invalid").foregroundStyle(.red) }
+                Button("action.add") {
+                    guard let url = SafeURL.relay(relay),
+                          (url.path.isEmpty || url.path == "/"), url.query == nil,
+                          !store.preferences.relays.contains(url.absoluteString), store.preferences.relays.count < 12 else { invalid = true; return }
+                    if store.updatePreferences({ $0.relays.append(url.absoluteString) }) { relay = "wss://"; invalid = false }
+                }
+            }
+            Button("relay.defaults") {
+                store.updatePreferences { $0.relays = LocalPreferences().relays }
+            }
+        }.formStyle(.grouped).navigationTitle("settings.relays")
+    }
+}
+
+struct MempoolSettingsView: View {
+    @Environment(AppStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @State private var server = ""
+    @State private var invalid = false
+    @State private var mode = MempoolConfiguration.Mode.clearnet
+    var body: some View {
+        Form {
+            Section {
+                Picker("Connection", selection: $mode) {
+                    Text("Default HTTPS").tag(MempoolConfiguration.Mode.clearnet)
+                    Text("Tor / Onion").tag(MempoolConfiguration.Mode.tor)
+                    Text("Custom server").tag(MempoolConfiguration.Mode.custom)
+                }.onChange(of: mode) { _, mode in
+                    if mode == .clearnet { server = MempoolConfiguration.clearnet }
+                    if mode == .tor { server = MempoolConfiguration.onion }
+                    invalid = false
+                }
+                TextField("mempool.address", text: $server).autocorrectionDisabled()
+                Text("HTTPS is the default. Explicit HTTP is supported for your own Bitcoin node or tunnel.").font(.caption).foregroundStyle(.secondary)
+                if invalid { Text("mempool.invalid").foregroundStyle(.red) }
+                Button("action.save") {
+                    guard let url = try? MempoolConfiguration.normalize(server) else { invalid = true; return }
+                    if store.updatePreferences({ $0.mempoolServer = url.absoluteString }) { dismiss() }
+                }
+                Button("mempool.default") { mode = .clearnet; server = MempoolConfiguration.clearnet; invalid = false }
+            }
+            Section { Text("Onion connections require a running system VPN that resolves and routes .onion addresses, such as Orbot. The app does not start a Tor proxy or switch to clearnet on failure.").font(.caption).foregroundStyle(.secondary) }
+        }
+        .formStyle(.grouped).navigationTitle("settings.mempool")
+        .onAppear { server = store.preferences.mempoolServer; if let url = try? MempoolConfiguration.normalize(server) { mode = MempoolConfiguration.mode(for: url) } }
+    }
+}
+
+struct DiagnosticsView: View {
+    @Environment(AppStore.self) private var store
+    var body: some View {
+        List {
+            Section {
+                Text("diagnostics.body").font(.caption).foregroundStyle(.secondary)
+                LabeledContent("diagnostics.meetups", value: store.cache.meetups.count.formatted())
+                LabeledContent("diagnostics.events", value: store.cache.events.count.formatted())
+                LabeledContent("diagnostics.articles", value: store.cache.articles.count.formatted())
+            }
+            ForEach(Array(store.diagnostics.enumerated()), id: \.offset) { _, entry in Text(entry).font(.caption.monospaced()).textSelection(.enabled) }
+            Section("Export") {
+                ShareLink(item: (["Einundzwanzig Apple diagnostics", Date().formatted(), "No keys, tokens, QR payloads, messages or profiles are included."] + store.diagnostics).joined(separator: "\n")) { Label("Export diagnostics", systemImage: "square.and.arrow.up") }
+                Text(UserDefaults.standard.string(forKey: "background-refresh-status") ?? "No background refresh recorded.").font(.caption)
+            }
+        }.navigationTitle("settings.diagnostics")
+    }
+}

@@ -1,0 +1,158 @@
+name: Apple native
+
+on:
+  pull_request:
+    paths:
+      - 'apple-native/**'
+      - '.github/workflows/apple-native.yml'
+  push:
+    paths:
+      - 'apple-native/**'
+      - '.github/workflows/apple-native.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apple-native-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Validate, test, and build iOS + macOS
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select an installed Xcode 26
+        run: python3 apple-native/Scripts/select_xcode.py
+
+      - name: Validate checked-in project and resources
+        run: python3 apple-native/Scripts/validate_project.py --require-route-matrix
+
+      - name: Test MeetupCore and MeetupNostr with the checked-in dependency pin
+        run: swift test --package-path apple-native/Packages/MeetupCore --force-resolved-versions -Xswiftc -warnings-as-errors
+
+      - name: Test real signing and badge app-store state machines with local fixtures
+        run: |
+          python3 apple-native/Packages/MeetupCore/Tests/MeetupNostrTests/Fixtures/IdentityLifecycleHarness.py
+          python3 apple-native/Packages/MeetupCore/Tests/MeetupNostrTests/Fixtures/BadgeLifecycleHarness.py
+          python3 apple-native/Packages/MeetupCore/Tests/MeetupNostrTests/Fixtures/IdentityAppStoreHarness.py
+
+      - name: Parse all Apple platform branches
+        run: python3 apple-native/Scripts/parse_swift.py
+
+      - name: Test real app import and local-state models
+        run: python3 apple-native/Scripts/test_local_models.py
+
+      - name: Test portable CalendarICS serializer
+        run: |
+          swiftc -swift-version 6 -D CALENDAR_ICS_TESTS apple-native/App/Platform/CalendarICS.swift apple-native/App/Platform/Tests/CalendarICSTests.swift -o /tmp/calendar-ics-tests
+          /tmp/calendar-ics-tests
+
+      - name: Build iOS simulator without signing
+        run: >-
+          xcodebuild
+          -project apple-native/Einundzwanzig.xcodeproj
+          -scheme Einundzwanzig
+          -configuration Debug
+          -onlyUsePackageVersionsFromResolvedFile
+          -skipPackagePluginValidation
+          -sdk iphonesimulator
+          -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath /tmp/einundzwanzig-ios-derived-data
+          CODE_SIGNING_ALLOWED=NO
+          build
+
+      - name: Build iOS device VisionKit path without signing
+        run: >-
+          xcodebuild
+          -project apple-native/Einundzwanzig.xcodeproj
+          -scheme Einundzwanzig
+          -configuration Debug
+          -onlyUsePackageVersionsFromResolvedFile
+          -skipPackagePluginValidation
+          -sdk iphoneos
+          -destination 'generic/platform=iOS'
+          -derivedDataPath /tmp/einundzwanzig-iphoneos-derived-data
+          CODE_SIGNING_ALLOWED=NO
+          build
+
+      - name: Build native macOS without signing
+        run: >-
+          xcodebuild
+          -project apple-native/Einundzwanzig.xcodeproj
+          -scheme Einundzwanzig
+          -configuration Debug
+          -onlyUsePackageVersionsFromResolvedFile
+          -skipPackagePluginValidation
+          -sdk macosx
+          -destination 'platform=macOS'
+          -derivedDataPath /tmp/einundzwanzig-macos-derived-data
+          CODE_SIGNING_ALLOWED=NO
+          build
+
+      - name: Build optimized native macOS without signing
+        run: >-
+          xcodebuild
+          -project apple-native/Einundzwanzig.xcodeproj
+          -scheme Einundzwanzig
+          -configuration Release
+          -onlyUsePackageVersionsFromResolvedFile
+          -skipPackagePluginValidation
+          -sdk macosx
+          -destination 'platform=macOS'
+          -derivedDataPath /tmp/einundzwanzig-macos-release-derived-data
+          CODE_SIGNING_ALLOWED=NO
+          build
+
+      - name: Build original Flutter app identity for production upgrade without signing
+        run: >-
+          xcodebuild
+          -project apple-native/Einundzwanzig.xcodeproj
+          -scheme Einundzwanzig
+          -configuration Upgrade
+          -onlyUsePackageVersionsFromResolvedFile
+          -skipPackagePluginValidation
+          -sdk iphoneos
+          -destination 'generic/platform=iOS'
+          -derivedDataPath /tmp/einundzwanzig-upgrade-derived-data
+          CODE_SIGNING_ALLOWED=NO
+          build
+
+      - name: Build isolated iOS UI tests with simulator ad-hoc signing
+        run: |
+          xcodebuild build-for-testing \
+            -project apple-native/Einundzwanzig.xcodeproj \
+            -scheme Einundzwanzig -configuration Debug \
+            -onlyUsePackageVersionsFromResolvedFile -skipPackagePluginValidation \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath /tmp/einundzwanzig-ui-derived-data \
+            CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY=- \
+            CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
+            CODE_SIGN_ENTITLEMENTS="${GITHUB_WORKSPACE}/apple-native/Configuration/SimulatorUITests.entitlements"
+          python3 apple-native/Scripts/validate_project.py \
+            --verify-simulator-app /tmp/einundzwanzig-ui-derived-data/Build/Products/Debug-iphonesimulator/Einundzwanzig.app
+
+      - name: Run isolated iOS app identity, wallet and offline smoke tests
+        run: |
+          simulator_id=$(python3 apple-native/Scripts/select_simulator.py)
+          xcodebuild test-without-building \
+            -project apple-native/Einundzwanzig.xcodeproj \
+            -scheme Einundzwanzig -configuration Debug \
+            -onlyUsePackageVersionsFromResolvedFile -skipPackagePluginValidation \
+            -sdk iphonesimulator -destination "platform=iOS Simulator,id=$simulator_id" \
+            -derivedDataPath /tmp/einundzwanzig-ui-derived-data \
+            -resultBundlePath /tmp/einundzwanzig-ui-tests.xcresult \
+            -parallel-testing-enabled NO -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 180 -maximum-test-execution-time-allowance 240
+
+      - name: Preserve simulator smoke test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apple-ui-smoke-results
+          path: /tmp/einundzwanzig-ui-tests.xcresult
+          if-no-files-found: ignore

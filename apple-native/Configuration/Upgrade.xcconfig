@@ -1,0 +1,9 @@
+// Explicit same-app upgrade identity. Signing team/certificate and access to
+// existing device Keychain items must be supplied and validated by the owner.
+#include "Release.xcconfig"
+E21_APP_BUNDLE_IDENTIFIER = dev.einundzwanzig.einundzwanzigMeetupApp
+PRODUCT_BUNDLE_IDENTIFIER = $(E21_APP_BUNDLE_IDENTIFIER)
+// Monotonic app/widget defaults against the checked-in Flutter 1.7.2+31 baseline.
+// The owner must confirm the latest App Store version/build before distribution.
+MARKETING_VERSION = 2.0.0
+CURRENT_PROJECT_VERSION = 32

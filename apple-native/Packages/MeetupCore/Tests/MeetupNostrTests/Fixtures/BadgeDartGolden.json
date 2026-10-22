@@ -1,0 +1,611 @@
+{
+  "_note": "Generated with Dart from verbatim copies of the Flutter code. Signatures use BIP-340 with aux_rand = 32 zero bytes (deterministic). Keys are test-only (privkey 1 and 2).",
+  "keys": {
+    "organizer": {
+      "priv": "0000000000000000000000000000000000000000000000000000000000000001",
+      "pub": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      "npub": "npub10xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqpkge6d"
+    },
+    "attendee": {
+      "priv": "0000000000000000000000000000000000000000000000000000000000000002",
+      "pub": "c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+      "npub": "npub1ccz8l9zpa47k6vz9gphftsrumpw80rjt3nhnefat4symjhrsnmjs38mnyd"
+    }
+  },
+  "canonicalJson": [
+    {
+      "input_insertion_order": {
+        "z": 1,
+        "a": 2,
+        "m": 3,
+        "b": 4
+      },
+      "expected": "{\"a\":2,\"b\":4,\"m\":3,\"z\":1}"
+    },
+    {
+      "input_insertion_order": {
+        "b": [
+          1,
+          2,
+          3
+        ],
+        "a": {
+          "y": true,
+          "x": false
+        }
+      },
+      "expected": "{\"a\":{\"y\":true,\"x\":false},\"b\":[1,2,3]}",
+      "note": "only TOP-LEVEL keys are sorted; nested maps keep insertion order"
+    },
+    {
+      "input_insertion_order": {
+        "s": "ä\"\\\n\u0001/< \t"
+      },
+      "expected": "{\"s\":\"ä\\\"\\\\\\n\\u0001/< \\t\"}",
+      "note": "Dart escaping: only \" \\ and control chars < 0x20 (\\b \\t \\n \\f \\r short, others \\u00XX lowercase); non-ASCII and / and U+2028 raw"
+    },
+    {
+      "input_insertion_order": {
+        "d": [
+          0.0,
+          0.0001,
+          1e-7,
+          48.2,
+          1e+21,
+          100.0,
+          -0.0
+        ]
+      },
+      "expected": "{\"d\":[0.0,0.0001,1e-7,48.2,1e+21,100.0,-0.0]}",
+      "note": "Dart double.toString formatting"
+    }
+  ],
+  "compactBadge": {
+    "kind": 21000,
+    "tags": [
+      [
+        "t",
+        "badge"
+      ],
+      [
+        "m",
+        "bad-neuenahr-de"
+      ]
+    ],
+    "content": "{\"b\":917000,\"m\":\"bad-neuenahr-de\",\"t\":\"B\",\"v\":2,\"x\":1760014400}",
+    "created_at": 1760000000,
+    "serialized_for_id": "[0,\"79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798\",1760000000,21000,[[\"t\",\"badge\"],[\"m\",\"bad-neuenahr-de\"]],\"{\\\"b\\\":917000,\\\"m\\\":\\\"bad-neuenahr-de\\\",\\\"t\\\":\\\"B\\\",\\\"v\\\":2,\\\"x\\\":1760014400}\"]",
+    "id": "f0834e7afe9639e76ad1635e92d260b12cfc96bc1f91637d4ab031d719f4fb81",
+    "sig": "0d706e9dbfb89051484b86e8eaed71a5d2d98bc559e81bc47b7f548db7aaeadf3c3c85db3bbc8dd313a088609820ab9fb659e6b2474ec2f50100316091d3f4f0",
+    "valid": true,
+    "base_payload_json": "{\"v\":2,\"t\":\"B\",\"m\":\"bad-neuenahr-de\",\"b\":917000,\"x\":1760014400,\"c\":1760000000,\"p\":\"79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798\",\"s\":\"0d706e9dbfb89051484b86e8eaed71a5d2d98bc559e81bc47b7f548db7aaeadf3c3c85db3bbc8dd313a088609820ab9fb659e6b2474ec2f50100316091d3f4f0\"}",
+    "nfc_ndef_text_record_payload_hex_prefix": "02656e",
+    "tampered_b_valid": false
+  },
+  "rollingQr": {
+    "seed_hex_string": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+    "hmac_key": "UTF-8 bytes of the 64-char hex STRING (not hex-decoded)",
+    "time_step": 176000000,
+    "hmac_message": "176000000",
+    "hmac_sha256_hex": "13e6ad4521b7c87659296152a878296f227145f7945f3fb97028ef417591f2eb",
+    "nonce": "13e6ad4521b7c876",
+    "qr_string": "{\"v\":2,\"t\":\"B\",\"m\":\"bad-neuenahr-de\",\"b\":917000,\"x\":1760014400,\"c\":1760000000,\"p\":\"79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798\",\"s\":\"0d706e9dbfb89051484b86e8eaed71a5d2d98bc559e81bc47b7f548db7aaeadf3c3c85db3bbc8dd313a088609820ab9fb659e6b2474ec2f50100316091d3f4f0\",\"n\":\"13e6ad4521b7c876\",\"ts\":176000000,\"d\":\"rolling_qr\",\"la\":50.5453,\"lo\":7.1123}",
+    "note": "time_step = floor(unixSeconds / 10); valid iff |currentStep - ts| <= 1"
+  },
+  "claim": {
+    "kind": 21002,
+    "tags": [
+      [
+        "t",
+        "badge_claim"
+      ],
+      [
+        "p",
+        "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+      ],
+      [
+        "block",
+        "917001"
+      ]
+    ],
+    "content": "{\"action\":\"claim_badge\",\"block_height\":917001,\"claimed_at\":1760000123,\"org_event_id\":\"\",\"org_pubkey\":\"79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798\",\"org_sig\":\"0d706e9dbfb89051484b86e8eaed71a5d2d98bc559e81bc47b7f548db7aaeadf3c3c85db3bbc8dd313a088609820ab9fb659e6b2474ec2f50100316091d3f4f0\"}",
+    "created_at": 1760000123,
+    "serialized_for_id": "[0,\"c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5\",1760000123,21002,[[\"t\",\"badge_claim\"],[\"p\",\"79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798\"],[\"block\",\"917001\"]],\"{\\\"action\\\":\\\"claim_badge\\\",\\\"block_height\\\":917001,\\\"claimed_at\\\":1760000123,\\\"org_event_id\\\":\\\"\\\",\\\"org_pubkey\\\":\\\"79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798\\\",\\\"org_sig\\\":\\\"0d706e9dbfb89051484b86e8eaed71a5d2d98bc559e81bc47b7f548db7aaeadf3c3c85db3bbc8dd313a088609820ab9fb659e6b2474ec2f50100316091d3f4f0\\\"}\"]",
+    "id": "836649ab2c2f1c2110c7f5a21b6eea77234edcf3cc7cfeb8b7ba9c52a6486546",
+    "sig": "7f5acc00665ade438bd5b152d5d83e7568184d8f2255653f43037271468219606c79bb099f332da50f0a3ae2e691bfbc96b8c79199aa93e3f57195c010b49c6e",
+    "valid": true,
+    "note": "org_event_id is the badge sigId, which is EMPTY for compact (v2) badges"
+  },
+  "proofs": {
+    "claimProofId_input": "0d706e9dbfb89051484b86e8eaed71a5d2d98bc559e81bc47b7f548db7aaeadf3c3c85db3bbc8dd313a088609820ab9fb659e6b2474ec2f50100316091d3f4f0|7f5acc00665ade438bd5b152d5d83e7568184d8f2255653f43037271468219606c79bb099f332da50f0a3ae2e691bfbc96b8c79199aa93e3f57195c010b49c6e|c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+    "claimProofId": "9a1f5a512faa0f6424425a567a56f04496a1f8c40c9d4008e6da89169c77b6dc",
+    "badgeProofV2_single_bound_badge": "fee0aa19904809f981b31e5e2476d73dca63f87946c1a35a12760ee6f3c3bb88",
+    "proofId_when_sigId_empty": "0d706e9dbfb89051484b86e8eaed71a5d2d98bc559e81bc47b7f548db7aaeadf",
+    "badgeProofV1_single_badge_sigId_empty": "784dbd4a3003554d42751c862538c36bee3fc112084e3d718afa562e367f7fc2",
+    "proofId_fallback_input": "wien-Wien, AT-2025-03-15T19:00:00.000Z-875000",
+    "proofId_fallback": "28c6dc91f7a8aca002b5a300ce73df0f4d87fb269e7a7be40a4dc875393e613e",
+    "verificationHash": "28c6dc91f7a8aca0",
+    "reputationQr_meetupList_hash_input": "21meetup:Wien, AT",
+    "reputationQr_meetupList_hash12": "9ec0d6b575a3"
+  },
+  "dartIso8601": [
+    {
+      "utc": true,
+      "y": 2025,
+      "mo": 3,
+      "d": 15,
+      "h": 19,
+      "mi": 0,
+      "s": 0,
+      "ms": 0,
+      "us": 0,
+      "expected": "2025-03-15T19:00:00.000Z"
+    },
+    {
+      "utc": false,
+      "y": 2025,
+      "mo": 3,
+      "d": 15,
+      "h": 19,
+      "mi": 0,
+      "s": 0,
+      "ms": 0,
+      "us": 0,
+      "expected": "2025-03-15T19:00:00.000"
+    },
+    {
+      "utc": true,
+      "y": 2025,
+      "mo": 3,
+      "d": 15,
+      "h": 19,
+      "mi": 0,
+      "s": 0,
+      "ms": 123,
+      "us": 456,
+      "expected": "2025-03-15T19:00:00.123456Z"
+    },
+    {
+      "utc": false,
+      "y": 2025,
+      "mo": 1,
+      "d": 2,
+      "h": 3,
+      "mi": 4,
+      "s": 5,
+      "ms": 6,
+      "us": 0,
+      "expected": "2025-01-02T03:04:05.006"
+    }
+  ],
+  "aesGcmBlob": {
+    "key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "iv_hex": "a0a1a2a3a4a5a6a7a8a9aaab",
+    "plaintext": "[{\"id\":\"wien\",\"meetupName\":\"Wien, AT\",\"date\":\"2025-03-15T19:00:00.000Z\",\"iconPath\":\"assets/badge_icon.png\"}]",
+    "blob": "oKGio6Slpqeoqaqr:vWNeRCHpOJ0VDOK9JVbisxXJLWXi+SMB+SwcpCjCEG/+VgarjQ5xWT7oYeozWLHJdS5reFH9K0sVbzJklEC/gISStV8A/8bM1oucd+Gerc6lKZGGpLLqH5oGEfjQ/irx0O1IxG2A//X5+XsNO0yTj6ZiUoNYRXDiA0bBcQ==",
+    "format": "base64(iv 12 bytes) + \":\" + base64(ciphertext || 16-byte GCM tag), standard base64 alphabet WITH padding, no AAD"
+  },
+  "meetupKey": {
+    "parse": [
+      {
+        "input": "bad-neuenahr",
+        "slug": "bad-neuenahr",
+        "country": ""
+      },
+      {
+        "input": "frankfurt-am-main",
+        "slug": "frankfurt-am-main",
+        "country": ""
+      },
+      {
+        "input": "köln-deutz",
+        "slug": "köln-deutz",
+        "country": ""
+      },
+      {
+        "input": "aachen-de",
+        "slug": "aachen",
+        "country": "DE"
+      },
+      {
+        "input": "bad-neuenahr-de",
+        "slug": "bad-neuenahr",
+        "country": "DE"
+      },
+      {
+        "input": "wien-at",
+        "slug": "wien",
+        "country": "AT"
+      },
+      {
+        "input": "zürich-ch",
+        "slug": "zürich",
+        "country": "CH"
+      },
+      {
+        "input": "aschaffenburg",
+        "slug": "aschaffenburg",
+        "country": ""
+      },
+      {
+        "input": "",
+        "slug": "",
+        "country": ""
+      },
+      {
+        "input": "-de",
+        "slug": "-de",
+        "country": ""
+      },
+      {
+        "input": "aachen-",
+        "slug": "aachen-",
+        "country": ""
+      },
+      {
+        "input": "test-xx",
+        "slug": "test-xx",
+        "country": ""
+      },
+      {
+        "input": "test-uk",
+        "slug": "test-uk",
+        "country": ""
+      },
+      {
+        "input": "test-gb",
+        "slug": "test",
+        "country": "GB"
+      }
+    ],
+    "compose": [
+      {
+        "slug": "bad-neuenahr",
+        "country": "DE",
+        "expected": "bad-neuenahr-de"
+      },
+      {
+        "slug": "wien",
+        "country": "at",
+        "expected": "wien-at"
+      },
+      {
+        "slug": "bad-neuenahr",
+        "country": "",
+        "expected": "bad-neuenahr"
+      },
+      {
+        "slug": "bad-neuenahr",
+        "country": "Deutschland",
+        "expected": "bad-neuenahr"
+      },
+      {
+        "slug": "",
+        "country": "DE",
+        "expected": ""
+      }
+    ],
+    "slug": [
+      {
+        "input": "Aschaffenburg",
+        "expected": "aschaffenburg"
+      },
+      {
+        "input": " Bad Neuenahr ",
+        "expected": "bad-neuenahr"
+      },
+      {
+        "input": "Neu-Ulm",
+        "expected": "neu-ulm"
+      },
+      {
+        "input": "München",
+        "expected": "münchen"
+      },
+      {
+        "input": "Frankfurt am Main",
+        "expected": "frankfurt-am-main"
+      }
+    ],
+    "displayFromSlug": [
+      {
+        "input": "bad-neuenahr",
+        "expected": "Bad Neuenahr"
+      },
+      {
+        "input": "neu-ulm",
+        "expected": "Neu Ulm"
+      },
+      {
+        "input": "münchen",
+        "expected": "München"
+      },
+      {
+        "input": "a--b",
+        "expected": "A B"
+      }
+    ],
+    "eventId": {
+      "slug": "bad-neuenahr",
+      "date_local": "2026-10-05",
+      "expected": "bad-neuenahr-2026-10-05"
+    }
+  },
+  "eventMeetupId": {
+    "eventAddress": "31923:79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798:zitadelle-2026",
+    "title": "  Zitadelle Bitcoin-Treff 2026! Große Party ",
+    "expected": "evt:31923:79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798:zitadelle-2026:zitadelle-bitcoin-treff-2026-große-party"
+  },
+  "normalize": [
+    {
+      "input": {
+        "v": 2,
+        "t": "B",
+        "m": "aschaffenburg-de",
+        "b": 875000,
+        "x": 1700021600,
+        "p": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "s": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "v": 2,
+        "type": "BADGE",
+        "meetup_id": "aschaffenburg",
+        "meetup_slug": "aschaffenburg",
+        "meetup_name": "Aschaffenburg",
+        "meetup_country": "DE",
+        "block_height": 875000,
+        "expires_at": 1700021600,
+        "admin_pubkey": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "admin_npub": "npub10xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqpkge6d",
+        "sig": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "input": {
+        "v": 2,
+        "t": "B",
+        "m": "münchen-de",
+        "b": 0
+      },
+      "expected": {
+        "v": 2,
+        "type": "BADGE",
+        "meetup_id": "münchen",
+        "meetup_slug": "münchen",
+        "meetup_name": "München",
+        "meetup_country": "DE",
+        "block_height": 0
+      }
+    },
+    {
+      "input": {
+        "v": 2,
+        "t": "B",
+        "m": "bad-neuenahr",
+        "b": 0,
+        "d": "qr"
+      },
+      "expected": {
+        "v": 2,
+        "type": "BADGE",
+        "meetup_id": "bad-neuenahr",
+        "meetup_slug": "bad-neuenahr",
+        "meetup_name": "Bad Neuenahr",
+        "meetup_country": "",
+        "block_height": 0,
+        "delivery": "rolling_qr"
+      }
+    },
+    {
+      "input": {
+        "v": 2,
+        "t": "B",
+        "m": "evt:31923:79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798:zitadelle-2026:zitadelle-bitcoin-treff-2026-große-party",
+        "b": 0
+      },
+      "expected": {
+        "v": 2,
+        "type": "BADGE",
+        "event_address": "31923:79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798:zitadelle-2026",
+        "meetup_id": "evt:zitadelle-2026",
+        "meetup_name": "Zitadelle Bitcoin Treff 2026 Große Party",
+        "meetup_country": "",
+        "is_event": true,
+        "block_height": 0
+      }
+    },
+    {
+      "input": {
+        "v": 2,
+        "t": "B",
+        "m": "evt:31923:abc",
+        "b": 0
+      },
+      "expected": {
+        "v": 2,
+        "type": "BADGE",
+        "meetup_id": "evt:31923:abc",
+        "meetup_name": "evt:31923:abc",
+        "block_height": 0
+      }
+    },
+    {
+      "input": {
+        "v": 2,
+        "t": "B",
+        "m": "",
+        "b": 0
+      },
+      "expected": {
+        "v": 2,
+        "type": "BADGE",
+        "meetup_id": "",
+        "meetup_slug": "",
+        "meetup_name": "",
+        "meetup_country": "",
+        "block_height": 0
+      }
+    },
+    {
+      "input": {
+        "v": 2,
+        "t": "B",
+        "m": "wien-at",
+        "b": 1,
+        "n": "ffff",
+        "ts": 5,
+        "d": "rolling_qr",
+        "la": 48.2,
+        "lo": 16.3
+      },
+      "expected": {
+        "v": 2,
+        "type": "BADGE",
+        "meetup_id": "wien",
+        "meetup_slug": "wien",
+        "meetup_name": "Wien",
+        "meetup_country": "AT",
+        "block_height": 1,
+        "qr_nonce": "ffff",
+        "qr_time_step": 5,
+        "delivery": "rolling_qr"
+      }
+    }
+  ],
+  "normalize_note": "'timestamp'/'meetup_date' from 'c' are rendered in LOCAL time by the app (DateTime.fromMillisecondsSinceEpoch without isUtc); this fixture uses UTC to be timezone-independent.",
+  "identityKey": [
+    {
+      "case": "withEventId",
+      "id": "a",
+      "meetupName": "Koblenz",
+      "date": "2026-10-11T19:00:00.000Z",
+      "meetupEventId": "koblenz-2026-10-11",
+      "sigId": "",
+      "isOrganizer": false,
+      "identityKey": "evt:koblenz-2026-10-11",
+      "unionKey": "evt:koblenz-2026-10-11"
+    },
+    {
+      "case": "withSigIdOnly",
+      "id": "a",
+      "meetupName": "Koblenz",
+      "date": "2026-10-11T19:00:00.000Z",
+      "meetupEventId": "",
+      "sigId": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "isOrganizer": false,
+      "identityKey": "sig:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "unionKey": "sig:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    {
+      "case": "nameDayFallback",
+      "id": "a",
+      "meetupName": "  KoBlenz, DE ",
+      "date": "2026-10-11T19:00:00.000Z",
+      "meetupEventId": "",
+      "sigId": "",
+      "isOrganizer": false,
+      "identityKey": "nd:koblenz, de|2026-10-11",
+      "unionKey": "nd:koblenz, de|2026-10-11"
+    },
+    {
+      "case": "organizerMarker",
+      "id": "org-koblenz-2026-10-11",
+      "meetupName": "Koblenz",
+      "date": "2026-10-11T19:00:00.000Z",
+      "meetupEventId": "koblenz-2026-10-11",
+      "sigId": "",
+      "isOrganizer": true,
+      "identityKey": "evt:koblenz-2026-10-11",
+      "unionKey": "org:evt:koblenz-2026-10-11"
+    }
+  ],
+  "unionByIdentity": [
+    {
+      "case": "both claimed, earlier wins regardless of side",
+      "base": [
+        "first"
+      ],
+      "extra": [
+        "second"
+      ],
+      "expectedIds": [
+        "koblenz-2026-10-11"
+      ]
+    },
+    {
+      "case": "both claimed, reversed",
+      "base": [
+        "second"
+      ],
+      "extra": [
+        "first"
+      ],
+      "expectedIds": [
+        "koblenz-2026-10-11"
+      ]
+    },
+    {
+      "case": "claimed beats unclaimed even if later",
+      "base": [
+        "unclaimed"
+      ],
+      "extra": [
+        "second"
+      ],
+      "expectedIds": [
+        "koblenz-2026-10-11-2"
+      ]
+    },
+    {
+      "case": "organizer marker is separate",
+      "base": [
+        "first",
+        "marker"
+      ],
+      "extra": [
+        "second"
+      ],
+      "expectedIds": [
+        "koblenz-2026-10-11",
+        "org-koblenz-2026-10-11"
+      ]
+    }
+  ],
+  "unionByIdentity_fixtures": {
+    "first": {
+      "id": "koblenz-2026-10-11",
+      "date": "2026-10-11T19:00:00.000Z",
+      "meetupEventId": "koblenz-2026-10-11",
+      "claimSig": "sig"
+    },
+    "second": {
+      "id": "koblenz-2026-10-11-2",
+      "date": "2026-10-11T20:00:00.000Z",
+      "meetupEventId": "koblenz-2026-10-11",
+      "claimSig": "sig"
+    },
+    "unclaimed": {
+      "id": "koblenz-2026-10-11",
+      "date": "2026-10-11T19:00:00.000Z",
+      "meetupEventId": "koblenz-2026-10-11",
+      "claimSig": ""
+    },
+    "marker": {
+      "id": "org-koblenz-2026-10-11",
+      "date": "2026-10-11T18:00:00.000Z",
+      "meetupEventId": "koblenz-2026-10-11",
+      "isOrganizer": true
+    }
+  },
+  "reputationQrV3": {
+    "kind": 21001,
+    "tags": [],
+    "json": "{\"v\":6,\"id\":{\"n\":\"Anon\"},\"rp\":{\"sc\":1.5,\"lv\":\"STARTER\",\"bc\":1,\"vc\":1,\"mc\":1,\"si\":1,\"ad\":10,\"ml\":[\"abcdefabcdef\"],\"bb\":1},\"pf\":{\"bp\":\"x\",\"pv\":2,\"vc\":1,\"tc\":1,\"bb\":1},\"t\":1760000000000}",
+    "created_at": 1760000000,
+    "id": "304e8cdb6c4b0a76cb4b0f8fce7e2e7d8070744eff0556f0034a8d749849c7e6",
+    "sig": "2188c2b2e9c81c3d503920c2cc88f044d10c73701375f6f4f3c7e009deed514aa7f0814a2854ad98a5218dc0616e881025759fdb024914dc6479c8a9204d10a7",
+    "qr_string": "21v3:eyJ2Ijo2LCJpZCI6eyJuIjoiQW5vbiJ9LCJycCI6eyJzYyI6MS41LCJsdiI6IlNUQVJURVIiLCJiYyI6MSwidmMiOjEsIm1jIjoxLCJzaSI6MSwiYWQiOjEwLCJtbCI6WyJhYmNkZWZhYmNkZWYiXSwiYmIiOjF9LCJwZiI6eyJicCI6IngiLCJwdiI6MiwidmMiOjEsInRjIjoxLCJiYiI6MX0sInQiOjE3NjAwMDAwMDAwMDB9.2188c2b2e9c81c3d503920c2cc88f044d10c73701375f6f4f3c7e009deed514aa7f0814a2854ad98a5218dc0616e881025759fdb024914dc6479c8a9204d10a7.304e8cdb6c4b0a76cb4b0f8fce7e2e7d8070744eff0556f0034a8d749849c7e6.1760000000.c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+    "valid": true
+  }
+}
