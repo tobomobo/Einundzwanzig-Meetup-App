@@ -11,6 +11,15 @@ the separate real Flutter upgrade check passed. Preview lint and the strict APK 
 There are no error-level lint baseline entries (98 existing warnings and one hint remain).
 Machine-readable results live in `parity/{jvm,device,apk}-validation.json`.
 
+Follow-up checks after the comparison audit passed **258 tests** in Home and backup modules,
+including eight new regressions/interoperability cases. Reset now reports incomplete secret
+erasure; restore cannot report successful proof writes after a persistence failure. A real
+Flutter-exported backup restores on Kotlin, and Kotlin's export restores through Flutter's
+unchanged importer. The fresh optimized suites also passed **nine app tests plus five legacy
+storage tests on both API 26 and API 36**, at CI's 320×640 viewport. The updated ordinary
+preview passed lint and all APK checks again. These focused runs supplement the full-suite
+result above; they do not represent another full run of every unchanged module.
+
 | Feature area | Implementation and automated coverage | Device evidence |
 |---|---|---|
 | Identity, keys and onboarding | Local keys, NIP-49, vault/recovery, typed localized errors, external signers, pending-secret protection | Real Flutter identity upgraded; same public key and a successful local signature |
@@ -20,7 +29,7 @@ Machine-readable results live in `parity/{jvm,device,apk}-validation.json`.
 | Social graph and organizer tools | Session lifecycle, attendance, graph/admin state machines | JVM coverage; real organizer/peer/network interaction remains a field check |
 | Platform and humanity proofs | Generation plus intended-identity fencing inside transactions; ownership checked on reads/exports/publication | Deterministic JVM interleavings; actual Hilt/Keystore/proof integration device regression |
 | Nostr infrastructure and profile | Relay/signing modes, profile editing, Nostr avatar, authenticated recovery | Migrated profile and public key displayed; external signer hardware/app interaction remains a field check |
-| Backup and sync | Additive/replace restore, encrypted keys, ownership-aware proof checks, share/reset outcomes | Android document picker opened and cancelled safely; storage/error behavior covered by JVM tests |
+| Backup and sync | Additive/replace restore, encrypted keys, ownership-aware proof checks, truthful persistence results, share/reset outcomes | Android document picker cancellation; actual Flutter ↔ Kotlin export/import of a synthetic identity/profile/wallet; JVM storage/error tests |
 | Meetups and portal | Directory, details, favorites, crests, location bridge and portal flows | Real system location prompt, denial, retry and grant |
 | Calendar and events | Month/year/list views, filtering, localized fallbacks, widget retention | Month and list navigation, localized empty states |
 | Chat, news and community | Chat/news/community routes, media services, Lightning intents and web fallbacks | Community/news navigation and offline state; no public messages sent |
@@ -49,6 +58,11 @@ The pending-identity regression also passed three fresh installs at CI's 320×64
 Its fixture waits for migration completion and uses a distinct temporary file plus atomic rename,
 avoiding a collision with production `AtomicFile` readers. The ten-second UI deadline remains;
 failures save the visible screen, accessibility tree and migration report in device artifacts.
+Fresh AVDs can show Android's first immersive-mode explanation over the app. The UI fixture
+confirms only that specific system window before asserting the app screen. API 26's emulator
+image denies Wi-Fi control to the shell UID; the runner uses privileged ADB setup on that
+dedicated rootable AVD and restores its prior daemon mode and connectivity on exit. App and
+instrumentation UIDs remain their normal application UIDs.
 
 `migrationTest` is deliberately unminified and debuggable, with the production application ID,
 so an existing Flutter APK can be updated in place with the matching signing key. This covers

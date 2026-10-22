@@ -62,5 +62,33 @@
       "Flutter vendored encrypted preferences with actual Keystore master",
       "Missing ESP master is never regenerated"
     ]
+  },
+  "followupValidation": {
+    "date": "2026-10-22",
+    "apis": {
+      "26": {
+        "optimizedAppTests": 9,
+        "legacyStorageTests": 5,
+        "failures": 0
+      },
+      "36": {
+        "optimizedAppTests": 9,
+        "legacyStorageTests": 5,
+        "failures": 0,
+        "apkSha256": "3a66513151267a74d6c551080222af9b5b32e33e327f7ea2f6770ebc620389ca"
+      }
+    },
+    "screenPixels": "320x640",
+    "densityDpi": 160,
+    "diagnosticsDeadlineSeconds": 10,
+    "fixtureChanges": "Confirm only the Android immersive-mode explanation, identified by system window or resource IDs. API 26 rootable AVD connectivity preparation restores original ADB mode and connectivity. App UID remains unchanged."
+  },
+  "priorCiEvidence": {
+    "run": 39769205740,
+    "head": "0bb4ed1acef1f7346fef1abe6a3802fd57de0f7e",
+    "api29": "passed",
+    "api34": "passed",
+    "api26": "Connectivity permission failure, reproduced and corrected in runner",
+    "api36": "System immersive-mode explanation covered the visible storage diagnostics; corrected in device fixture"
   }
 }

@@ -3,8 +3,8 @@
   "package": "space.einundzwanzig.meetup.preview",
   "versionName": "2.0.0-preview",
   "versionCode": 20000,
-  "sha256": "af725cc2c62b7e381e432a26e9fdd0f3efc10dfd5ee404b134fb326aea541323",
-  "sizeBytes": 28381713,
+  "sha256": "875e2fdf9dae0650bbe6604106f5fa690c7789625f4b953f627da7e5c3b22e3d",
+  "sizeBytes": 28382225,
   "certificateSha256": "ec7f64440a0cb11a81043dda45f398c0a73dfaded9243b64cbc93dd85f97b50a",
   "checks": {
     "signature": true,
@@ -15,11 +15,11 @@
     "deviceTestEntryPointAbsent": true
   },
   "signing": "Test-only preview key; production signing is external",
-  "scope": "Local ordinary preview artifact. CI artifacts have their own SHA256SUMS.",
+  "scope": "Fresh ordinary preview after reset/restore corrections; all recorded APK checks repeated. Instrumentation-only entry point absent from DEX and mapping. CI artifacts have their own SHA256SUMS.",
   "lintPreview": {
     "result": "passed",
     "severities": {
-      "Hint": 2,
+      "Hint": 1,
       "Warning": 13
     },
     "baselineWarnings": 98,

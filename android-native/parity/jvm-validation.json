@@ -289,5 +289,21 @@
   "followUpCommands": [
     "tools/gradlew-locked :data:identity:testDebugUnitTest --max-workers=3 (complete suite after final barrier change)",
     "tools/gradlew-locked :feature:onboarding:testDebugUnitTest :feature:meetups:testDebugUnitTest --max-workers=3 (passed after final insets/locale edits)"
-  ]
+  ],
+  "followupValidation": {
+    "date": "2026-10-22",
+    "scope": "Reset secret-erasure failures, backup proof-write failures and actual Flutter backup interoperability",
+    "command": "tools/gradlew-locked :feature:home:testDebugUnitTest :data:backup:testDebugUnitTest :feature:backup:testDebugUnitTest --max-workers=3",
+    "result": "BUILD SUCCESSFUL",
+    "modules": {
+      "feature/home": 94,
+      "data/backup": 101,
+      "feature/backup": 63
+    },
+    "passed": 258,
+    "failures": 0,
+    "note": "Focused follow-up after the full-suite result above; eight additional cases. Unchanged modules are covered by the earlier full run, not claimed re-executed here.",
+    "flutterWidgetTests": 2,
+    "swiftExportToActualFlutterImporter": 1
+  }
 }
