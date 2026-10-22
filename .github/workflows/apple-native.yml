@@ -94,6 +94,20 @@ jobs:
           CODE_SIGNING_ALLOWED=NO
           build
 
+      - name: Build optimized native macOS without signing
+        run: >-
+          xcodebuild
+          -project apple-native/Einundzwanzig.xcodeproj
+          -scheme Einundzwanzig
+          -configuration Release
+          -onlyUsePackageVersionsFromResolvedFile
+          -skipPackagePluginValidation
+          -sdk macosx
+          -destination 'platform=macOS'
+          -derivedDataPath /tmp/einundzwanzig-macos-release-derived-data
+          CODE_SIGNING_ALLOWED=NO
+          build
+
       - name: Build original Flutter app identity for production upgrade without signing
         run: >-
           xcodebuild

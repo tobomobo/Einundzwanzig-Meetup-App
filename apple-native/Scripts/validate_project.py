@@ -561,6 +561,11 @@ def validate_configurations(project):
     target_configs = configurations(project, project.target, "target")
     widget_configs = configurations(project, project.widget, "widget")
     project.effective = {}
+    upgrade_required = {"PRODUCT_BUNDLE_IDENTIFIER": "dev.einundzwanzig.einundzwanzigMeetupApp", "MARKETING_VERSION": "2.0.0", "CURRENT_PROJECT_VERSION": "32"}
+    flutter_version = re.search(r"^version:\s*(\d+)\.(\d+)\.(\d+)\+(\d+)\s*$", read_text(project.apple.parent / "pubspec.yaml"), re.MULTILINE)
+    require(flutter_version is not None, "Flutter baseline must declare a version and build number")
+    require(tuple(map(int, upgrade_required["MARKETING_VERSION"].split("."))) > tuple(map(int, flutter_version.groups()[:3])), "Upgrade marketing version must exceed the checked-in Flutter baseline")
+    require(int(upgrade_required["CURRENT_PROJECT_VERSION"]) > int(flutter_version.group(4)), "Upgrade build number must exceed the checked-in Flutter baseline")
     required = {"PRODUCT_NAME": "Einundzwanzig", "PRODUCT_BUNDLE_IDENTIFIER": "space.einundzwanzig.meetup.apple", "MARKETING_VERSION": "0.1.0", "CURRENT_PROJECT_VERSION": "1", "SDKROOT": "auto", "SUPPORTS_MACCATALYST": "NO", "GENERATE_INFOPLIST_FILE": "NO", "INFOPLIST_FILE": "Configuration/Info.plist", "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon"}
     for name in ("Debug", "Release", "Upgrade"):
         settings = merge_settings(project_configs[name], target_configs[name])
@@ -570,7 +575,7 @@ def validate_configurations(project):
             effective = {key: expand(value, effective) for key, value in effective.items()}
             prefix = f"{name}/{sdk}"
             for key, expected in required.items():
-                if key == "PRODUCT_BUNDLE_IDENTIFIER" and name == "Upgrade": expected = "dev.einundzwanzig.einundzwanzigMeetupApp"
+                if name == "Upgrade": expected = upgrade_required.get(key, expected)
                 require(effective.get(key) == expected, f"{prefix}: {key} must be {expected!r}, got {effective.get(key)!r}")
             require(effective.get("SWIFT_VERSION") in ("6", "6.0"), f"{prefix}: SWIFT_VERSION must be 6.0")
             for key in ("IPHONEOS_DEPLOYMENT_TARGET", "MACOSX_DEPLOYMENT_TARGET"):
@@ -589,6 +594,8 @@ def validate_configurations(project):
             widget = {key: expand(value, widget) for key, value in widget.items()}
             require(widget.get("PRODUCT_BUNDLE_IDENTIFIER") == effective["PRODUCT_BUNDLE_IDENTIFIER"] + ".widget", f"{prefix}: widget must use the matching app bundle prefix")
             require(widget.get("APPLICATION_EXTENSION_API_ONLY") == "YES" and widget.get("INFOPLIST_FILE") == "Widget/Info.plist", f"{prefix}: widget extension build settings invalid")
+            for key in ("MARKETING_VERSION", "CURRENT_PROJECT_VERSION"):
+                require(widget.get(key) == effective[key], f"{prefix}: widget {key} must match the app")
             project.effective[name, sdk] = effective
         require("CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" in settings, f"{name}: expected conditional macOS entitlements setting")
     require(len(project.of_type("XCBuildConfiguration")) == 12, "expected project/app/widget/UI-test Debug, Release and Upgrade configurations")
@@ -601,6 +608,7 @@ def load_plist(path):
 
 def validate_plists(project):
     info = load_plist(project.apple / "Configuration/Info.plist")
+    widget_info = load_plist(project.apple / "Widget/Info.plist")
     ats = dictionary(info.get("NSAppTransportSecurity", {}), "Info.plist NSAppTransportSecurity")
     for key in ("NSAllowsArbitraryLoads", "NSAllowsArbitraryLoadsForMedia", "NSAllowsArbitraryLoadsInWebContent"):
         require(ats.get(key, False) is False, f"Info.plist must not enable ATS arbitrary loads: {key}")
@@ -608,7 +616,11 @@ def validate_plists(project):
     for (name, sdk), settings in project.effective.items():
         for key, value in expected.items():
             if key == "CFBundleIdentifier" and name == "Upgrade": value = "dev.einundzwanzig.einundzwanzigMeetupApp"
+            if key == "CFBundleShortVersionString": value = settings["MARKETING_VERSION"]
+            if key == "CFBundleVersion": value = settings["CURRENT_PROJECT_VERSION"]
             require(isinstance(info.get(key), str) and expand(info[key], settings) == value, f"Info.plist {key} does not resolve to {value!r} for {name}/{sdk}")
+            if key in ("CFBundleShortVersionString", "CFBundleVersion"):
+                require(isinstance(widget_info.get(key), str) and expand(widget_info[key], settings) == value, f"Widget Info.plist {key} must match the app for {name}/{sdk}")
     require(isinstance(info.get("NSCameraUsageDescription"), str) and info["NSCameraUsageDescription"].strip(), "Info.plist needs a camera usage description for the iOS scanner")
     calendar_key = "NSCalendarsWriteOnlyAccessUsageDescription"
     require(isinstance(info.get(calendar_key), str) and info[calendar_key].strip(), "Info.plist needs a calendar write-only access usage description")

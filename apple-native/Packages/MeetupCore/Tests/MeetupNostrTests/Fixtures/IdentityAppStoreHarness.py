@@ -18,8 +18,9 @@ for name in ["AppStore.swift", "UserContinuity.swift", "IdentityStore.swift", "B
     source = apple / "App" / name
     shutil.copy2(source, sources / source.name)
 shutil.copy2(fixture.parent / "IdentityAppStoreFixture.swift", sources / "IdentityAppStoreFixture.swift")
-for source in fixture.parent.glob("WorkflowAppStore*.swift"):
-    shutil.copy2(source, sources / source.name)
+for pattern in ("WorkflowAppStore*.swift", "SecurityAppStore*.swift"):
+    for source in fixture.parent.glob(pattern):
+        shutil.copy2(source, sources / source.name)
 shutil.copytree(fixture.parent / "BackupInterop", sources / "Fixtures/BackupInterop")
 (harness / "Package.swift").write_text('''// swift-tools-version: 6.1
 import PackageDescription

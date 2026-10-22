@@ -114,9 +114,18 @@ enum KeychainStore {
     }
     @Test func oldThreeFieldProfileRemainsReadableAndEditorPreservesImportedOptionalFields() async throws {
         let defaults = try fresh()
-        let old = try JSONDecoder().decode(LocalProfile.self, from: Data("{\"nickname\":\"Older\",\"npub\":\"\",\"onboarded\":true}".utf8))
+        let oldData = Data("{\"nickname\":\"Older\",\"npub\":\"\",\"onboarded\":true}".utf8)
+        let old = try JSONDecoder().decode(LocalProfile.self, from: oldData)
         #expect(old.fullName.isEmpty); #expect(old.favoriteMeetupIDs.isEmpty)
-        try KeychainStore.write(JSONEncoder().encode(old), account: "local-public-profile-v1")
+        #if os(macOS)
+        // Seed the actual macOS profile file with the historical three-field format.
+        try FileManager.default.createDirectory(at: UITestFixtureMode.directory, withIntermediateDirectories: true,
+                                                attributes: [.posixPermissions: 0o700])
+        try oldData.write(to: UITestFixtureMode.directory.appendingPathComponent("public-profile.json"), options: .atomic)
+        #else
+        // iOS and the portable Linux adapter exercise the Keychain profile branch.
+        try KeychainStore.write(oldData, account: "local-public-profile-v1")
+        #endif
         let app = AppStore(legacyDefaults: defaults)
         #expect(app.profile.nickname == "Older")
         #expect(app.saveProfile(nickname: "Edited", npub: "", fullName: "Full name", homeMeetupID: "Vienna", favoriteMeetupIDs: ["Vienna"], telegramHandle: "telegram", twitterHandle: "twitter"))
@@ -125,6 +134,11 @@ enum KeychainStore {
         #expect(relaunch.profile.fullName == "Full name")
         #expect(relaunch.profile.twitterHandle == "twitter")
         #expect(relaunch.preferences.favoriteIDs == ["Vienna"])
+        #if os(macOS)
+        #expect(try KeychainStore.read(account: "local-public-profile-v1") == nil)
+        #else
+        #expect(!FileManager.default.fileExists(atPath: UITestFixtureMode.directory.appendingPathComponent("public-profile.json").path))
+        #endif
     }
     private func seedFlutter(_ defaults: UserDefaults) throws -> (BackupDocument, Data, String) {
         let document = try BackupDocument.decode(fixture("flutter-v5", "json")), block = document.fields["nostr"]!.object!
@@ -216,12 +230,26 @@ enum KeychainStore {
     }
     @Test func profileWriteFailureLeavesFlutterOriginalsAndCompleteProtectedPendingCopy() async throws {
         let defaults = try fresh(), (_, wrapped, _) = try seedFlutter(defaults), app = AppStore(legacyDefaults: defaults)
+        #if os(macOS)
+        // Collide with the real file destination after init, so reads remain healthy
+        // but an atomic profile write fails even when running with elevated privileges.
+        let profileFile = UITestFixtureMode.directory.appendingPathComponent("public-profile.json", isDirectory: true)
+        try FileManager.default.createDirectory(at: profileFile, withIntermediateDirectories: false)
+        let blocker = profileFile.appendingPathComponent("fixture-write-blocker")
+        try Data([1]).write(to: blocker)
+        #else
         KeychainStore.fixture.failWrites("local-public-profile-v1")
+        #endif
         await #expect(throws: IdentityError.invalidBackup) { try await app.identity.migrateFlutterInstallation(vaultPassword: vaultPassword) }
         #expect(try FlutterUpgradeJournal.read()?.nativeCommitted == false)
         #expect(try KeychainStore.readFlutter(account: "fss.wrapped.badge_encryption_key") == wrapped)
         #expect(defaults.string(forKey: "flutter.nickname") == "Legacy nickname")
+        #if os(macOS)
+        #expect(try Data(contentsOf: blocker) == Data([1]))
+        try FileManager.default.removeItem(at: profileFile)
+        #else
         KeychainStore.fixture.failWrites(nil)
+        #endif
         try await app.identity.resumeFlutterInstallation(vaultPassword: vaultPassword)
         #expect(app.profile.fullName == "Legacy Full 😀"); #expect(app.badgeWallet.badges.count == 3)
     }
