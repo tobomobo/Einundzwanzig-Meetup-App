@@ -14,7 +14,7 @@ final class BitcoinDashboardTests: XCTestCase {
         let dashboard = try await MempoolClient(transport: DashboardFixtureTransport()).dashboard()
         XCTAssertEqual(dashboard.prices["CHF"], 59000)
         XCTAssertEqual(dashboard.values["count"], 123)
-        XCTAssertEqual(dashboard.failedSources, ["difficulty", "mining"])
+        XCTAssertEqual(dashboard.failedSources, ["difficulty", "lightning", "mining"])
     }
     func testUnitsAndReverseFiatEnforceSatoshiPrecision() throws {
         XCTAssertEqual(try BitcoinAmountUnit.mBTC.sats("1.23456"), 123456)

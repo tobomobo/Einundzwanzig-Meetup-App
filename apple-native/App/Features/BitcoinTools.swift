@@ -25,6 +25,14 @@ struct BitcoinView: View {
                     LabeledContent("EUR") { Text(snapshot.eur, format: .currency(code: "EUR")) }
                     LabeledContent("USD") { Text(snapshot.usd, format: .currency(code: "USD")) }
                 }
+                Section("Network metrics") {
+                    if let supply = BitcoinDashboard.circulatingSupply(atHeight: snapshot.height) {
+                        LabeledContent("Circulating supply (BTC)", value: supply.formatted())
+                    }
+                    if let time = BitcoinDashboard.moscowTime(usdPrice: BitcoinDashboard.price(for: "USD", dashboard: store.bitcoinDashboard, snapshot: snapshot)) {
+                        LabeledContent("Sats per USD (Moscow time)", value: time)
+                    }
+                }
                 Section("bitcoin.fees") {
                     LabeledContent("bitcoin.fast") { Text("\(snapshot.fastestFee) sat/vB").monospacedDigit() }
                     LabeledContent("bitcoin.halfHour") { Text("\(snapshot.halfHourFee) sat/vB").monospacedDigit() }
@@ -38,10 +46,18 @@ struct BitcoinView: View {
             }
             if let dashboard = store.bitcoinDashboard {
                 Section("Network metrics") {
-                    ForEach(dashboard.values.keys.sorted(), id: \.self) { key in
+                    ForEach(dashboard.values.keys.filter { !$0.hasPrefix("lightning") }.sorted(), id: \.self) { key in
                         LabeledContent { Text(dashboard.values[key]!, format: .number.precision(.fractionLength(0...2))) } label: { Text(LocalizedStringKey(metricName(key))) }
                     }
                     ForEach(dashboard.failedSources, id: \.self) { source in Text("Unavailable source: \(source)").font(.caption).foregroundStyle(.secondary) }
+                }
+                Section("Lightning") {
+                    if let capacity = dashboard.values["lightningCapacityBTC"] {
+                        LabeledContent("Capacity (BTC)") { Text(capacity, format: .number.precision(.fractionLength(0...8))) }
+                    }
+                    if let nodes = dashboard.values["lightningNodes"] { LabeledContent("Nodes") { Text(nodes, format: .number.precision(.fractionLength(0))) } }
+                    if let channels = dashboard.values["lightningChannels"] { LabeledContent("Channels") { Text(channels, format: .number.precision(.fractionLength(0))) } }
+                    if dashboard.failedSources.contains("lightning") { Text("Lightning statistics unavailable").font(.caption).foregroundStyle(.secondary) }
                 }
                 Section("Currencies") {
                     ForEach(dashboard.prices.keys.sorted(), id: \.self) { currency in
@@ -78,23 +94,53 @@ struct ConverterView: View {
     @Environment(AppStore.self) private var store
     @State private var amount = "100000"
     @State private var unit = "sats"
+    @State private var premium = ""
     private var price: Double? {
         BitcoinDashboard.price(for: store.preferences.currency, dashboard: store.bitcoinDashboard, snapshot: store.bitcoin)
     }
     private var sats: Int64? { try? (BitcoinAmountUnit(rawValue: unit) ?? .sats).sats(amount, price: price) }
+    private var selectedUnit: BitcoinAmountUnit { BitcoinAmountUnit(rawValue: unit) ?? .sats }
+    private var quote: BitcoinPremiumQuote? {
+        guard let price else { return nil }
+        return try? BitcoinPremiumQuote(amount: amount, unit: selectedUnit, price: price, percentage: premium)
+    }
+    private func changeUnit(_ next: String) {
+        let target = BitcoinAmountUnit(rawValue: next) ?? .sats
+        if !amount.isEmpty {
+            guard let sats, let converted = try? target.input(sats: sats, price: price) else { return }
+            amount = converted
+        }
+        unit = next
+    }
     var body: some View {
         Form {
             Section("converter.input") {
                 Picker("settings.currency", selection: Binding(get: { store.preferences.currency }, set: { currency in store.updatePreferences { $0.currency = currency } })) {
                     ForEach(["EUR", "USD", "GBP", "CHF", "CAD", "AUD", "JPY"], id: \.self) { currency in Text(currency).tag(currency) }
                 }
-                Picker("converter.unit", selection: $unit) {
+                Picker("converter.unit", selection: Binding(get: { unit }, set: changeUnit)) {
                     Text("Satoshis").tag("sats"); Text("BTC").tag("btc"); Text("mBTC").tag("mBTC")
                     Text("µBTC").tag("microBTC"); Text(store.preferences.currency).tag("fiat")
                 }
                     .pickerStyle(.segmented)
                 TextField("converter.amount", text: $amount).font(.title2.monospacedDigit()).autocorrectionDisabled()
                 Text("converter.precision").font(.caption).foregroundStyle(.secondary)
+            }
+            Section("Trading premium or discount") {
+                TextField("Premium or discount (%)", text: $premium).autocorrectionDisabled()
+                Text("A positive percentage adds a premium; a negative percentage applies a discount.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Slider(value: Binding(get: { min(20, max(-20, (try? BitcoinPremiumQuote.percentage(premium)) ?? 0)) },
+                                      set: { premium = String($0) }), in: -20...20, step: 0.5) {
+                    Text("Premium or discount (%)")
+                } minimumValueLabel: { Text("−20%") } maximumValueLabel: { Text("+20%") }
+                if let quote {
+                    LabeledContent("Adjusted amount") { Text(quote.adjustedFiat, format: .currency(code: store.preferences.currency)) }
+                    LabeledContent("Resulting satoshis", value: quote.adjustedSats.formatted())
+                    LabeledContent("Base amount") { Text(quote.baseFiat, format: .currency(code: store.preferences.currency)) }
+                } else if (try? BitcoinPremiumQuote.percentage(premium)) == nil {
+                    Text("Enter a valid percentage of at least -100%.").font(.caption).foregroundStyle(.secondary)
+                }
             }
             Section("converter.result") {
                 if let sats {
@@ -116,6 +162,8 @@ struct ConverterView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("nav.converter")
+        .refreshable { await store.refreshBitcoin() }
+        .toolbar { Button("action.refresh") { Task { await store.refreshBitcoin() } }.disabled(store.bitcoinLoading) }
         .task { if !store.preferences.demo { await store.refreshBitcoin() } }
     }
 }

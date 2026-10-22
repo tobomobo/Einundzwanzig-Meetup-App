@@ -23,6 +23,7 @@ struct CommunityView: View {
                 NavigationLink("nav.chat", value: AppRoute.unavailable(.chat))
             }
             Section("community.culture") {
+                Link("Einundzwanzig on Nostr", destination: URL(string: "https://njump.me/npub1qv02xpsc3lhxxx5x7xswf88w3u7kykft9ea7t78tz7ywxf7mxs9qrxujnc")!)
                 Link("resource.podcast", destination: URL(string: "https://einundzwanzig.space/podcast/")!)
                 Link("resource.shoutout", destination: URL(string: "https://shoutout.einundzwanzig.space")!)
                 NavigationLink("resource.plebrap", value: AppRoute.unavailable(.plebrap))
@@ -44,6 +45,8 @@ struct NewsView: View {
             Section {
                 SourceNotice()
                 Text("news.source").font(.caption).foregroundStyle(.secondary)
+                Link("Write an article", destination: URL(string: "https://media.einundzwanzig.space")!)
+                Link("Read all news", destination: URL(string: "https://media.einundzwanzig.space/s/einundzwanzig-news")!)
             }
             if filtered.isEmpty { EmptyState(title: "news.empty", symbol: "newspaper", message: "news.empty.body") }
             ForEach(filtered) { article in
@@ -74,9 +77,19 @@ struct ArticleDetailView: View {
     @Environment(WorkflowStore.self) private var workflow
     @State private var fullContent: String?
     @State private var likes: Set<String> = []
+    @State private var locallyLikedKey: String?
     @State private var issue: String?
     @State private var reacting = false
     let article: NewsArticle
+    private var liked: Bool {
+        guard let key = workflow.publicKey else { return false }
+        return likes.contains(key) || locallyLikedKey == key
+    }
+    private var likeCount: Int {
+        var result = likes
+        if let key = workflow.publicKey, locallyLikedKey == key { result.insert(key) }
+        return result.count
+    }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
@@ -94,15 +107,27 @@ struct ArticleDetailView: View {
                 if (try? NostrArticleAddress(article.id)) != nil {
                     HStack {
                         Button {
-                            guard let signer = workflow.signer else { return }
+                            guard let signer = workflow.signer, let key = workflow.publicKey else { return }
                             reacting = true
+                            issue = nil
                             Task {
                                 defer { reacting = false }
-                                do { try await workflow.news.like(article.id, signer: signer, relays: workflow.relays); likes = try await workflow.news.likes(article.id, relays: workflow.relays) }
-                                catch { issue = error.localizedDescription }
+                                do {
+                                    try await workflow.news.like(article.id, signer: signer, relays: workflow.relays, isCurrentIdentity: { [workflow] candidate in
+                                        await MainActor.run { workflow.publicKey == candidate }
+                                    })
+                                    guard workflow.publicKey == key, !Task.isCancelled else { return }
+                                    let remembered = await workflow.news.hasLikedLocally(article.id, publicKey: key)
+                                    guard workflow.publicKey == key, !Task.isCancelled else { return }
+                                    if remembered { locallyLikedKey = key; likes.insert(key) }
+                                    let result = try await workflow.news.likes(article.id, relays: workflow.relays)
+                                    guard workflow.publicKey == key, !Task.isCancelled else { return }
+                                    likes = result
+                                } catch { if workflow.publicKey == key, !Task.isCancelled { issue = error.localizedDescription } }
                             }
-                        } label: { Label(likes.count.formatted(), systemImage: "heart") }
-                            .disabled(workflow.signer == nil || reacting)
+                        } label: { Label(likeCount.formatted(), systemImage: liked ? "heart.fill" : "heart") }
+                            .disabled(workflow.signer == nil || workflow.publicKey == nil || reacting || liked)
+                        if liked { Text("Liked").font(.caption).foregroundStyle(.secondary) }
                         NavigationLink("Zap author") { ValueForValueView(article: article.id) }
                     }
                 }
@@ -113,12 +138,24 @@ struct ArticleDetailView: View {
         }
         .navigationTitle("news.article")
         .onAppear { store.markRead(article) }
-        .task(id: article.id) {
+        .task(id: article.id + "|" + (workflow.publicKey ?? "")) {
+            let key = workflow.publicKey
+            likes = []; locallyLikedKey = nil; issue = nil
             guard (try? NostrArticleAddress(article.id)) != nil else { return }
+            if let key, await workflow.news.hasLikedLocally(article.id, publicKey: key), !Task.isCancelled, workflow.publicKey == key { locallyLikedKey = key }
+            let news = workflow.news, relays = workflow.relays
+            async let content = news.fullArticle(article.id, relays: relays)
+            async let reactions = news.likes(article.id, relays: relays)
             do {
-                fullContent = try await workflow.news.fullArticle(article.id, relays: workflow.relays)?.content
-                likes = try await workflow.news.likes(article.id, relays: workflow.relays)
-            } catch { issue = error.localizedDescription }
+                let result = try await content
+                guard !Task.isCancelled, workflow.publicKey == key else { return }
+                fullContent = result?.content
+            } catch { if !Task.isCancelled, workflow.publicKey == key { issue = error.localizedDescription } }
+            do {
+                let result = try await reactions
+                guard !Task.isCancelled, workflow.publicKey == key else { return }
+                likes = result
+            } catch { if !Task.isCancelled, workflow.publicKey == key { issue = error.localizedDescription } }
         }
     }
 }

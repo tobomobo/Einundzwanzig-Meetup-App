@@ -18,7 +18,23 @@ public struct NostrArticleAddress: Sendable {
 public actor NewsNostrService {
     private let relay: any NostrRelayTransport
     private let crypto = NostrCrypto()
-    public init(relay: any NostrRelayTransport) { self.relay = relay }
+    private let localLikesKey: String?
+    private var localLikes: [String]
+    private var pendingLikes: Set<String> = []
+    public init(relay: any NostrRelayTransport, localLikesKey: String? = "news-liked-reactions-v1") {
+        self.relay = relay
+        self.localLikesKey = localLikesKey
+        localLikes = localLikesKey.map { Array((UserDefaults.standard.stringArray(forKey: $0) ?? []).suffix(500)) } ?? []
+    }
+    public func hasLikedLocally(_ address: String, publicKey: String) -> Bool {
+        localLikes.contains(publicKey + "|" + address)
+    }
+    private func rememberLike(_ address: String, publicKey: String) {
+        let entry = publicKey + "|" + address
+        if !localLikes.contains(entry) { localLikes.append(entry) }
+        localLikes = Array(localLikes.suffix(500))
+        if let localLikesKey { UserDefaults.standard.set(localLikes, forKey: localLikesKey) }
+    }
     public func fullArticle(_ address: String, relays: [URL]) async throws -> NostrEvent? {
         let address = try NostrArticleAddress(address)
         let filter = NostrFilter(authors: [address.publicKey], kinds: [30023], limit: 10, tags: ["d": [address.identifier]])
@@ -34,20 +50,38 @@ public actor NewsNostrService {
         let filter = NostrFilter(kinds: [7], limit: 1000, tags: ["a": [address]])
         let events = try await relay.query(filter, relays: relays, timeout: 8)
         var keys: Set<String> = []
-        for event in events where filter.matches(event) && event.createdAt <= Int(Date().timeIntervalSince1970) + 600 && ["", "+", "❤️", "❤", "♥", "👍", "🤙"].contains(event.content.trimmingCharacters(in: .whitespacesAndNewlines)) {
+        for entry in localLikes {
+            let parts = entry.split(separator: "|", maxSplits: 1, omittingEmptySubsequences: false)
+            if parts.count == 2, parts[1] == address { keys.insert(String(parts[0])) }
+        }
+        for event in events where filter.matches(event) && event.createdAt <= Int(Date().timeIntervalSince1970) + 600 && event.content.trimmingCharacters(in: .whitespacesAndNewlines) != "-" {
             if await crypto.verify(event) { keys.insert(event.pubkey) }
         }
         return keys
     }
-    public func like(_ address: String, signer: any NostrSigner, relays: [URL]) async throws {
+    public func like(_ address: String, signer: any NostrSigner, relays: [URL],
+                     isCurrentIdentity: @Sendable (String) async -> Bool = { _ in true }) async throws {
         let article = try NostrArticleAddress(address)
         let key = try await signer.publicKey()
-        if try await likes(address, relays: relays).contains(key) { return }
+        guard await isCurrentIdentity(key) else { throw CalendarChatError.identityMismatch }
+        if hasLikedLocally(address, publicKey: key) { return }
+        let entry = key + "|" + address
+        guard pendingLikes.insert(entry).inserted else { return }
+        defer { pendingLikes.remove(entry) }
+        if try await likes(address, relays: relays).contains(key) {
+            rememberLike(address, publicKey: key)
+            return
+        }
+        try Task.checkCancellation()
+        guard await isCurrentIdentity(key) else { throw CalendarChatError.identityMismatch }
         let tags = [["a", address], ["p", article.publicKey], ["k", "30023"]]
         let now = Int(Date().timeIntervalSince1970)
         let event = try await signer.sign(kind: 7, tags: tags, content: "+", createdAt: now)
         try await BadgeSecurity.requireSigned(event, signer: signer, kind: 7, tags: tags, content: "+", createdAt: now)
+        try Task.checkCancellation()
+        guard await isCurrentIdentity(key) else { throw CalendarChatError.identityMismatch }
         try await relay.publish(event, relays: relays, signer: signer)
+        rememberLike(address, publicKey: key)
     }
     public func lightningAddress(author: String, relays: [URL]) async throws -> String {
         let filter = NostrFilter(authors: [author], kinds: [0], limit: 10)

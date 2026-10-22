@@ -39,7 +39,8 @@ public actor MempoolClient {
     /// discards fresh prices or metrics returned by the others.
     public func dashboard(baseURL: URL = MempoolClient.defaultBaseURL) async throws -> BitcoinDashboard {
         let root = try MempoolConfiguration.normalize(baseURL.absoluteString)
-        let sources = ["prices": "api/v1/prices", "mempool": "api/mempool", "mining": "api/v1/mining/hashrate/3d", "difficulty": "api/v1/difficulty-adjustment"]
+        let sources = ["prices": "api/v1/prices", "mempool": "api/mempool", "mining": "api/v1/mining/hashrate/3d", "difficulty": "api/v1/difficulty-adjustment",
+                       "lightning": "api/v1/lightning/statistics/latest"]
         let transport = transport
         return await withTaskGroup(of: (String, Data?).self) { group in
             for (name, path) in sources {
@@ -55,6 +56,17 @@ public actor MempoolClient {
                         if let number = JSONFields.number(value), number > 0 { dashboard.prices[currency] = number }
                     }
                     if dashboard.prices.isEmpty { dashboard.failedSources.append(source) }
+                } else if source == "lightning" {
+                    let latest = object["latest"] as? [String: Any] ?? object
+                    let fields = ["total_capacity": "lightningCapacityBTC", "node_count": "lightningNodes", "channel_count": "lightningChannels"]
+                    var found = 0
+                    for (field, key) in fields {
+                        guard let value = JSONFields.number(latest[field]), value.isFinite, value >= 0,
+                              value.rounded(.towardZero) == value else { continue }
+                        dashboard.values[key] = field == "total_capacity" ? value / 100_000_000 : value
+                        found += 1
+                    }
+                    if found < fields.count { dashboard.failedSources.append(source) }
                 } else {
                     let keys: [String]
                     switch source {

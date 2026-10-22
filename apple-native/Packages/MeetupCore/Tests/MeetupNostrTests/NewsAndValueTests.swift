@@ -59,7 +59,7 @@ private actor NewsFixtureRelay: NostrRelayTransport {
         let positive = try await signer.sign(kind: 7, tags: [["a", address]], content: "+", createdAt: 200)
         let duplicate = try await signer.sign(kind: 7, tags: [["a", address]], content: "❤️", createdAt: 300)
         let negative = try await signer.sign(kind: 7, tags: [["a", address]], content: "-", createdAt: 400)
-        let relay = NewsFixtureRelay([other, old, latest, positive, duplicate, negative]), service = NewsNostrService(relay: relay)
+        let relay = NewsFixtureRelay([other, old, latest, positive, duplicate, negative]), service = NewsNostrService(relay: relay, localLikesKey: nil)
         #expect(try await service.fullArticle(address, relays: []) == latest)
         #expect(try await service.likes(address, relays: []) == [key])
         try await service.like(address, signer: signer, relays: [])

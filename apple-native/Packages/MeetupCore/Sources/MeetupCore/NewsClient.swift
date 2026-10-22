@@ -4,6 +4,7 @@ import FoundationXML
 #endif
 
 public actor NewsClient {
+    public static let websiteURL = URL(string: "https://media.einundzwanzig.space/s/einundzwanzig-news")!
     public static let feedURL = URL(string: "https://media.einundzwanzig.space/s/einundzwanzig-news/feed.xml")!
     private let transport: any HTTPTransport
 
@@ -101,7 +102,15 @@ private final class RSSDelegate: NSObject, XMLParserDelegate {
         let title = HTMLText.plain(fields["title"] ?? "")
         let summary = HTMLText.plain(fields["description"] ?? fields["content:encoded"] ?? "")
         guard !title.isEmpty || !summary.isEmpty else { return }
-        guard let url = fields["link"].flatMap(SafeURL.web) ?? fields["guid"].flatMap(SafeURL.web) else { return }
+        let guid = fields["guid"] ?? ""
+        let address = guid.split(separator: ":", maxSplits: 2, omittingEmptySubsequences: false)
+        let isNostrArticle = address.count == 3 && address[0] == "30023" && address[1].utf8.count == 64
+            && address[1].utf8.allSatisfy { (48...57).contains($0) || (65...70).contains($0) || (97...102).contains($0) }
+            && !address[2].isEmpty
+        // NIP-23 GUIDs identify relay articles, not web URLs. Keep these feed
+        // items readable and use the overview for browser/share fallback.
+        guard let url = fields["link"].flatMap(SafeURL.web) ?? fields["guid"].flatMap(SafeURL.web)
+            ?? (isNostrArticle ? NewsClient.websiteURL : nil) else { return }
         let id = fields["guid"].flatMap { $0.isEmpty ? nil : $0 } ?? url.absoluteString
         guard ids.insert(id).inserted else { return }
         let creator = HTMLText.plain(fields["dc:creator"] ?? "")
