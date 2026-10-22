@@ -41,6 +41,45 @@ private actor SecurityBunkerRelay: NostrRelayTransport {
     }
 }
 
+private struct SecurityHumanityRelay: NostrRelayTransport {
+    let events: [NostrEvent]
+    func query(_ filter: NostrFilter, relays: [URL], timeout: TimeInterval) -> [NostrEvent] { events.filter(filter.matches) }
+    func publish(_ event: NostrEvent, relays: [URL], signer: (any NostrSigner)?) async throws { throw NIP46Error.disconnected }
+}
+private struct SecurityHumanityHTTP: ProofHTTPClient {
+    let provider: String
+    func get(_ url: URL) async throws -> BadgeJSON {
+        guard url.absoluteString == "https://humanity.invalid/.well-known/lnurlp/recipient" else { throw BadgeProtocolError.malformed }
+        return .object(["allowsNostr": .bool(true), "nostrPubkey": .string(provider)])
+    }
+}
+/// Same public synthetic BOLT11 description-hash fixture as
+/// BadgeProtocolTests.fixtureInvoice; this is not a payable invoice.
+private func securityHumanityInvoice(description: String) -> String {
+    let hex = BadgeWire.sha256(description)
+    let bytes = stride(from: 0, to: hex.count, by: 2).map { index -> UInt8 in
+        let start = hex.index(hex.startIndex, offsetBy: index), end = hex.index(start, offsetBy: 2)
+        return UInt8(hex[start..<end], radix: 16)!
+    }
+    var acc: UInt32 = 0, bits = 0, hashWords: [Int] = []
+    for byte in bytes {
+        acc = acc << 8 | UInt32(byte); bits += 8
+        while bits >= 5 { bits -= 5; hashWords.append(Int(acc >> bits & 31)) }
+    }
+    if bits > 0 { hashWords.append(Int(acc << (5 - bits) & 31)) }
+    var words = Array(repeating: 0, count: 7) + [23, 1, 20] + hashWords + Array(repeating: 0, count: 104)
+    let hrp = Array("lnbc10n".utf8), alphabet = Array("qpzry9x8gf2tvdw0s3jn54khce6mua7l")
+    var checksum: UInt32 = 1
+    let generators: [UInt32] = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3]
+    for value in hrp.map({ Int($0 >> 5) }) + [0] + hrp.map({ Int($0 & 31) }) + words + Array(repeating: 0, count: 6) {
+        let top = checksum >> 25; checksum = (checksum & 0x1ffffff) << 5 ^ UInt32(value)
+        for i in 0..<5 where top >> i & 1 != 0 { checksum ^= generators[i] }
+    }
+    checksum ^= 1
+    words += (0..<6).map { Int(checksum >> (5 * (5 - $0)) & 31) }
+    return "lnbc10n1" + String(words.map { alphabet[$0] })
+}
+
 extension IdentityAppStoreContinuityTests {
     private func securityDocument() throws -> BackupDocument { try BackupDocument.decode(fixture("flutter-v5", "json")) }
     private func restoreSecurity(_ document: BackupDocument, into app: AppStore, allowReplacement: Bool = false) async throws {
@@ -213,5 +252,99 @@ extension IdentityAppStoreContinuityTests {
         #expect(!relaunch.isFavorite("7")); #expect(!relaunch.preferences.favoriteIDs.contains("Aschaffenburg"))
         let again = AppStore(legacyDefaults: defaults)
         #expect(again.isFavorite("8")); #expect(!again.isFavorite("9")); #expect(!again.isFavorite("7"))
+    }
+
+    @Test func roundTwoSameIdentityRetainedKeyRequiresCurrentVaultPasswordWhileUnlocked() async throws {
+        let defaults = try fresh(), relay = try SecurityBunkerRelay(), mixed = try mixedSecurityDocument(relay)
+        let app = AppStore(legacyDefaults: defaults, identityTransport: relay)
+        try await app.identity.connectBunker(relay.uri, vaultPassword: vaultPassword)
+        await app.synchronizeIdentity()
+        #expect(app.identity.npub == mixed.identityNpub); #expect(app.identity.state == .unlocked)
+        #expect(try IdentityVault.read()?.retainedLocalSecret == nil)
+        let ciphertext = try #require(try KeychainStore.read(account: "signing-identity-v1"))
+        await #expect(throws: IdentityError.authenticationFailed) {
+            try await app.identity.restoreBackup(String(decoding: mixed.encoded(), as: UTF8.self), password: vaultPassword,
+                                                  vaultPassword: "different-fixture-vault-password")
+        }
+        #expect(try KeychainStore.read(account: "signing-identity-v1") == ciphertext)
+        #expect(try IdentityVault.read()?.retainedLocalSecret == nil)
+        #expect(app.identity.state == .recoveryRequired)
+        let protected = try #require(try IdentityVault.pendingRestore())
+        let recovery = try BackupDocument.decode(BackupEncryption.decrypt(protected.payload, password: vaultPassword))
+        #expect(recovery.identityNpub == mixed.identityNpub); #expect(try recovery.localPrivateKey() == mixed.localPrivateKey())
+        // Explicitly discard the failed attempt; the original B vault remains usable.
+        try await app.identity.discardPendingRecovery()
+        try await app.identity.unlock(password: vaultPassword)
+        let unchanged = try await exported(app)
+        #expect(unchanged.identityNpub == mixed.identityNpub); #expect(try unchanged.localPrivateKey() == nil)
+        try await restoreSecurity(mixed, into: app)
+        #expect(!((try IdentityVault.hasPendingRestore())))
+        let complete = try await exported(app)
+        #expect(complete.identityNpub == mixed.identityNpub); #expect(try complete.localPrivateKey() == mixed.localPrivateKey())
+        let rotatedPassword = "rotated-fixture-vault-password"
+        try await app.identity.changePassword(current: vaultPassword, replacement: rotatedPassword)
+        await app.identity.lock(); await app.synchronizeIdentity()
+        let relaunch = AppStore(legacyDefaults: defaults, identityTransport: relay)
+        try await relaunch.identity.unlock(password: rotatedPassword)
+        let rotated = try await relaunch.identity.exportBackup(password: vaultPassword, vaultPassword: rotatedPassword)
+        let after = try BackupDocument.decode(BackupEncryption.decrypt(rotated, password: vaultPassword))
+        #expect(after.identityNpub == mixed.identityNpub); #expect(try after.localPrivateKey() == mixed.localPrivateKey())
+    }
+    @Test func roundTwoNativeHumanityRemainsUnverifiedEvidenceAfterReloadMutationAndAdditiveImport() async throws {
+        let defaults = try fresh(), app = AppStore(legacyDefaults: defaults)
+        try await app.identity.importKey(String(repeating: "01", count: 32), vaultPassword: vaultPassword)
+        await app.synchronizeIdentity()
+        let signer = try #require(app.identity.signer), owner = app.identity.publicKey
+        let recipient = try LocalIdentitySigner(privateKey: Data(repeating: 5, count: 32))
+        let provider = try LocalIdentitySigner(privateKey: Data(repeating: 6, count: 32))
+        let recipientKey = try await recipient.publicKey(), providerKey = try await provider.publicKey()
+        let timestamp = Int(Date().timeIntervalSince1970) - 10
+        let request = try await signer.sign(kind: 9734, tags: [["p", recipientKey]], content: "synthetic humanity continuity", createdAt: timestamp - 1)
+        let description = String(decoding: try JSONEncoder().encode(request), as: UTF8.self)
+        let receipt = try await provider.sign(kind: 9735,
+            tags: [["p", recipientKey], ["P", owner], ["description", description], ["bolt11", securityHumanityInvoice(description: description)]],
+            content: "", createdAt: timestamp)
+        let metadata = try await recipient.sign(kind: 0, tags: [], content: #"{"lud16":"recipient@humanity.invalid"}"#, createdAt: timestamp - 2)
+        let relay = SecurityHumanityRelay(events: [receipt, metadata]), http = SecurityHumanityHTTP(provider: providerKey)
+        let native = BadgeStore(relay: relay, persistence: KeychainBadgeWalletPersistence(), relays: [], proofHTTP: http)
+        await native.configure(signer: signer)
+        try await native.checkHumanity()
+        #expect(native.humanity?.receipt.id == receipt.id)
+        #expect(native.pendingBackup["humanity_proof"] == nil)
+        #expect(try KeychainStore.read(account: "pending-imported-proofs-v1") == nil)
+        func expectPending(_ fields: [String: BackupValue]) {
+            let summary = fields["humanity_proof"]?.object
+            #expect(summary?["receipt_event_id"] == .string(receipt.id))
+            #expect(summary?["receipt_id"] == .string(receipt.id))
+            #expect(summary?["first_zap_at"] == .number(Double(timestamp)))
+            #expect(summary?["verified"] == .bool(false)); #expect(summary?["needs_reverification"] == .bool(true))
+        }
+        await app.identity.lock(); await app.synchronizeIdentity()
+        let relaunch = AppStore(legacyDefaults: defaults)
+        try await relaunch.identity.unlock(password: vaultPassword)
+        expectPending(try await exported(relaunch).fields)
+        #expect(relaunch.badgeWallet.humanity == nil)
+        _ = try await relaunch.badgeWallet.createPlatformProof(platform: "fixture", username: "retains-humanity")
+        await relaunch.identity.lock(); await relaunch.synchronizeIdentity()
+        let afterMutation = AppStore(legacyDefaults: defaults)
+        try await afterMutation.identity.unlock(password: vaultPassword)
+        expectPending(try await exported(afterMutation).fields)
+        #expect(afterMutation.badgeWallet.humanity == nil)
+        // Revalidate natively, then import absent/empty sections while the
+        // verified receipt is still live. That transition must also stage it.
+        let active = BadgeStore(relay: relay, persistence: KeychainBadgeWalletPersistence(), relays: [], proofHTTP: http)
+        await active.configure(signer: afterMutation.identity.signer)
+        try await active.checkHumanity()
+        #expect(active.humanity?.receipt.id == receipt.id); #expect(active.pendingBackup["humanity_proof"] == nil)
+        var additive = try BackupDocument(fields: ["version": .number(5), "user": .object([:]), "badges": .array([])])
+        for section: BackupValue? in [nil, .object([:]), .null, .array([])] {
+            additive.fields["humanity_proof"] = section
+            try await active.restoreBackup(additive, decision: .sameIdentity)
+            expectPending(try active.backupSnapshot(owner: owner)); #expect(active.humanity == nil)
+        }
+        await afterMutation.identity.lock(); await afterMutation.synchronizeIdentity()
+        let final = AppStore(legacyDefaults: defaults)
+        try await final.identity.unlock(password: vaultPassword)
+        expectPending(try await exported(final).fields); #expect(final.badgeWallet.humanity == nil)
     }
 }

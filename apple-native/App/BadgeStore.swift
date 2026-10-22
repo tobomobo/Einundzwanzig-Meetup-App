@@ -12,6 +12,7 @@ import MeetupNostr
 @Observable @MainActor final class BadgeStore {
     private let relay: any NostrRelayTransport
     private let persistence: any BadgeWalletPersistence
+    private let proofHTTP: any ProofHTTPClient
     var relays: [URL]
     private(set) var signer: (any NostrSigner)?
     private(set) var publicKey = ""
@@ -42,8 +43,9 @@ import MeetupNostr
     private let crypto = NostrCrypto()
 
     init(relay: any NostrRelayTransport, persistence: any BadgeWalletPersistence,
-         relays: [URL] = [URL(string: "wss://relay.damus.io")!, URL(string: "wss://nos.lol")!]) {
-        self.relay = relay; self.persistence = persistence; self.relays = relays
+         relays: [URL] = [URL(string: "wss://relay.damus.io")!, URL(string: "wss://nos.lol")!],
+         proofHTTP: any ProofHTTPClient = ProofURLSessionClient()) {
+        self.relay = relay; self.persistence = persistence; self.relays = relays; self.proofHTTP = proofHTTP
     }
 
     func configure(signer: (any NostrSigner)?) async {
@@ -124,7 +126,7 @@ import MeetupNostr
         value.registry = await RegistryAuthority.resolve([], previous: value.registry, now: Self.now)
         // Cached humanity and platform flags are not authority. Platform
         // signatures can be checked locally; provider evidence is re-fetched.
-        value.humanity = nil
+        Self.stageHumanityForRevalidation(in: &value)
         var verifiedProofs: [PlatformIdentityProof] = []
         for proof in value.platformProofs {
             if let event = try? proof.event(publicKey: key), await crypto.verify(event) { verifiedProofs.append(proof) }
@@ -454,12 +456,13 @@ import MeetupNostr
             let filter = NostrFilter(authors: [local.recipient], kinds: [0], limit: 20)
             let events = try await relay.query(filter, relays: relays, timeout: 6)
             guard let metadata = await newestVerified(events, filter: filter),
-                  let checked = try? await ProofVerifier.humanity(receipt, identity: key, recipientMetadata: metadata, http: ProofURLSessionClient(), now: Self.now) else { continue }
+                  let checked = try? await ProofVerifier.humanity(receipt, identity: key, recipientMetadata: metadata, http: proofHTTP, now: Self.now) else { continue }
             var next = wallet; next.humanity = checked; next.pendingBackup.removeValue(forKey: "humanity_proof")
             try await persist(next, signer: signer, epoch: epoch); status = "Zap receipt and recipient provider verified."; return
         }
         try assertCurrent(epoch, key: key)
-        var next = wallet; next.humanity = nil; try await persist(next, signer: signer, epoch: epoch)
+        var next = wallet; Self.stageHumanityForRevalidation(in: &next)
+        try await persist(next, signer: signer, epoch: epoch)
         status = "No verified provider receipt was found."
     }
     func publishReputation(nickname: String) async throws {
@@ -521,12 +524,18 @@ import MeetupNostr
             proofs.append(try JSONDecoder().decode(BackupValue.self, from: JSONEncoder().encode(proof)))
         }
         if fields["platform_proofs"] != nil || !proofs.isEmpty { fields["platform_proofs"] = .array(proofs) }
-        if let humanity {
-            var summary = try JSONDecoder().decode(BackupValue.self, from: JSONEncoder().encode(humanity.publicSummary)).object ?? [:]
-            summary["verified"] = .bool(false); summary["needs_reverification"] = .bool(true)
-            fields["humanity_proof"] = .object(summary)
-        }
+        if let humanity { fields["humanity_proof"] = Self.pendingHumanity(humanity) }
         return fields
+    }
+    private static func pendingHumanity(_ proof: HumanityReceipt) -> BackupValue {
+        .object(["verified": .bool(false), "needs_reverification": .bool(true), "method": .string("lightning_zap"),
+                 "first_zap_at": .number(Double(proof.timestamp)), "receipt_id": .string(proof.receipt.id),
+                 "receipt_event_id": .string(proof.receipt.id)])
+    }
+    /// Preserve historical evidence while dropping cached provider authority.
+    private static func stageHumanityForRevalidation(in value: inout Wallet) {
+        if let proof = value.humanity { value.pendingBackup["humanity_proof"] = pendingHumanity(proof) }
+        value.humanity = nil
     }
     private static func removePendingPlatform(_ platform: String, from fields: inout [String: BackupValue]) {
         if let proofs = fields["platform_proofs"]?.array {
@@ -557,6 +566,8 @@ import MeetupNostr
         for name in ["humanity_proof", "platform_proofs", "admin_registry", "my_vouches", "co_attendance"] {
             if let value = document.fields[name] {
                 let safe = Self.safeProofMetadata(value)
+                // Empty additive sections cannot erase an earlier receipt.
+                if name == "humanity_proof", safe.object?.isEmpty != false { continue }
                 if let old = next.pendingBackup[name]?.array, let incoming = safe.array {
                     next.pendingBackup[name] = .array(old + incoming.filter { !old.contains($0) })
                 } else if safe != .null { next.pendingBackup[name] = safe }
@@ -569,7 +580,7 @@ import MeetupNostr
                   let event = try? proof.event(publicKey: key), await crypto.verify(event) else { continue }
             if !next.platformProofs.contains(where: { $0.platform == proof.platform }) { next.platformProofs.append(proof) }
         }
-        next.humanity = nil
+        Self.stageHumanityForRevalidation(in: &next)
         try assertCurrent(epoch, key: key); try await persist(next, signer: signer, epoch: epoch)
         await recalculate(epoch: epoch, key: key); status = "Badge signatures restored; imported authority claims await revalidation."
     }

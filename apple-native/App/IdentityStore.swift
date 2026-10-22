@@ -437,6 +437,10 @@ final class IdentityStore {
             // A same-identity import must also retain its alternate local key.
             if mode == "nip46", let secret, var current = record, current.kind == .bunker, current.retainedLocalSecret == nil {
                 let fence = generation
+                // An unlocked signer does not authenticate a password. Both
+                // ciphertexts in this record must use the current vault password.
+                _ = try await decryptRecord(current, password: vaultPassword)
+                guard generation == fence else { throw IdentityError.identityChanged }
                 current.retainedLocalSecret = try await seal(secret, password: vaultPassword)
                 guard generation == fence else { throw IdentityError.identityChanged }
                 try IdentityVault.write(current); record = current
