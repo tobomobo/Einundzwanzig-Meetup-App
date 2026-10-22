@@ -26,6 +26,7 @@ const int kDateEventKind = 31922; // datumsbasiert (ganztägig)
 class NostrCalendarEvent {
   final String id;
   final String pubkey;
+  final int createdAt; // Nostr version timestamp, independent of event start.
   final String dTag;
   final String title;
   final String description;
@@ -119,6 +120,7 @@ class NostrCalendarEvent {
   NostrCalendarEvent({
     required this.id,
     required this.pubkey,
+    this.createdAt = 0,
     required this.dTag,
     required this.title,
     required this.description,
@@ -210,6 +212,7 @@ class NostrCalendarEvent {
       return NostrCalendarEvent(
         id: (e['id'] ?? '').toString(),
         pubkey: (e['pubkey'] ?? '').toString(),
+        createdAt: e['created_at'] as int? ?? 0,
         dTag: tagVal('d'),
         title: title,
         description: (e['content'] ?? '').toString(),
@@ -241,33 +244,53 @@ class CalendarEventService {
   /// werden alle aktiven Relays abgefragt.
   static const String kCommunityRelay = 'wss://nostr.einundzwanzig.space';
 
+  static final _fetching = <String, Future<List<NostrCalendarEvent>>>{};
+
   /// Lädt Kalender-Events (NIP-52).
   /// [worldwide]=false (Standard): nur das Community-Relay, und nur Events,
   ///   die über diese App erstellt wurden (client-Tag) -> überschaubar.
   /// [worldwide]=true: alle aktiven Relays, alle Events (die ganze Nostr-Welt).
-  /// Dedupliziert (pubkey:dTag -> neueste Version) und nach Startdatum sortiert.
+  /// Dedupliziert (kind:pubkey:dTag -> neueste Version) und nach Startdatum sortiert.
   static Future<List<NostrCalendarEvent>> fetchEvents({int limit = 200, bool worldwide = false}) async {
-    final List<String> relays;
-    if (worldwide) {
-      relays = await RelayConfig.getActiveRelays();
-    } else {
-      relays = [kCommunityRelay];
-    }
+    final relays = (worldwide
+        ? await RelayConfig.getActiveRelays()
+        : [kCommunityRelay]).toSet().toList()..sort();
+    if (relays.isEmpty) return [];
+    final key = jsonEncode([limit, worldwide, relays]);
+    // Home counters and the calendar can ask concurrently. Share only work
+    // in flight; a later refresh must see new edits and cancellations.
+    final events = await (_fetching[key] ??= _fetchEvents(relays, limit, worldwide, key));
+    return List<NostrCalendarEvent>.of(events);
+  }
 
-    final byKey = <String, NostrCalendarEvent>{};
-    for (final relayUrl in relays) {
-      final list = await _fetchFromRelay(relayUrl, limit);
-      if (list == null) continue;
-      for (final ev in list) {
-        // Community-Modus: nur Events, die über die App erstellt wurden.
-        if (!worldwide && !ev.fromApp) continue;
-        final key = '${ev.pubkey}:${ev.dTag}:${ev.kind}';
-        byKey[key] = ev;
+  static bool _newer(NostrCalendarEvent event, NostrCalendarEvent previous) =>
+      event.createdAt > previous.createdAt ||
+      (event.createdAt == previous.createdAt && event.id.compareTo(previous.id) < 0);
+
+  static Future<List<NostrCalendarEvent>> _fetchEvents(
+      List<String> relays, int limit, bool worldwide, String queryKey) async {
+    try {
+      final byKey = <String, NostrCalendarEvent>{};
+      // Bound connection fan-out while avoiding a full timeout per relay.
+      for (var offset = 0; offset < relays.length; offset += 4) {
+        final batches = await Future.wait(relays.skip(offset).take(4)
+            .map((relay) => _fetchFromRelay(relay, limit)));
+        for (final events in batches) {
+          for (final event in events ?? <NostrCalendarEvent>[]) {
+            final key = event.address;
+            final previous = byKey[key];
+            if (previous == null || _newer(event, previous)) byKey[key] = event;
+          }
+        }
       }
+      // Apply display filters AFTER resolving addressable-event versions.
+      // A newer cancellation must suppress an older active copy on any relay.
+      return byKey.values
+          .where((event) => !event.isCancelled && (worldwide || event.fromApp))
+          .toList()..sort((a, b) => a.start.compareTo(b.start));
+    } finally {
+      _fetching.remove(queryKey);
     }
-
-    final all = byKey.values.toList()..sort((a, b) => a.start.compareTo(b.start));
-    return all;
   }
 
   /// Holt EIN Kalender-Event ueber seine Adresse `<kind>:<pubkey>:<dTag>`.
@@ -316,22 +339,22 @@ class CalendarEventService {
         ws.listen((data) {
           try {
             final msg = jsonDecode(data as String) as List<dynamic>;
-            if (msg.length >= 3 && msg[0] == 'EVENT') {
+            if (msg.length >= 3 && msg[0] == 'EVENT' && msg[1] == subId) {
               final raw = RelaySocket.verifiedEvent(msg[2], tag: 'Calendar');
               if (raw == null || !RelaySocket.answersFilter(raw, filter)) {
                 return;
               }
               final at = RelaySocket.replaceableCreatedAt(raw);
               final ev = at == null ? null : NostrCalendarEvent.fromEvent(raw);
-              if (ev == null || at! < bestAt) return;
+              if (ev == null || (best != null && !_newer(ev, best!))) return;
               if (ev.pubkey.toLowerCase() != author ||
                   ev.dTag != dTag ||
                   ev.kind != kind) {
                 return;
               }
-              bestAt = at;
+              bestAt = ev.createdAt;
               best = ev;
-            } else if (msg.isNotEmpty && msg[0] == 'EOSE') {
+            } else if (msg.length >= 2 && msg[0] == 'EOSE' && msg[1] == subId) {
               if (!completer.isCompleted) {
                 completer.complete(best == null ? null : (bestAt, best!));
               }
@@ -359,11 +382,9 @@ class CalendarEventService {
       }
     }));
 
-    var winnerAt = -1;
     NostrCalendarEvent? winner;
     for (final hit in hits) {
-      if (hit == null || hit.$1 < winnerAt) continue;
-      winnerAt = hit.$1;
+      if (hit == null || (winner != null && !_newer(hit.$2, winner))) continue;
       winner = hit.$2;
     }
 
@@ -395,15 +416,15 @@ class CalendarEventService {
           try {
             final message = jsonDecode(data as String) as List<dynamic>;
             final type = message[0] as String;
-            if (type == 'EVENT' && message.length >= 3) {
+            if (type == 'EVENT' && message.length >= 3 && message[1] == subId) {
               final raw = RelaySocket.verifiedEvent(message[2], tag: 'Calendar');
-              if (raw == null || !RelaySocket.answersFilter(raw, filter)) return;
+              if (raw == null || !RelaySocket.answersFilter(raw, filter) ||
+                  RelaySocket.replaceableCreatedAt(raw) == null) {
+                return;
+              }
               final ev = NostrCalendarEvent.fromEvent(raw);
-              // Abgesagte Termine gar nicht erst aufnehmen. Sie bleiben im
-              // Netz stehen — Nostr kennt kein Loeschen —, gehoeren aber in
-              // keinen Kalender.
-              if (ev != null && !ev.isCancelled) results.add(ev);
-            } else if (type == 'EOSE') {
+              if (ev != null) results.add(ev);
+            } else if (type == 'EOSE' && message.length >= 2 && message[1] == subId) {
               if (!completer.isCompleted) completer.complete(results);
             }
           } catch (e) { tally.failed(e); }

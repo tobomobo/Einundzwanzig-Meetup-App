@@ -469,8 +469,7 @@ class PromotionClaimService {
               final eventData = message[2] as Map<String, dynamic>;
 
               // Event-Signatur prüfen
-              // (verify: false — isValid() unten ist die einzige Prüfung;
-              // der Konstruktor würde dieselbe Signatur doppelt prüfen.)
+              // Uses the background-warmed RelaySocket cache below.
               final event = Event(
                 eventData['id'] ?? '',
                 eventData['pubkey'] ?? '',
@@ -484,7 +483,7 @@ class PromotionClaimService {
                 verify: false,
               );
 
-              if (event.isValid()) {
+              if (RelaySocket.verifiedEvent(eventData) != null) {
                 claims.add(RawClaim(
                   pubkey: event.pubkey,
                   content: event.content,
